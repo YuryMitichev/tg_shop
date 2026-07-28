@@ -10,6 +10,7 @@ COPY . .
 
 RUN chmod +x entrypoint.sh \
     && useradd -r -s /bin/false appuser \
+    && mkdir -p /app/data \
     && chown -R appuser:appuser /app
 
 USER appuser

@@ -6,9 +6,9 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:////data/shop.db
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/shop.db
     volumes:
-      - bot_data:/data
+      - bot_data:/app/data
 
 volumes:
   bot_data:
