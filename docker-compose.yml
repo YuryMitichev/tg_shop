@@ -1,0 +1,14 @@
+services:
+  bot:
+    build: .
+    container_name: tg_shop_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/shop.db
+    volumes:
+      - bot_data:/data
+
+volumes:
+  bot_data:
