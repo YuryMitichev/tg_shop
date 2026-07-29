@@ -151,22 +151,91 @@ async def process_comment(message: Message, state: FSMContext):
 
 
 async def _show_order_manual(message: Message, state: FSMContext, order: dict, comment: str | None):
-    """Старый флоу: оплата через менеджера."""
+    """Оплата по номеру карты + отправка чека."""
+    card = settings.payment_card_number or "не указан"
+    recipient = settings.payment_recipient_name or ""
+
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="🧾 Отправить чек об оплате",
+        callback_data=f"receipt:{order['order_id']}",
+    )
+
     new_msg = await message.bot.send_message(
         chat_id=message.chat.id,
         text=(
             f"✅ <b>Заказ №{order['order_id']} оформлен!</b>\n\n"
             f"{_render_order_items(order['items'])}\n\n"
             f"💰 Итого: <b>{order['total']} ₽</b>\n\n"
-            "Оплата — переводом по СБП или на карту, реквизиты придёт "
-            "менеджер. Мы свяжемся с вами в ближайшее время для подтверждения."
+            f"💳 <b>Оплата переводом на карту:</b>\n"
+            f"<code>{card}</code>\n"
+            f"{('Получатель: ' + esc(recipient)) if recipient else ''}\n\n"
+            "После оплаты нажмите кнопку ниже и отправьте фото чека."
         ),
-        reply_markup=get_reply_keyboard(),
+        reply_markup=builder.as_markup(),
     )
 
     await track_message(state, new_msg)
+    await message.bot.send_message(
+        chat_id=message.chat.id,
+        text="Менеджер проверит оплату и подтвердит заказ.",
+        reply_markup=get_reply_keyboard(),
+    )
 
     await _notify_manager(message, order, comment)
+
+
+@router.callback_query(F.data.startswith("receipt:"))
+async def request_receipt(callback: CallbackQuery, state: FSMContext):
+    order_id = int(callback.data.split(":")[1])
+
+    await state.set_state(OrderState.waiting_receipt)
+    await state.update_data(order_id=order_id)
+
+    await callback.message.answer(
+        "🧾 Отправьте фото чека об оплате одним сообщением."
+    )
+    await callback.answer()
+
+
+@router.message(OrderState.waiting_receipt, F.photo)
+async def process_receipt(message: Message, state: FSMContext):
+    data = await state.get_data()
+    order_id = data.get("order_id")
+
+    await state.clear()
+
+    await message.answer(
+        "✅ Чек получен! Менеджер проверит оплату.\n"
+        "Как только платёж подтвердится, вы получите уведомление.",
+        reply_markup=get_reply_keyboard(),
+    )
+
+    if settings.manager_chat_id:
+        try:
+            order = await OrderService.get_user_order(message.from_user.id, order_id)
+
+            if order:
+                items_text = "\n".join(
+                    f"• {item['product_name']} ({item['variant_volume']}) "
+                    f"× {item['quantity']}"
+                    for item in order["items"]
+                )
+
+                await message.bot.send_photo(
+                    settings.manager_chat_id,
+                    photo=message.photo[-1].file_id,
+                    caption=(
+                        f"🧾 <b>Чек по заказу №{order_id}</b>\n\n"
+                        f"👤 {esc(order['full_name'])}\n"
+                        f"📞 {esc(order['phone'])}\n\n"
+                        f"{items_text}\n\n"
+                        f"💰 Итого: <b>{order['total_amount']} ₽</b>\n\n"
+                        "Проверьте оплату и смените статус в /admin"
+                    ),
+                )
+        except Exception:
+            pass
 
 
 async def _show_payment_qr(message: Message, state: FSMContext, order: dict, comment: str | None):

@@ -6,3 +6,4 @@ class OrderState(StatesGroup):
     waiting_phone = State()
     waiting_address = State()
     waiting_comment = State()
+    waiting_receipt = State()

@@ -75,6 +75,13 @@ class Settings(BaseSettings):
     def tinkoff_enabled(self) -> bool:
         return bool(self.tinkoff_terminal_key and self.tinkoff_password and self.app_base_url)
 
+    # ==========================
+    # Ручная оплата (без эквайринга)
+    # ==========================
+
+    payment_card_number: str | None = Field(default=None, alias="PAYMENT_CARD_NUMBER")
+    payment_recipient_name: str | None = Field(default=None, alias="PAYMENT_RECIPIENT_NAME")
+
 
 @lru_cache
 def get_settings() -> Settings:
