@@ -1,12 +1,17 @@
+import base64
+
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup
 from aiogram.fsm.context import FSMContext
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import BufferedInputFile
 
 from app.bot.states.order import OrderState
 from app.bot.keyboards.main_menu import get_reply_keyboard
 from app.bot.utils.messages import show_screen, track_message
 from app.services.cart_service import CartService
 from app.services.order_service import OrderService
+from app.services.payment_service import PaymentService
 from app.core.config import settings
 from app.utils.escape import esc
 from app.utils.validation import (
@@ -139,6 +144,14 @@ async def process_comment(message: Message, state: FSMContext):
 
     await message.delete()
 
+    if settings.tinkoff_enabled:
+        await _show_payment_qr(message, state, order, comment)
+    else:
+        await _show_order_manual(message, state, order, comment)
+
+
+async def _show_order_manual(message: Message, state: FSMContext, order: dict, comment: str | None):
+    """Старый флоу: оплата через менеджера."""
     new_msg = await message.bot.send_message(
         chat_id=message.chat.id,
         text=(
@@ -153,6 +166,51 @@ async def process_comment(message: Message, state: FSMContext):
 
     await track_message(state, new_msg)
 
+    await _notify_manager(message, order, comment)
+
+
+async def _show_payment_qr(message: Message, state: FSMContext, order: dict, comment: str | None):
+    """Новый флоу: показ QR-кода СБП через Тинькофф."""
+    payment = await PaymentService.create_payment(
+        order_id=order["order_id"],
+        amount=order["total"],
+        description=f"Заказ №{order['order_id']} — TG Shop",
+    )
+
+    if payment is None:
+        await _show_order_manual(message, state, order, comment)
+        return
+
+    qr_bytes = base64.b64decode(payment["qr_base64"])
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="💳 Открыть СБП", url=payment["payment_url"])
+
+    new_msg = await message.bot.send_photo(
+        chat_id=message.chat.id,
+        photo=BufferedInputFile(qr_bytes, "sbp_qr.png"),
+        caption=(
+            f"✅ <b>Заказ №{order['order_id']} оформлен!</b>\n\n"
+            f"{_render_order_items(order['items'])}\n\n"
+            f"💰 Итого: <b>{order['total']} ₽</b>\n\n"
+            "Отсканируйте QR-код камерой телефона для оплаты через СБП.\n"
+            "Либо нажмите кнопку ниже."
+        ),
+        reply_markup=builder.as_markup(),
+    )
+
+    await track_message(state, new_msg)
+
+    await message.bot.send_message(
+        chat_id=message.chat.id,
+        text="После оплаты вы получите уведомление в этот чат.",
+        reply_markup=get_reply_keyboard(),
+    )
+
+    await _notify_manager(message, order, comment)
+
+
+async def _notify_manager(message: Message, order: dict, comment: str | None):
     if settings.manager_chat_id:
         try:
             comment_line = f"\n💬 {esc(comment)}" if comment else ""

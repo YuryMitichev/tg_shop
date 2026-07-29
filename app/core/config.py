@@ -60,6 +60,21 @@ class Settings(BaseSettings):
 
     app_version: str = "0.1.0"
 
+    # ==========================
+    # Tinkoff Acquiring (СБП QR)
+    # ==========================
+
+    tinkoff_terminal_key: str | None = Field(default=None, alias="TINKOFF_TERMINAL_KEY")
+    tinkoff_password: str | None = Field(default=None, alias="TINKOFF_PASSWORD")
+
+    # Базовый URL приложения для вебхуков Тинькофф,
+    # например: https://shop.example.com
+    app_base_url: str | None = Field(default=None, alias="APP_BASE_URL")
+
+    @property
+    def tinkoff_enabled(self) -> bool:
+        return bool(self.tinkoff_terminal_key and self.tinkoff_password and self.app_base_url)
+
 
 @lru_cache
 def get_settings() -> Settings:
