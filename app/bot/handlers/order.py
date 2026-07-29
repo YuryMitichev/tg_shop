@@ -182,8 +182,6 @@ async def _show_order_manual(message: Message, state: FSMContext, order: dict, c
         reply_markup=get_reply_keyboard(),
     )
 
-    await _notify_manager(message, order, comment)
-
 
 @router.callback_query(F.data.startswith("receipt:"))
 async def request_receipt(callback: CallbackQuery, state: FSMContext):
@@ -275,8 +273,6 @@ async def _show_payment_qr(message: Message, state: FSMContext, order: dict, com
         text="После оплаты вы получите уведомление в этот чат.",
         reply_markup=get_reply_keyboard(),
     )
-
-    await _notify_manager(message, order, comment)
 
 
 async def _notify_manager(message: Message, order: dict, comment: str | None):
