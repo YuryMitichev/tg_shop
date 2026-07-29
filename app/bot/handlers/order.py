@@ -17,7 +17,6 @@ from app.utils.escape import esc
 from app.utils.validation import (
     validate_name,
     validate_phone,
-    validate_address,
     validate_comment,
 )
 
@@ -83,21 +82,6 @@ async def process_phone(message: Message, state: FSMContext):
         return
 
     await state.update_data(phone=message.text.strip())
-    await state.set_state(OrderState.waiting_address)
-
-    await show_screen(message, state, "📍 Укажите адрес доставки.")
-
-
-@router.message(OrderState.waiting_address)
-async def process_address(message: Message, state: FSMContext):
-    if not validate_address(message.text):
-        await show_screen(
-            message, state,
-            "❌ Адрес слишком короткий или длинный (5–300 символов). Попробуйте ещё раз.",
-        )
-        return
-
-    await state.update_data(address=message.text.strip())
     await state.set_state(OrderState.waiting_comment)
 
     await show_screen(
@@ -129,7 +113,7 @@ async def process_comment(message: Message, state: FSMContext):
         telegram_user_id=message.from_user.id,
         full_name=data["full_name"],
         phone=data["phone"],
-        address=data["address"],
+        address="",
         comment=comment,
     )
 
