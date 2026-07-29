@@ -15,6 +15,27 @@ class TestAdminCategories:
         assert len(categories) == 3
         assert any(c["name"] == "Аромалампы" for c in categories)
 
+    async def test_create_category_with_emoji(self, db_session, seed_data):
+        cat_id = await AdminService.create_category("Саше", emoji="🌸")
+
+        categories = await AdminService.get_categories()
+        cat = next(c for c in categories if c["id"] == cat_id)
+        assert cat["emoji"] == "🌸"
+
+    async def test_update_category_emoji(self, db_session, seed_data):
+        await AdminService.update_category_emoji(1, "🔥")
+
+        categories = await AdminService.get_categories()
+        cat = next(c for c in categories if c["id"] == 1)
+        assert cat["emoji"] == "🔥"
+
+    async def test_update_category_emoji_remove(self, db_session, seed_data):
+        await AdminService.update_category_emoji(1, None)
+
+        categories = await AdminService.get_categories()
+        cat = next(c for c in categories if c["id"] == 1)
+        assert cat["emoji"] is None
+
     async def test_rename_category(self, db_session, seed_data):
         await AdminService.rename_category(1, "Свечи премиум")
 

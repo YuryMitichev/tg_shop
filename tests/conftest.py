@@ -86,8 +86,8 @@ async def seed_data(db_session):
 
     async with session_maker() as session:
         session.add_all([
-            Category(id=1, name="Свечи"),
-            Category(id=2, name="Диффузоры"),
+            Category(id=1, name="Свечи", emoji="🕯"),
+            Category(id=2, name="Диффузоры", emoji="🏠"),
         ])
 
         session.add_all([

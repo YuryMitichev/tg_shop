@@ -20,9 +20,9 @@ async def seed_if_empty() -> None:
             return
 
         session.add_all([
-            Category(id=1, name="🕯 Ароматические свечи"),
-            Category(id=2, name="🏠 Диффузоры"),
-            Category(id=3, name="🎁 Подарочные наборы"),
+            Category(id=1, name="Ароматические свечи", emoji="🕯"),
+            Category(id=2, name="Диффузоры", emoji="🏠"),
+            Category(id=3, name="Подарочные наборы", emoji="🎁"),
         ])
 
         session.add_all([

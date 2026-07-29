@@ -11,6 +11,7 @@ def _category_to_dict(category: Category) -> dict:
     return {
         "id": category.id,
         "name": category.name,
+        "emoji": category.emoji,
     }
 
 

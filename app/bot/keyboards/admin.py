@@ -16,12 +16,17 @@ def get_admin_menu() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def _cat_label(category: dict) -> str:
+    emoji = category.get("emoji")
+    return f"{emoji} {category['name']}" if emoji else category["name"]
+
+
 def get_admin_categories_keyboard(categories: list[dict]) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
     for category in categories:
         builder.button(
-            text=category["name"],
+            text=_cat_label(category),
             callback_data=f"admin_cat:{category['id']}"
         )
 
@@ -41,7 +46,7 @@ def get_admin_manage_categories_keyboard(categories: list[dict]) -> InlineKeyboa
 
     for category in categories:
         builder.button(
-            text=f"✏️ {category['name']}",
+            text=f"✏️ {_cat_label(category)}",
             callback_data=f"admin_rename_cat:{category['id']}"
         )
 
@@ -59,6 +64,7 @@ def get_admin_manage_categories_keyboard(categories: list[dict]) -> InlineKeyboa
 def get_admin_rename_category_keyboard(category_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
+    builder.button(text="😀 Сменить эмодзи", callback_data=f"admin_emoji_cat:{category_id}")
     builder.button(text="🗑 Удалить категорию", callback_data=f"admin_delete_cat:{category_id}")
     builder.button(text="⬅ Назад", callback_data="admin_manage_categories")
 

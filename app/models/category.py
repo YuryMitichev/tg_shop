@@ -8,6 +8,7 @@ class Category(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(nullable=False)
+    emoji: Mapped[str | None] = mapped_column(nullable=True)
 
     products: Mapped[list["Product"]] = relationship(
         back_populates="category",

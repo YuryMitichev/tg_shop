@@ -8,9 +8,11 @@ async def get_catalog_keyboard():
     builder = InlineKeyboardBuilder()
 
     for category in await CatalogService.get_categories():
+        emoji = category.get("emoji")
+        label = f"{emoji} {category['name']}" if emoji else category["name"]
 
         builder.button(
-            text=category["name"],
+            text=label,
             callback_data=f"category_{category['id']}"
         )
 

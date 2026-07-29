@@ -16,6 +16,7 @@ def _category_to_dict(category: Category) -> dict:
     return {
         "id": category.id,
         "name": category.name,
+        "emoji": category.emoji,
     }
 
 
@@ -63,9 +64,9 @@ class AdminService:
             return [_category_to_dict(c) for c in result.scalars().all()]
 
     @staticmethod
-    async def create_category(name: str) -> int:
+    async def create_category(name: str, emoji: str | None = None) -> int:
         async with async_session() as session:
-            category = Category(name=name)
+            category = Category(name=name, emoji=emoji or None)
             session.add(category)
             await session.commit()
             await session.refresh(category)
@@ -78,6 +79,15 @@ class AdminService:
 
             if category:
                 category.name = name
+                await session.commit()
+
+    @staticmethod
+    async def update_category_emoji(category_id: int, emoji: str | None) -> None:
+        async with async_session() as session:
+            category = await session.get(Category, category_id)
+
+            if category:
+                category.emoji = emoji or None
                 await session.commit()
 
     @staticmethod

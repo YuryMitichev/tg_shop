@@ -126,17 +126,63 @@ async def add_category_start(callback: CallbackQuery, state: FSMContext):
 async def add_category_process(message: Message, state: FSMContext):
     name = message.text.strip()
 
-    category_id = await AdminService.create_category(name)
-    await state.clear()
-
-    categories = await AdminService.get_categories()
+    await state.update_data(name=name)
+    await state.set_state(AdminCategoryState.waiting_emoji)
 
     await message.answer(
-        f"✅ Категория «{name}» добавлена (ID {category_id}).\n\n"
-        "🗂 <b>Управление категориями</b>\n\n"
-        "Нажмите на категорию, чтобы переименовать или удалить.",
-        reply_markup=get_admin_manage_categories_keyboard(categories)
+        "Отправьте эмодзи для категории (например: 🕊, 🏠, 🎁).\n"
+        'Отправьте «-», чтобы пропустить.'
     )
+
+
+@router.message(AdminCategoryState.waiting_emoji)
+async def process_category_emoji(message: Message, state: FSMContext):
+    data = await state.get_data()
+    emoji_text = message.text.strip()
+    emoji = None if emoji_text == "-" else emoji_text
+
+    if "category_id" in data:
+        category_id = data["category_id"]
+        await AdminService.update_category_emoji(category_id, emoji)
+        await state.clear()
+
+        categories = await AdminService.get_categories()
+        category = next((c for c in categories if c["id"] == category_id), None)
+
+        emoji_display = f"{category['emoji']} " if category and category["emoji"] else ""
+        await message.answer(
+            f"✅ Эмодзи категории изменён.\n\n"
+            "🗂 <b>Управление категориями</b>\n\n"
+            "Нажмите на категорию, чтобы переименовать или удалить.",
+            reply_markup=get_admin_manage_categories_keyboard(categories)
+        )
+    else:
+        name = data["name"]
+        category_id = await AdminService.create_category(name, emoji)
+        await state.clear()
+
+        categories = await AdminService.get_categories()
+
+        await message.answer(
+            f"✅ Категория «{name}» добавлена (ID {category_id}).\n\n"
+            "🗂 <b>Управление категориями</b>\n\n"
+            "Нажмите на категорию, чтобы переименовать или удалить.",
+            reply_markup=get_admin_manage_categories_keyboard(categories)
+        )
+
+
+@router.callback_query(F.data.startswith("admin_emoji_cat:"))
+async def emoji_category_start(callback: CallbackQuery, state: FSMContext):
+    category_id = int(callback.data.split(":")[1])
+
+    await state.set_state(AdminCategoryState.waiting_emoji)
+    await state.update_data(category_id=category_id)
+
+    await callback.message.edit_text(
+        "Отправьте новый эмодзи для категории.\n"
+        'Отправьте «-», чтобы убрать эмодзи.'
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("admin_rename_cat:"))
@@ -155,9 +201,13 @@ async def rename_category_start(callback: CallbackQuery, state: FSMContext):
 
     count = await AdminService.count_products_in_category(category_id)
 
+    emoji_display = f"{category['emoji']} " if category["emoji"] else ""
+    emoji_line = f"Эмодзи: {category['emoji']}" if category["emoji"] else "Эмодзи: нет"
+
     await callback.message.edit_text(
-        f"✏️ <b>{category['name']}</b>\n\n"
-        f"Товаров в категории: {count}\n\n"
+        f"✏️ <b>{emoji_display}{category['name']}</b>\n\n"
+        f"Товаров в категории: {count}\n"
+        f"{emoji_line}\n\n"
         "Введите новое название или воспользуйтесь кнопками ниже.",
         reply_markup=get_admin_rename_category_keyboard(category_id)
     )
