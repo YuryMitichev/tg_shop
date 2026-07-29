@@ -20,7 +20,13 @@ async def select_variant(
 
     data = await state.get_data()
 
-    product = await CatalogService.get_product(data["product_id"])
+    product_id = data.get("product_id")
+
+    if not product_id:
+        await callback.answer("Товар не найден, откройте каталог заново.", show_alert=True)
+        return
+
+    product = await CatalogService.get_product(product_id)
 
     if product is None:
         await callback.answer("Товар больше не найден.", show_alert=True)
@@ -43,10 +49,17 @@ async def add_to_cart(
 
     data = await state.get_data()
 
+    product_id = data.get("product_id")
+    variant_id = data.get("variant_id")
+
+    if not product_id or not variant_id:
+        await callback.answer("Сначала выберите товар.", show_alert=True)
+        return
+
     await CartService.add_item(
         telegram_user_id=callback.from_user.id,
-        product_id=data["product_id"],
-        variant_id=data["variant_id"],
+        product_id=product_id,
+        variant_id=variant_id,
         quantity=1,
     )
 
