@@ -1,0 +1,3 @@
+svechevarov-family.ru, www.svechevarov-family.ru {
+    reverse_proxy bot:8000
+}

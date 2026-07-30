@@ -7,10 +7,32 @@ services:
       - .env
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////app/data/shop.db
-    ports:
-      - "8000:8000"
     volumes:
       - bot_data:/app/data
+    networks:
+      - shopnet
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: tg_shop_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - shopnet
+    depends_on:
+      - bot
 
 volumes:
   bot_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  shopnet:
