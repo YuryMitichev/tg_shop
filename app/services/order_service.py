@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, exists
 from sqlalchemy.orm import selectinload
 
 from app.database.db import async_session
@@ -43,6 +43,7 @@ class OrderService:
             order.items = [
                 OrderItem(
                     product_name=item["product_name"],
+                    product_id=item["product_id"],
                     variant_volume=item["volume"],
                     price=item["price"],
                     quantity=item["quantity"],
@@ -76,6 +77,23 @@ class OrderService:
                 select(Order.telegram_user_id).where(Order.id == order_id)
             )
             return result.scalar_one_or_none()
+
+    @staticmethod
+    async def has_purchased(telegram_user_id: int, product_id: int) -> bool:
+        """Проверяет, покупал ли пользователь данный товар (заказ не отменён)."""
+        async with async_session() as session:
+            result = await session.execute(
+                select(
+                    exists()
+                    .where(
+                        OrderItem.product_id == product_id,
+                        OrderItem.order_id == Order.id,
+                        Order.telegram_user_id == telegram_user_id,
+                        Order.status != "cancelled",
+                    )
+                )
+            )
+            return bool(result.scalar())
 
     @staticmethod
     async def get_user_orders(telegram_user_id: int, limit: int = 10) -> list[dict]:

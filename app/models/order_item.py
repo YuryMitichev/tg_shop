@@ -18,6 +18,10 @@ class OrderItem(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
 
+    # product_id добавлен для проверки покупки при отзывах.
+    # nullable: старые заказы (до миграции) не содержат это поле.
+    product_id: Mapped[int | None] = mapped_column(nullable=True)
+
     product_name: Mapped[str] = mapped_column(nullable=False)
     variant_volume: Mapped[str] = mapped_column(nullable=False)
     price: Mapped[int] = mapped_column(nullable=False)

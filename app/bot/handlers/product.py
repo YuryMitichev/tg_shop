@@ -7,6 +7,7 @@ from app.bot.views.product_view import show_product
 from app.bot.states.order import ReviewState
 from app.services.catalog_service import CatalogService
 from app.services.cart_service import CartService
+from app.services.order_service import OrderService
 from app.services.review_service import ReviewService
 
 router = Router()
@@ -83,12 +84,21 @@ async def add_to_cart(
 
 @router.callback_query(F.data == "review")
 async def start_review(callback: CallbackQuery, state: FSMContext):
-    """Начало отзыва — показ клавиатуры оценок."""
+    """Начало отзыва — только для покупателей товара."""
     data = await state.get_data()
     product_id = data.get("product_id")
 
     if not product_id:
         await callback.answer("Товар не найден, откройте каталог заново.", show_alert=True)
+        return
+
+    has_bought = await OrderService.has_purchased(callback.from_user.id, product_id)
+
+    if not has_bought:
+        await callback.answer(
+            "⭐ Отзывы доступны только после покупки товара.",
+            show_alert=True,
+        )
         return
 
     await state.set_state(ReviewState.waiting_rating)
