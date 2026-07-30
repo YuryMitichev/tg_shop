@@ -3,6 +3,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 from aiogram.fsm.context import FSMContext
 
 from app.bot.utils.messages import replace_with_text
+from app.services.message_service import MessageService
 
 router = Router()
 
@@ -14,12 +15,14 @@ async def menu_callback(callback: CallbackQuery, state: FSMContext):
 
     await state.clear()
 
+    text = await MessageService.get("menu")
+
     await replace_with_text(
         callback.message,
         callback.bot,
         callback.message.chat.id,
         state,
-        "👋 <b>Главное меню</b>\n\nВыберите раздел — кнопки внизу.",
+        text,
         reply_markup=_EMPTY_KB,
     )
 

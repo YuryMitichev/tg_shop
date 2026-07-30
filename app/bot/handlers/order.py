@@ -12,6 +12,7 @@ from app.bot.utils.messages import show_screen, track_message
 from app.services.cart_service import CartService
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
+from app.services.message_service import MessageService
 from app.core.config import settings
 from app.utils.escape import esc
 from app.utils.validation import (
@@ -48,8 +49,7 @@ async def start_checkout(callback: CallbackQuery, state: FSMContext):
     await state.set_state(OrderState.waiting_full_name)
 
     await callback.message.edit_text(
-        "📝 <b>Оформление заказа</b>\n\n"
-        "Как к вам обращаться? Напишите имя и фамилию.",
+        await MessageService.get("checkout_name"),
         reply_markup=_EMPTY_KB,
     )
 
@@ -68,7 +68,7 @@ async def process_full_name(message: Message, state: FSMContext):
     await state.update_data(full_name=message.text.strip())
     await state.set_state(OrderState.waiting_phone)
 
-    await show_screen(message, state, "📞 Укажите номер телефона для связи.")
+    await show_screen(message, state, await MessageService.get("checkout_phone"))
 
 
 @router.message(OrderState.waiting_phone)
@@ -87,8 +87,7 @@ async def process_phone(message: Message, state: FSMContext):
     await show_screen(
         message,
         state,
-        "💬 Добавьте комментарий к заказу (пожелания, удобное время и т.д.).\n\n"
-        "Отправьте «-», чтобы пропустить.",
+        await MessageService.get("checkout_comment"),
     )
 
 

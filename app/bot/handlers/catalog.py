@@ -6,19 +6,21 @@ from app.bot.views.product_view import show_product
 from app.bot.keyboards.catalog import get_catalog_keyboard
 from app.bot.utils.messages import show_screen, replace_with_text
 from app.services.catalog_service import CatalogService
+from app.services.message_service import MessageService
 
 router = Router()
 
 
 async def _render_catalog(callback: CallbackQuery, state: FSMContext) -> None:
     keyboard = await get_catalog_keyboard()
+    text = await MessageService.get("catalog")
 
     await replace_with_text(
         callback.message,
         callback.bot,
         callback.message.chat.id,
         state,
-        "<b>🛍 Каталог</b>\n\nВыберите категорию.",
+        text,
         reply_markup=keyboard,
     )
 
@@ -30,11 +32,12 @@ async def open_catalog_msg(message: Message, state: FSMContext):
     await state.clear()
 
     keyboard = await get_catalog_keyboard()
+    text = await MessageService.get("catalog")
 
     await show_screen(
         message,
         state,
-        "<b>🛍 Каталог</b>\n\nВыберите категорию.",
+        text,
         reply_markup=keyboard,
     )
 

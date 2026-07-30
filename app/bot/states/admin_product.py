@@ -21,3 +21,7 @@ class AdminCategoryState(StatesGroup):
     waiting_name = State()
     waiting_rename = State()
     waiting_emoji = State()
+
+
+class AdminMessageState(StatesGroup):
+    waiting_new_content = State()

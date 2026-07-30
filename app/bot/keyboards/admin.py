@@ -10,6 +10,37 @@ def get_admin_menu() -> InlineKeyboardMarkup:
     builder.button(text="🗂 Товары", callback_data="admin_products")
     builder.button(text="📦 Заказы", callback_data="admin_orders")
     builder.button(text="📊 Статистика", callback_data="admin_stats")
+    builder.button(text="💬 Сообщения", callback_data="admin_messages")
+
+    builder.adjust(1)
+
+    return builder.as_markup()
+
+
+def get_admin_messages_keyboard(messages: list[dict]) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+
+    for msg in messages:
+        mark = "📝" if not msg["is_default"] else "📄"
+        builder.button(
+            text=f"{mark} {msg['label']}",
+            callback_data=f"admin_msg:{msg['key']}",
+        )
+
+    builder.adjust(1)
+
+    builder.button(text="⬅ Админ-меню", callback_data="admin_menu")
+
+    builder.adjust(1)
+
+    return builder.as_markup()
+
+
+def get_admin_message_edit_keyboard(key: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+
+    builder.button(text="🔄 Сбросить к стандарту", callback_data=f"admin_msg_reset:{key}")
+    builder.button(text="⬅ К сообщениям", callback_data="admin_messages")
 
     builder.adjust(1)
 

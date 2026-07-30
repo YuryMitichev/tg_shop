@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.utils.messages import show_screen, replace_with_text
+from app.services.message_service import MessageService
 
 router = Router()
 
@@ -21,20 +22,6 @@ def _back_keyboard():
     return builder.as_markup()
 
 
-DELIVERY_TEXT = (
-    "🚚 <b>Доставка</b>\n\n"
-    "Доставляем по России курьерской службой и Почтой России.\n"
-    "Точную стоимость и сроки уточним при оформлении заказа — "
-    "они зависят от региона."
-)
-
-PAYMENT_TEXT = (
-    "💳 <b>Оплата</b>\n\n"
-    "Оплата переводом по СБП или на карту — реквизиты пришлёт "
-    "менеджер после оформления заказа."
-)
-
-
 @router.message(F.text == "🚚 Доставка")
 async def show_delivery_msg(message: Message, state: FSMContext):
     await state.clear()
@@ -42,7 +29,7 @@ async def show_delivery_msg(message: Message, state: FSMContext):
     await show_screen(
         message,
         state,
-        DELIVERY_TEXT,
+        await MessageService.get("delivery"),
         reply_markup=_EMPTY_KB,
     )
 
@@ -54,7 +41,7 @@ async def show_payment_msg(message: Message, state: FSMContext):
     await show_screen(
         message,
         state,
-        PAYMENT_TEXT,
+        await MessageService.get("payment"),
         reply_markup=_EMPTY_KB,
     )
 
@@ -66,7 +53,7 @@ async def show_delivery_cb(callback: CallbackQuery, state: FSMContext):
         callback.bot,
         callback.message.chat.id,
         state,
-        DELIVERY_TEXT,
+        await MessageService.get("delivery"),
         reply_markup=_back_keyboard(),
     )
     await callback.answer()
@@ -79,7 +66,7 @@ async def show_payment_cb(callback: CallbackQuery, state: FSMContext):
         callback.bot,
         callback.message.chat.id,
         state,
-        PAYMENT_TEXT,
+        await MessageService.get("payment"),
         reply_markup=_back_keyboard(),
     )
     await callback.answer()

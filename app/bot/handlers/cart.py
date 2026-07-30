@@ -5,13 +5,14 @@ from aiogram.fsm.context import FSMContext
 from app.bot.keyboards.cart import get_cart_keyboard
 from app.bot.utils.messages import show_screen, replace_with_text
 from app.services.cart_service import CartService
+from app.services.message_service import MessageService
 
 router = Router()
 
 
-def _render_cart_text(items: list[dict]) -> str:
+async def _render_cart_text(items: list[dict]) -> str:
     if not items:
-        return "🛒 <b>Корзина пуста</b>\n\nДобавьте товары из каталога."
+        return await MessageService.get("cart_empty")
 
     lines = ["🛒 <b>Ваша корзина</b>\n"]
 
@@ -37,7 +38,7 @@ async def _render_cart_cb(callback: CallbackQuery, state: FSMContext) -> None:
         callback.bot,
         callback.message.chat.id,
         state,
-        _render_cart_text(items),
+        await _render_cart_text(items),
         reply_markup=get_cart_keyboard(items),
     )
 
@@ -53,7 +54,7 @@ async def open_cart_msg(message: Message, state: FSMContext):
     await show_screen(
         message,
         state,
-        _render_cart_text(items),
+        await _render_cart_text(items),
         reply_markup=get_cart_keyboard(items),
     )
 
@@ -72,7 +73,7 @@ async def increase_quantity(callback: CallbackQuery):
     items = await CartService.get_items(callback.from_user.id)
 
     await callback.message.edit_text(
-        _render_cart_text(items),
+        await _render_cart_text(items),
         reply_markup=get_cart_keyboard(items)
     )
     await callback.answer()
@@ -87,7 +88,7 @@ async def decrease_quantity(callback: CallbackQuery):
     items = await CartService.get_items(callback.from_user.id)
 
     await callback.message.edit_text(
-        _render_cart_text(items),
+        await _render_cart_text(items),
         reply_markup=get_cart_keyboard(items)
     )
     await callback.answer()
@@ -102,7 +103,7 @@ async def remove_item(callback: CallbackQuery):
     items = await CartService.get_items(callback.from_user.id)
 
     await callback.message.edit_text(
-        _render_cart_text(items),
+        await _render_cart_text(items),
         reply_markup=get_cart_keyboard(items)
     )
     await callback.answer()

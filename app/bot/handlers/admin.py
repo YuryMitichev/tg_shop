@@ -8,6 +8,7 @@ from app.bot.states.admin_product import (
     AdminProductState,
     AdminEditProductState,
     AdminCategoryState,
+    AdminMessageState,
 )
 from app.bot.keyboards.admin import (
     get_admin_menu,
@@ -24,8 +25,11 @@ from app.bot.keyboards.admin import (
     get_admin_manage_categories_keyboard,
     get_admin_rename_category_keyboard,
     get_confirm_delete_category_keyboard,
+    get_admin_messages_keyboard,
+    get_admin_message_edit_keyboard,
 )
 from app.services.admin_service import AdminService
+from app.services.message_service import MessageService
 from app.utils.order_status import STATUS_LABELS
 from app.utils.escape import esc
 
@@ -824,3 +828,98 @@ async def change_order_status(callback: CallbackQuery):
     await callback.answer(f"Статус изменён: {STATUS_LABELS[new_status]}")
 
     await _render_order(callback, int(order_id))
+
+
+# ==========================
+# Системные сообщения
+# ==========================
+
+@router.callback_query(F.data == "admin_messages")
+async def list_messages(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+
+    messages = await MessageService.get_all()
+
+    await callback.message.edit_text(
+        "💬 <b>Системные сообщения</b>\n\n"
+        "📄 — стандартный текст\n"
+        "📝 — изменённый текст\n\n"
+        "Выберите сообщение для редактирования:",
+        reply_markup=get_admin_messages_keyboard(messages),
+    )
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_msg:"))
+async def edit_message_start(callback: CallbackQuery, state: FSMContext):
+    key = callback.data.split(":", 1)[1]
+
+    msg = await MessageService.get_one(key)
+
+    if msg is None:
+        await callback.answer("Сообщение не найдено.", show_alert=True)
+        return
+
+    await state.set_state(AdminMessageState.waiting_new_content)
+    await state.update_data(msg_key=key)
+
+    status = "стандартный" if msg["is_default"] else "изменённый"
+
+    await callback.message.edit_text(
+        f"✏️ <b>{msg['label']}</b>\n"
+        f"Статус: {status}\n\n"
+        f"Текущий текст:\n\n{msg['content']}\n\n"
+        "Отправьте новый текст сообщения.\n"
+        "Поддерживаются HTML-теги: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;code&gt;</code>.",
+        reply_markup=get_admin_message_edit_keyboard(key),
+    )
+
+    await callback.answer()
+
+
+@router.message(AdminMessageState.waiting_new_content)
+async def edit_message_save(message: Message, state: FSMContext):
+    data = await state.get_data()
+    key = data["msg_key"]
+
+    await MessageService.update(key, message.text)
+    await state.clear()
+
+    messages = await MessageService.get_all()
+
+    await message.answer(
+        "✅ Текст сообщения обновлён.\n\n"
+        "💬 <b>Системные сообщения</b>\n\n"
+        "📄 — стандартный текст\n"
+        "📝 — изменённый текст\n\n"
+        "Выберите сообщение для редактирования:",
+        reply_markup=get_admin_messages_keyboard(messages),
+    )
+
+
+@router.callback_query(F.data.startswith("admin_msg_reset:"))
+async def reset_message(callback: CallbackQuery, state: FSMContext):
+    key = callback.data.split(":", 1)[1]
+
+    await MessageService.reset(key)
+    await state.clear()
+
+    msg = await MessageService.get_one(key)
+
+    if msg is None:
+        await callback.answer("Сообщение не найдено.", show_alert=True)
+        return
+
+    messages = await MessageService.get_all()
+
+    await callback.message.edit_text(
+        f"✅ Сброшено к стандарту: <b>{msg['label']}</b>\n\n"
+        "💬 <b>Системные сообщения</b>\n\n"
+        "📄 — стандартный текст\n"
+        "📝 — изменённый текст\n\n"
+        "Выберите сообщение для редактирования:",
+        reply_markup=get_admin_messages_keyboard(messages),
+    )
+
+    await callback.answer("Сброшено к стандарту")
