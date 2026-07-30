@@ -82,6 +82,16 @@ class Settings(BaseSettings):
     payment_card_number: str | None = Field(default=None, alias="PAYMENT_CARD_NUMBER")
     payment_recipient_name: str | None = Field(default=None, alias="PAYMENT_RECIPIENT_NAME")
 
+    @property
+    def webapp_enabled(self) -> bool:
+        return bool(self.app_base_url)
+
+    @property
+    def webapp_url(self) -> str | None:
+        if self.app_base_url:
+            return f"{self.app_base_url.rstrip('/')}/app/"
+        return None
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Магазин</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Каталог -->
+<div id="view-catalog" class="view active">
+    <div id="categories" class="categories"></div>
+    <div id="products" class="products-grid"></div>
+</div>
+
+<!-- Карточка товара -->
+<div id="view-product" class="view">
+    <div class="header">
+        <button class="back-btn" onclick="App.showCatalog()">←</button>
+    </div>
+    <div id="product-detail"></div>
+</div>
+
+<!-- Корзина -->
+<div id="view-cart" class="view">
+    <div class="header">
+        <h2>🛒 Корзина</h2>
+    </div>
+    <div id="cart-items"></div>
+    <div id="cart-footer"></div>
+</div>
+
+<!-- Оформление -->
+<div id="view-checkout" class="view">
+    <div class="header">
+        <button class="back-btn" onclick="App.showCart()">←</button>
+        <h2>Оформление</h2>
+    </div>
+    <form id="checkout-form" onsubmit="App.submitOrder(event)">
+        <label>Имя и фамилия</label>
+        <input type="text" id="co-name" required maxlength="100">
+        <label>Телефон</label>
+        <input type="tel" id="co-phone" required placeholder="+7 999 123-45-67">
+        <label>Комментарий (необязательно)</label>
+        <textarea id="co-comment" rows="3" placeholder="Пожелания к заказу..."></textarea>
+        <div id="co-total" class="co-total"></div>
+        <button type="submit" class="btn-primary">Оформить заказ</button>
+    </form>
+</div>
+
+<!-- Заказы -->
+<div id="view-orders" class="view">
+    <div class="header">
+        <h2>📦 Мои заказы</h2>
+    </div>
+    <div id="orders-list"></div>
+</div>
+
+<!-- Заказ оформлен -->
+<div id="view-success" class="view">
+    <div id="success-content"></div>
+</div>
+
+<!-- Bottom nav -->
+<div id="bottom-nav" class="bottom-nav">
+    <button class="nav-btn active" onclick="App.showCatalog()">
+        <span class="nav-icon">🛍</span>
+        <span class="nav-label">Каталог</span>
+    </button>
+    <button class="nav-btn" onclick="App.showCart()">
+        <span class="nav-icon">🛒</span>
+        <span class="nav-label">Корзина</span>
+        <span id="cart-badge" class="cart-badge" style="display:none">0</span>
+    </button>
+    <button class="nav-btn" onclick="App.showOrders()">
+        <span class="nav-icon">📦</span>
+        <span class="nav-label">Заказы</span>
+    </button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

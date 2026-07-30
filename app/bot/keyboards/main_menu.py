@@ -1,5 +1,7 @@
-from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from app.core.config import settings
 
 
 REPLY_BUTTONS = ["🛍 Каталог", "🛒 Корзина", "🚚 Доставка", "💳 Оплата"]
@@ -8,20 +10,32 @@ REPLY_BUTTONS = ["🛍 Каталог", "🛒 Корзина", "🚚 Доста�
 def get_reply_keyboard() -> ReplyKeyboardMarkup:
     """
     Постоянная клавиатура внизу экрана.
+    Если Mini App включён — добавляется кнопка «🏪 Витрина».
     """
 
+    rows = []
+
+    if settings.webapp_enabled:
+        rows.append([
+            KeyboardButton(
+                text="🏪 Витрина",
+                web_app=WebAppInfo(url=settings.webapp_url),
+            ),
+        ])
+
+    rows.append([
+        KeyboardButton(text="🛍 Каталог"),
+        KeyboardButton(text="🛒 Корзина"),
+    ])
+
+    rows.append([
+        KeyboardButton(text="📦 Мои заказы"),
+        KeyboardButton(text="🚚 Доставка"),
+        KeyboardButton(text="💳 Оплата"),
+    ])
+
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text="🛍 Каталог"),
-                KeyboardButton(text="🛒 Корзина"),
-            ],
-            [
-                KeyboardButton(text="📦 Мои заказы"),
-                KeyboardButton(text="🚚 Доставка"),
-                KeyboardButton(text="💳 Оплата"),
-            ],
-        ],
+        keyboard=rows,
         resize_keyboard=True,
         is_persistent=True,
     )
