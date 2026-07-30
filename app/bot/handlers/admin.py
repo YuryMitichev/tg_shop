@@ -30,7 +30,8 @@ from app.bot.keyboards.admin import (
 )
 from app.services.admin_service import AdminService
 from app.services.message_service import MessageService
-from app.utils.order_status import STATUS_LABELS
+from app.services.order_service import OrderService
+from app.utils.order_status import STATUS_LABELS, STATUS_NOTIFICATIONS
 from app.utils.escape import esc
 
 router = Router()
@@ -826,6 +827,18 @@ async def change_order_status(callback: CallbackQuery):
 
     await AdminService.set_order_status(int(order_id), new_status)
     await callback.answer(f"Статус изменён: {STATUS_LABELS[new_status]}")
+
+    notification = STATUS_NOTIFICATIONS.get(new_status)
+    if notification:
+        user_id = await OrderService.get_order_owner(int(order_id))
+        if user_id:
+            try:
+                await callback.bot.send_message(
+                    chat_id=user_id,
+                    text=notification.format(order_id=order_id),
+                )
+            except Exception:
+                pass
 
     await _render_order(callback, int(order_id))
 

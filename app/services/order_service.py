@@ -69,6 +69,15 @@ class OrderService:
         }
 
     @staticmethod
+    async def get_order_owner(order_id: int) -> int | None:
+        """Возвращает telegram_user_id владельца заказа."""
+        async with async_session() as session:
+            result = await session.execute(
+                select(Order.telegram_user_id).where(Order.id == order_id)
+            )
+            return result.scalar_one_or_none()
+
+    @staticmethod
     async def get_user_orders(telegram_user_id: int, limit: int = 10) -> list[dict]:
         """Последние заказы пользователя (краткая информация)."""
         async with async_session() as session:
