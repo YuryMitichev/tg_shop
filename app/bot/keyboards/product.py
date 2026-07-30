@@ -25,6 +25,9 @@ def get_product_keyboard(product: dict, selected_variant_id: int, position: int,
     # Добавить в корзину
     builder.button(text="🛒 Добавить в корзину", callback_data="add_to_cart")
 
+    # Отзыв
+    builder.button(text="⭐ Оставить отзыв", callback_data="review")
+
     # Навигация
     builder.button(text="◀️", callback_data="prev_product")
     builder.button(text=f"{position}/{total}", callback_data="ignore")
@@ -33,7 +36,7 @@ def get_product_keyboard(product: dict, selected_variant_id: int, position: int,
     # Назад к категориям
     builder.button(text="⬅️ Категории", callback_data="catalog")
 
-    # Раскладка: ряд 1 — варианты, ряд 2 — корзина, ряд 3 — навигация (3), ряд 4 — назад
-    builder.adjust(len(product["variants"]), 1, 3, 1)
+    # Раскладка: ряд 1 — варианты, ряд 2 — корзина, ряд 3 — отзыв, ряд 4 — навигация (3), ряд 5 — назад
+    builder.adjust(len(product["variants"]), 1, 1, 3, 1)
 
     return builder.as_markup()

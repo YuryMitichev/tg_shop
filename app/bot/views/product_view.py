@@ -42,7 +42,7 @@ async def show_product(
         product["id"]
     )
 
-    text = ProductCard.render(product, variant["id"])
+    text = await ProductCard.render(product, variant["id"])
 
     keyboard = get_product_keyboard(
         product,
