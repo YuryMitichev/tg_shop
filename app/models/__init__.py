@@ -7,6 +7,7 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.system_message import SystemMessage
 from app.models.review import Review
+from app.models.promo_code import PromoCode
 
 __all__ = [
     "Category",
@@ -18,4 +19,5 @@ __all__ = [
     "OrderItem",
     "SystemMessage",
     "Review",
+    "PromoCode",
 ]

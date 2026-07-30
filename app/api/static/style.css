@@ -441,6 +441,57 @@ body {
     border-radius: 12px;
 }
 
+.co-total .discount-line {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--destructive);
+    margin-top: 4px;
+}
+
+.co-total .subtotal-line {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--hint);
+    text-decoration: line-through;
+    margin-top: 4px;
+}
+
+.promo-row {
+    display: flex;
+    gap: 8px;
+}
+
+.promo-row input {
+    flex: 1;
+}
+
+.btn-promo {
+    flex-shrink: 0;
+    padding: 14px 20px;
+    border-radius: 12px;
+    border: none;
+    background: var(--secondary-bg);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+#promo-result {
+    font-size: 14px;
+    margin-top: 8px;
+    min-height: 20px;
+}
+
+#promo-result.success {
+    color: #4caf50;
+}
+
+#promo-result.error {
+    color: var(--destructive);
+}
+
 /* Orders */
 #orders-list {
     padding: 12px 16px;

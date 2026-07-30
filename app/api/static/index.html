@@ -45,6 +45,14 @@
         <input type="tel" id="co-phone" required placeholder="+7 999 123-45-67">
         <label>Комментарий (необязательно)</label>
         <textarea id="co-comment" rows="3" placeholder="Пожелания к заказу..."></textarea>
+
+        <label>Промокод (необязательно)</label>
+        <div class="promo-row">
+            <input type="text" id="co-promo" placeholder="Например: NEW10">
+            <button type="button" class="btn-promo" onclick="App.applyPromo()">Применить</button>
+        </div>
+        <div id="promo-result"></div>
+
         <div id="co-total" class="co-total"></div>
         <button type="submit" class="btn-primary">Оформить заказ</button>
     </form>

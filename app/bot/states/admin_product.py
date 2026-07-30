@@ -25,3 +25,10 @@ class AdminCategoryState(StatesGroup):
 
 class AdminMessageState(StatesGroup):
     waiting_new_content = State()
+
+
+class AdminPromoState(StatesGroup):
+    waiting_code = State()
+    waiting_type = State()
+    waiting_value = State()
+    waiting_max_uses = State()

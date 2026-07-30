@@ -12,6 +12,7 @@ import app.services.cart_service as cart_service
 import app.services.catalog_service as catalog_service
 import app.services.order_service as order_service
 import app.services.review_service as review_service
+import app.services.promo_service as promo_service
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
     CartItem,
@@ -22,6 +23,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     ProductPhoto,
     ProductVariant,
     Review,
+    PromoCode,
 )
 
 
@@ -35,6 +37,7 @@ _PATCH_TARGETS = [
     order_service,
     admin_service,
     review_service,
+    promo_service,
 ]
 
 

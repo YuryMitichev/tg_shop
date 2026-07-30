@@ -11,6 +11,45 @@ def get_admin_menu() -> InlineKeyboardMarkup:
     builder.button(text="📦 Заказы", callback_data="admin_orders")
     builder.button(text="📊 Статистика", callback_data="admin_stats")
     builder.button(text="💬 Сообщения", callback_data="admin_messages")
+    builder.button(text="🎟 Промокоды", callback_data="admin_promos")
+
+    builder.adjust(1)
+
+    return builder.as_markup()
+
+
+def get_admin_promos_keyboard(promos: list[dict]) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+
+    for p in promos:
+        icon = "✅" if p["is_active"] else "🚫"
+        if p["discount_type"] == "percent":
+            val = f"−{p['discount_value']}%"
+        else:
+            val = f"−{p['discount_value']}₽"
+        builder.button(
+            text=f"{icon} {p['code']} — {val} ({p['used_count']}/{p['max_uses'] or '∞'})",
+            callback_data=f"admin_promo:{p['id']}",
+        )
+
+    builder.button(text="➕ Создать промокод", callback_data="admin_promo_new")
+    builder.button(text="⬅ Админ-меню", callback_data="admin_menu")
+
+    builder.adjust(1)
+
+    return builder.as_markup()
+
+
+def get_admin_promo_detail_keyboard(promo_id: int, is_active: bool) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+
+    if is_active:
+        builder.button(text="🚫 Выключить", callback_data=f"admin_promo_toggle:{promo_id}")
+    else:
+        builder.button(text="✅ Включить", callback_data=f"admin_promo_toggle:{promo_id}")
+
+    builder.button(text="🗑 Удалить", callback_data=f"admin_promo_delete:{promo_id}")
+    builder.button(text="⬅ К промокодам", callback_data="admin_promos")
 
     builder.adjust(1)
 

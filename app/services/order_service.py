@@ -5,6 +5,7 @@ from app.database.db import async_session
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.services.cart_service import CartService
+from app.services.promo_service import PromoCodeService
 
 
 class OrderService:
@@ -16,6 +17,7 @@ class OrderService:
         phone: str,
         address: str,
         comment: str | None = None,
+        promo_code: str | None = None,
     ) -> dict | None:
         """
         Создаёт заказ из текущей корзины пользователя и очищает корзину.
@@ -29,6 +31,18 @@ class OrderService:
 
         total = sum(item["subtotal"] for item in items)
 
+        discount = 0
+        applied_promo = None
+
+        if promo_code:
+            promo_info = await PromoCodeService.validate(promo_code, total)
+
+            if promo_info:
+                discount = promo_info["discount_amount"]
+                applied_promo = promo_info["code"]
+
+        final_total = total - discount
+
         async with async_session() as session:
             order = Order(
                 telegram_user_id=telegram_user_id,
@@ -37,7 +51,9 @@ class OrderService:
                 phone=phone,
                 address=address,
                 comment=comment,
-                total_amount=total,
+                total_amount=final_total,
+                promo_code=applied_promo,
+                discount_amount=discount,
             )
 
             order.items = [
@@ -59,10 +75,16 @@ class OrderService:
 
         await CartService.clear(telegram_user_id)
 
+        if applied_promo:
+            await PromoCodeService.increment_usage(applied_promo)
+
         return {
             "order_id": order_id,
             "items": items,
-            "total": total,
+            "total": final_total,
+            "subtotal": total,
+            "discount": discount,
+            "promo_code": applied_promo,
             "full_name": full_name,
             "phone": phone,
             "address": address,

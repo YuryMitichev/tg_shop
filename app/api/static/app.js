@@ -6,6 +6,7 @@ const App = {
     categories: [],
     selectedVariant: null,
     cartTotal: 0,
+    appliedPromo: null,
 
     init() {
         this.tg = window.Telegram.WebApp;
@@ -338,7 +339,53 @@ const App = {
         }
 
         this.showView("checkout");
-        document.getElementById("co-total").textContent = `Итого: ${this.cartTotal} ₽`;
+        this.appliedPromo = null;
+        document.getElementById("co-promo").value = "";
+        document.getElementById("promo-result").textContent = "";
+        document.getElementById("promo-result").className = "";
+        this.renderCheckoutTotal();
+    },
+
+    async applyPromo() {
+        const code = document.getElementById("co-promo").value.trim();
+        const result = document.getElementById("promo-result");
+
+        if (!code) {
+            result.textContent = "Введите промокод";
+            result.className = "error";
+            return;
+        }
+
+        result.textContent = "Проверка...";
+
+        try {
+            const promo = await this.api("POST", "/promo/validate", { code });
+
+            this.appliedPromo = promo;
+            result.textContent = `✅ Скидка: ${promo.discount_amount} ₽`;
+            result.className = "success";
+            this.tg.HapticFeedback?.notificationOccurred("success");
+            this.renderCheckoutTotal();
+        } catch (e) {
+            this.appliedPromo = null;
+            result.textContent = "❌ " + e.message;
+            result.className = "error";
+            this.renderCheckoutTotal();
+        }
+    },
+
+    renderCheckoutTotal() {
+        const el = document.getElementById("co-total");
+
+        if (this.appliedPromo) {
+            el.innerHTML = `
+                <div class="subtotal-line">Без скидки: ${this.cartTotal} ₽</div>
+                <div class="discount-line">Скидка: −${this.appliedPromo.discount_amount} ₽</div>
+                <div>Итого: ${this.appliedPromo.final_total} ₽</div>
+            `;
+        } else {
+            el.textContent = `Итого: ${this.cartTotal} ₽`;
+        }
     },
 
     async submitOrder(event) {
@@ -358,6 +405,7 @@ const App = {
                 full_name: name,
                 phone,
                 comment,
+                promo_code: this.appliedPromo?.code || null,
             });
 
             this.updateCartBadge();
@@ -391,6 +439,10 @@ const App = {
         content.innerHTML = `
             <div class="emoji">✅</div>
             <h2>Заказ №${result.order_id} оформлен!</h2>
+            ${result.discount > 0
+                ? `<div class="info">Скидка: <b>−${result.discount} ₽</b></div>`
+                : ""
+            }
             <div class="info">Сумма: <b>${result.total} ₽</b></div>
             ${paymentInfo}
             <button class="btn-primary" onclick="App.showCatalog()">Продолжить покупки</button>

@@ -23,6 +23,10 @@ class Order(Base):
 
     total_amount: Mapped[int] = mapped_column(nullable=False)
 
+    # Промокод и размер скидки
+    promo_code: Mapped[str | None] = mapped_column(nullable=True)
+    discount_amount: Mapped[int] = mapped_column(default=0)
+
     # ID платежа в Тинькофф (после Init)
     payment_id: Mapped[str | None] = mapped_column(nullable=True)
 

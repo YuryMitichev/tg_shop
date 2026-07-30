@@ -14,6 +14,7 @@ from app.models.product_photo import ProductPhoto
 from app.services.catalog_service import CatalogService
 from app.services.cart_service import CartService
 from app.services.order_service import OrderService
+from app.services.promo_service import PromoCodeService
 from app.services.review_service import ReviewService
 
 router = APIRouter()
@@ -37,6 +38,11 @@ class CreateOrderRequest(BaseModel):
     full_name: str
     phone: str
     comment: str | None = None
+    promo_code: str | None = None
+
+
+class ValidatePromoRequest(BaseModel):
+    code: str
 
 
 # ==========================
@@ -166,6 +172,26 @@ async def remove_cart_item(cart_item_id: int, user: dict = Depends(get_current_u
 
 
 # ==========================
+# Промокоды
+# ==========================
+
+@router.post("/promo/validate")
+async def validate_promo(req: ValidatePromoRequest, user: dict = Depends(get_current_user)):
+    cart = await CartService.get_items(user["id"])
+    cart_total = sum(item["subtotal"] for item in cart)
+
+    if cart_total == 0:
+        raise HTTPException(status_code=400, detail="Корзина пуста")
+
+    result = await PromoCodeService.validate(req.code, cart_total)
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Промокод недействителен")
+
+    return result
+
+
+# ==========================
 # Заказы
 # ==========================
 
@@ -183,6 +209,7 @@ async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current
         phone=req.phone,
         address="",
         comment=req.comment,
+        promo_code=req.promo_code,
     )
 
     if order is None:
@@ -192,12 +219,14 @@ async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current
         return {
             "order_id": order["order_id"],
             "total": order["total"],
+            "discount": order["discount"],
             "payment": "qr",
         }
 
     return {
         "order_id": order["order_id"],
         "total": order["total"],
+        "discount": order["discount"],
         "payment": "manual",
         "card_number": settings.payment_card_number,
         "recipient": settings.payment_recipient_name,
