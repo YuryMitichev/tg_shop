@@ -1,0 +1,91 @@
+import secrets
+import time
+from datetime import datetime, timedelta, timezone
+
+import jwt
+
+from app.bot.bot import get_bot
+from app.core.config import settings
+
+
+class AdminAuthService:
+    """
+    Авторизация админ-панели через одноразовый код из Telegram.
+
+    Flow:
+    1. POST /request-code → бот присылает 6-значный код (живёт 5 мин)
+    2. POST /verify → проверка кода, выдача JWT (живёт 24 часа)
+    """
+
+    _codes: dict[int, tuple[str, float]] = {}
+
+    CODE_TTL = 300
+    JWT_ALGORITHM = "HS256"
+    JWT_EXPIRES = timedelta(hours=24)
+
+    @staticmethod
+    async def request_code(telegram_user_id: int) -> bool:
+        if telegram_user_id not in settings.admin_id_list:
+            return False
+
+        code = f"{secrets.randbelow(1000000):06d}"
+        AdminAuthService._codes[telegram_user_id] = (code, time.time() + AdminAuthService.CODE_TTL)
+
+        bot = get_bot()
+        if bot is None:
+            return False
+
+        await bot.send_message(
+            telegram_user_id,
+            f"🔐 <b>Код входа в админ-панель</b>\n\n"
+            f"<code>{code}</code>\n\n"
+            f"Действует 5 минут.",
+        )
+        return True
+
+    @staticmethod
+    def verify_code(telegram_user_id: int, code: str) -> str | None:
+        stored = AdminAuthService._codes.get(telegram_user_id)
+
+        if stored is None:
+            return None
+
+        stored_code, expires = stored
+
+        if time.time() > expires:
+            AdminAuthService._codes.pop(telegram_user_id, None)
+            return None
+
+        if stored_code != code.strip():
+            return None
+
+        AdminAuthService._codes.pop(telegram_user_id, None)
+
+        return AdminAuthService._create_token(telegram_user_id)
+
+    @staticmethod
+    def _create_token(telegram_user_id: int) -> str:
+        now = datetime.now(timezone.utc)
+        payload = {
+            "sub": str(telegram_user_id),
+            "iat": now,
+            "exp": now + AdminAuthService.JWT_EXPIRES,
+        }
+        return jwt.encode(payload, settings.resolved_jwt_secret, algorithm=AdminAuthService.JWT_ALGORITHM)
+
+    @staticmethod
+    def verify_token(token: str) -> int | None:
+        try:
+            payload = jwt.decode(
+                token,
+                settings.resolved_jwt_secret,
+                algorithms=[AdminAuthService.JWT_ALGORITHM],
+            )
+            user_id = int(payload["sub"])
+
+            if user_id not in settings.admin_id_list:
+                return None
+
+            return user_id
+        except Exception:
+            return None

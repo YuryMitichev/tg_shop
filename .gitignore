@@ -23,3 +23,8 @@ venv/
 
 # Логи
 *.log
+
+# Admin (Next.js)
+admin/node_modules/
+admin/.next/
+admin/.env.local

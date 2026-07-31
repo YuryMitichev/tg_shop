@@ -76,6 +76,16 @@ class Settings(BaseSettings):
         return bool(self.tinkoff_terminal_key and self.tinkoff_password and self.app_base_url)
 
     # ==========================
+    # Admin Panel (JWT)
+    # ==========================
+
+    jwt_secret: str = Field(default="", alias="JWT_SECRET")
+
+    @property
+    def resolved_jwt_secret(self) -> str:
+        return self.jwt_secret or self.bot_token
+
+    # ==========================
     # Ручная оплата (без эквайринга)
     # ==========================
 

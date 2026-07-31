@@ -14,5 +14,7 @@ python-dotenv==1.1.1
 
 aiohttp-socks==0.10.1
 
+pyjwt==2.10.1
+
 pytest==8.4.1
 pytest-asyncio==1.0.0

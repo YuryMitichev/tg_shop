@@ -10,6 +10,7 @@ from app.models.product_variant import ProductVariant
 from app.models.product_photo import ProductPhoto
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.review import Review
 
 
 def _category_to_dict(category: Category) -> dict:
@@ -393,3 +394,220 @@ class AdminService:
                 "month_revenue": month_revenue,
                 "top_products": top_products,
             }
+
+    # ==========================
+    # Все товары (вне категорий)
+    # ==========================
+
+    @staticmethod
+    async def get_all_products() -> list[dict]:
+        async with async_session() as session:
+            result = await session.execute(
+                select(Product)
+                .options(
+                    selectinload(Product.variants),
+                    selectinload(Product.photos),
+                    selectinload(Product.category),
+                )
+                .order_by(Product.id.desc())
+            )
+            products = result.scalars().all()
+
+            return [
+                {
+                    **_product_to_dict(p),
+                    "category_name": p.category.name if p.category else None,
+                }
+                for p in products
+            ]
+
+    # ==========================
+    # Заказы (расширенные)
+    # ==========================
+
+    @staticmethod
+    async def get_orders_filtered(
+        status: str | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> dict:
+        async with async_session() as session:
+            query = select(Order).order_by(Order.id.desc())
+
+            if status:
+                query = query.where(Order.status == status)
+
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await session.execute(count_query)
+            total = total_result.scalar() or 0
+
+            result = await session.execute(
+                query.offset((page - 1) * per_page).limit(per_page)
+            )
+
+            orders = []
+            for order in result.scalars().all():
+                orders.append({
+                    "id": order.id,
+                    "status": order.status,
+                    "full_name": order.full_name,
+                    "phone": order.phone,
+                    "total_amount": order.total_amount,
+                    "promo_code": order.promo_code,
+                    "discount_amount": order.discount_amount,
+                    "created_at": order.created_at.isoformat() if order.created_at else None,
+                    "telegram_user_id": order.telegram_user_id,
+                })
+
+            return {
+                "orders": orders,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+            }
+
+    @staticmethod
+    async def get_order_detail(order_id: int) -> dict | None:
+        async with async_session() as session:
+            result = await session.execute(
+                select(Order)
+                .options(selectinload(Order.items))
+                .where(Order.id == order_id)
+            )
+            order = result.scalar_one_or_none()
+
+            if not order:
+                return None
+
+            return {
+                "id": order.id,
+                "status": order.status,
+                "full_name": order.full_name,
+                "phone": order.phone,
+                "address": order.address,
+                "comment": order.comment,
+                "total_amount": order.total_amount,
+                "promo_code": order.promo_code,
+                "discount_amount": order.discount_amount,
+                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "telegram_user_id": order.telegram_user_id,
+                "items": [
+                    {
+                        "product_name": item.product_name,
+                        "variant_volume": item.variant_volume,
+                        "price": item.price,
+                        "quantity": item.quantity,
+                    }
+                    for item in order.items
+                ],
+            }
+
+    # ==========================
+    # Пользователи
+    # ==========================
+
+    @staticmethod
+    async def get_users() -> list[dict]:
+        async with async_session() as session:
+            result = await session.execute(
+                select(
+                    Order.telegram_user_id,
+                    Order.full_name,
+                    Order.phone,
+                    func.count(Order.id).label("orders_count"),
+                    func.sum(Order.total_amount).label("total_spent"),
+                    func.max(Order.created_at).label("last_order"),
+                )
+                .where(Order.status != "cancelled")
+                .group_by(Order.telegram_user_id, Order.full_name, Order.phone)
+                .order_by(func.sum(Order.total_amount).desc())
+            )
+
+            return [
+                {
+                    "telegram_user_id": row[0],
+                    "full_name": row[1],
+                    "phone": row[2],
+                    "orders_count": row[3],
+                    "total_spent": row[4] or 0,
+                    "last_order": row[5].isoformat() if row[5] else None,
+                }
+                for row in result.all()
+            ]
+
+    # ==========================
+    # Отзывы (все)
+    # ==========================
+
+    @staticmethod
+    async def get_all_reviews() -> list[dict]:
+        async with async_session() as session:
+            result = await session.execute(
+                select(Review).order_by(Review.created_at.desc())
+            )
+
+            reviews = []
+            for r in result.scalars().all():
+                product_name = None
+                if r.product_id:
+                    product = await session.get(Product, r.product_id)
+                    product_name = product.name if product else None
+
+                reviews.append({
+                    "id": r.id,
+                    "product_id": r.product_id,
+                    "product_name": product_name,
+                    "telegram_user_id": r.telegram_user_id,
+                    "rating": r.rating,
+                    "text": r.text,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                })
+
+            return reviews
+
+    @staticmethod
+    async def delete_review(review_id: int) -> bool:
+        async with async_session() as session:
+            review = await session.get(Review, review_id)
+
+            if review:
+                await session.delete(review)
+                await session.commit()
+                return True
+
+            return False
+
+    # ==========================
+    # Аналитика (графики)
+    # ==========================
+
+    @staticmethod
+    async def get_revenue_chart(days: int = 30) -> list[dict]:
+        from datetime import timedelta
+
+        async with async_session() as session:
+            now = datetime.now()
+            start = now - timedelta(days=days)
+
+            result = await session.execute(
+                select(
+                    func.date(Order.created_at).label("date"),
+                    func.sum(Order.total_amount).label("revenue"),
+                    func.count(Order.id).label("orders"),
+                )
+                .where(
+                    Order.status != "cancelled",
+                    Order.created_at >= start,
+                )
+                .group_by(func.date(Order.created_at))
+                .order_by(func.date(Order.created_at))
+            )
+
+            return [
+                {
+                    "date": str(row[0]),
+                    "revenue": row[1] or 0,
+                    "orders": row[2],
+                }
+                for row in result.all()
+            ]

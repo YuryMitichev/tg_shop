@@ -12,6 +12,18 @@ services:
     networks:
       - shopnet
 
+  admin:
+    build:
+      context: ./admin
+      args:
+        - NEXT_PUBLIC_API_BASE=${APP_BASE_URL:-https://svechevarov-family.ru}
+    container_name: tg_shop_admin
+    restart: unless-stopped
+    networks:
+      - shopnet
+    depends_on:
+      - bot
+
   caddy:
     image: caddy:2-alpine
     container_name: tg_shop_caddy
@@ -28,6 +40,7 @@ services:
       - shopnet
     depends_on:
       - bot
+      - admin
 
 volumes:
   bot_data:
