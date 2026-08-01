@@ -24,7 +24,7 @@ async_session = async_sessionmaker(
 )
 
 
-async def _add_column_if_missing(conn, table: str, column: str, definition: str) -> None:
+def _add_column_if_missing(conn, table: str, column: str, definition: str) -> None:
     """Добавляет колонку в таблицу, если её ещё нет (SQLite ALTER TABLE)."""
     from sqlalchemy import text, inspect
 
