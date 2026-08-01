@@ -110,6 +110,57 @@ export interface StatusOption {
   label: string;
 }
 
+export interface AnalyticsOverview {
+  revenue: number;
+  revenue_growth: number;
+  orders: number;
+  orders_growth: number;
+  avg_order_value: number;
+  aov_growth: number;
+  unique_customers: number;
+  customers_growth: number;
+  completed_orders: number;
+  completion_rate: number;
+  repeat_customers: number;
+  repeat_rate: number;
+  avg_items_per_order: number;
+}
+
+export interface CategoryStat {
+  id: number;
+  name: string;
+  emoji: string | null;
+  revenue: number;
+  quantity: number;
+}
+
+export interface ProductStat {
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
+export interface CustomerStats {
+  new_customers: number;
+  returning_customers: number;
+  total_customers: number;
+  ltv: number;
+  top_customers: { name: string; orders: number; spent: number }[];
+}
+
+export interface PromoStats {
+  total_discount: number;
+  orders_with_promo: number;
+  orders_without_promo: number;
+  top_promos: { code: string; uses: number; discount: number }[];
+}
+
+export interface ReviewStats {
+  avg_rating: number;
+  total_reviews: number;
+  distribution: Record<string, number>;
+}
+
 export interface Admin {
   id: number;
   telegram_user_id: number;

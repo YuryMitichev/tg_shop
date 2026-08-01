@@ -126,6 +126,36 @@ async def get_revenue_chart(days: int = 30, _admin_id: int = Depends(require_adm
     return await AdminService.get_revenue_chart(days)
 
 
+@router.get("/analytics/overview")
+async def get_analytics_overview(days: int = 30, _admin_id: int = Depends(require_admin)):
+    return await AdminService.get_analytics_overview(days)
+
+
+@router.get("/analytics/categories")
+async def get_category_breakdown(days: int = 30, _admin_id: int = Depends(require_admin)):
+    return await AdminService.get_category_breakdown(days)
+
+
+@router.get("/analytics/products")
+async def get_product_stats(days: int = 30, _admin_id: int = Depends(require_admin)):
+    return await AdminService.get_product_stats(days)
+
+
+@router.get("/analytics/customers")
+async def get_customer_stats(days: int = 30, _admin_id: int = Depends(require_admin)):
+    return await AdminService.get_customer_stats(days)
+
+
+@router.get("/analytics/promos")
+async def get_promo_stats(days: int = 30, _admin_id: int = Depends(require_admin)):
+    return await AdminService.get_promo_stats(days)
+
+
+@router.get("/analytics/reviews")
+async def get_review_stats(_admin_id: int = Depends(require_admin)):
+    return await AdminService.get_review_stats()
+
+
 # ==========================
 # Категории
 # ==========================

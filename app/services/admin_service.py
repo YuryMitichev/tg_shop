@@ -611,3 +611,342 @@ class AdminService:
                 }
                 for row in result.all()
             ]
+
+    # ==========================
+    # Расширенная аналитика
+    # ==========================
+
+    @staticmethod
+    async def get_analytics_overview(days: int = 30) -> dict:
+        from datetime import timedelta
+
+        now = datetime.now()
+        cur_start = now - timedelta(days=days)
+        prev_start = cur_start - timedelta(days=days)
+
+        async with async_session() as session:
+            cur_rev = await AdminService._period_revenue(session, cur_start, now)
+            prev_rev = await AdminService._period_revenue(session, prev_start, cur_start)
+
+            cur_orders = await AdminService._period_orders(session, cur_start, now)
+            prev_orders = await AdminService._period_orders(session, prev_start, cur_start)
+
+            cur_aov = cur_rev / cur_orders if cur_orders else 0
+            prev_aov = prev_rev / prev_orders if prev_orders else 0
+
+            cur_customers = await AdminService._period_unique_customers(session, cur_start, now)
+            prev_customers = await AdminService._period_unique_customers(session, prev_start, cur_start)
+
+            cur_repeat = await AdminService._period_repeat_customers(session, cur_start, now)
+
+            cur_items = await AdminService._period_total_items(session, cur_start, now)
+            avg_items = cur_items / cur_orders if cur_orders else 0
+
+            completed_result = await session.execute(
+                select(func.count())
+                .select_from(Order)
+                .where(Order.status == "done", Order.created_at >= cur_start)
+            )
+            completed = completed_result.scalar() or 0
+
+            completion_rate = completed / cur_orders * 100 if cur_orders else 0
+
+            return {
+                "revenue": cur_rev,
+                "revenue_growth": AdminService._growth_pct(cur_rev, prev_rev),
+                "orders": cur_orders,
+                "orders_growth": AdminService._growth_pct(cur_orders, prev_orders),
+                "avg_order_value": cur_aov,
+                "aov_growth": AdminService._growth_pct(cur_aov, prev_aov),
+                "unique_customers": cur_customers,
+                "customers_growth": AdminService._growth_pct(cur_customers, prev_customers),
+                "completed_orders": completed,
+                "completion_rate": round(completion_rate, 1),
+                "repeat_customers": cur_repeat,
+                "repeat_rate": round(cur_repeat / cur_customers * 100, 1) if cur_customers else 0,
+                "avg_items_per_order": round(avg_items, 1),
+            }
+
+    @staticmethod
+    async def _period_revenue(session, start, end) -> int:
+        result = await session.execute(
+            select(func.coalesce(func.sum(Order.total_amount), 0))
+            .where(
+                Order.status != "cancelled",
+                Order.created_at >= start,
+                Order.created_at < end,
+            )
+        )
+        return result.scalar() or 0
+
+    @staticmethod
+    async def _period_orders(session, start, end) -> int:
+        result = await session.execute(
+            select(func.count())
+            .select_from(Order)
+            .where(
+                Order.status != "cancelled",
+                Order.created_at >= start,
+                Order.created_at < end,
+            )
+        )
+        return result.scalar() or 0
+
+    @staticmethod
+    async def _period_unique_customers(session, start, end) -> int:
+        result = await session.execute(
+            select(func.count(func.distinct(Order.telegram_user_id)))
+            .where(
+                Order.status != "cancelled",
+                Order.created_at >= start,
+                Order.created_at < end,
+            )
+        )
+        return result.scalar() or 0
+
+    @staticmethod
+    async def _period_repeat_customers(session, start, end) -> int:
+        result = await session.execute(
+            select(Order.telegram_user_id, func.count(Order.id).label("cnt"))
+            .where(
+                Order.status != "cancelled",
+                Order.created_at >= start,
+                Order.created_at < end,
+            )
+            .group_by(Order.telegram_user_id)
+        )
+        return sum(1 for row in result.all() if row[1] > 1)
+
+    @staticmethod
+    async def _period_total_items(session, start, end) -> int:
+        result = await session.execute(
+            select(func.coalesce(func.sum(OrderItem.quantity), 0))
+            .join(Order, OrderItem.order_id == Order.id)
+            .where(
+                Order.status != "cancelled",
+                Order.created_at >= start,
+                Order.created_at < end,
+            )
+        )
+        return result.scalar() or 0
+
+    @staticmethod
+    def _growth_pct(current: float | int, previous: float | int) -> float:
+        if previous == 0:
+            return 100.0 if current > 0 else 0.0
+        return round((current - previous) / previous * 100, 1)
+
+    @staticmethod
+    async def get_category_breakdown(days: int = 30) -> list[dict]:
+        from datetime import timedelta
+
+        now = datetime.now()
+        start = now - timedelta(days=days)
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(
+                    Category.id,
+                    Category.name,
+                    Category.emoji,
+                    func.coalesce(func.sum(OrderItem.price * OrderItem.quantity), 0).label("revenue"),
+                    func.coalesce(func.sum(OrderItem.quantity), 0).label("quantity"),
+                )
+                .join(Product, Product.category_id == Category.id)
+                .join(OrderItem, OrderItem.product_id == Product.id, isouter=True)
+                .join(Order, OrderItem.order_id == Order.id, isouter=True)
+                .where(
+                    Order.status != "cancelled",
+                    Order.created_at >= start,
+                )
+                .group_by(Category.id, Category.name, Category.emoji)
+                .order_by(func.coalesce(func.sum(OrderItem.price * OrderItem.quantity), 0).desc())
+            )
+
+            return [
+                {
+                    "id": row[0],
+                    "name": row[1],
+                    "emoji": row[2],
+                    "revenue": row[3],
+                    "quantity": row[4],
+                }
+                for row in result.all()
+            ]
+
+    @staticmethod
+    async def get_product_stats(days: int = 30, limit: int = 10) -> list[dict]:
+        from datetime import timedelta
+
+        now = datetime.now()
+        start = now - timedelta(days=days)
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(
+                    OrderItem.product_name,
+                    func.sum(OrderItem.quantity).label("qty"),
+                    func.sum(OrderItem.price * OrderItem.quantity).label("revenue"),
+                )
+                .join(Order, OrderItem.order_id == Order.id)
+                .where(
+                    Order.status != "cancelled",
+                    Order.created_at >= start,
+                )
+                .group_by(OrderItem.product_name)
+                .order_by(func.sum(OrderItem.quantity).desc())
+                .limit(limit)
+            )
+
+            return [
+                {
+                    "name": row[0],
+                    "quantity": row[1],
+                    "revenue": row[2],
+                }
+                for row in result.all()
+            ]
+
+    @staticmethod
+    async def get_customer_stats(days: int = 30) -> dict:
+        from datetime import timedelta
+
+        now = datetime.now()
+        start = now - timedelta(days=days)
+
+        async with async_session() as session:
+            first_order_result = await session.execute(
+                select(Order.telegram_user_id, func.min(Order.created_at).label("first"))
+                .where(Order.status != "cancelled")
+                .group_by(Order.telegram_user_id)
+            )
+            all_customers = first_order_result.all()
+
+            new_customers = sum(1 for row in all_customers if row[1] and row[1] >= start.replace(tzinfo=None))
+            returning_customers = len(all_customers) - new_customers
+
+            total_rev_result = await session.execute(
+                select(func.coalesce(func.sum(Order.total_amount), 0))
+                .where(Order.status != "cancelled")
+            )
+            total_revenue = total_rev_result.scalar() or 0
+
+            ltv = total_revenue / len(all_customers) if all_customers else 0
+
+            top_customers_result = await session.execute(
+                select(
+                    Order.full_name,
+                    func.count(Order.id).label("orders"),
+                    func.sum(Order.total_amount).label("spent"),
+                )
+                .where(Order.status != "cancelled")
+                .group_by(Order.full_name)
+                .order_by(func.sum(Order.total_amount).desc())
+                .limit(5)
+            )
+
+            top_customers = [
+                {"name": row[0], "orders": row[1], "spent": row[2] or 0}
+                for row in top_customers_result.all()
+            ]
+
+            return {
+                "new_customers": new_customers,
+                "returning_customers": returning_customers,
+                "total_customers": len(all_customers),
+                "ltv": round(ltv),
+                "top_customers": top_customers,
+            }
+
+    @staticmethod
+    async def get_promo_stats(days: int = 30) -> dict:
+        from datetime import timedelta
+
+        now = datetime.now()
+        start = now - timedelta(days=days)
+
+        async with async_session() as session:
+            total_discount_result = await session.execute(
+                select(func.coalesce(func.sum(Order.discount_amount), 0))
+                .where(
+                    Order.status != "cancelled",
+                    Order.created_at >= start,
+                    Order.discount_amount > 0,
+                )
+            )
+            total_discount = total_discount_result.scalar() or 0
+
+            with_promo_result = await session.execute(
+                select(func.count())
+                .select_from(Order)
+                .where(
+                    Order.status != "cancelled",
+                    Order.created_at >= start,
+                    Order.promo_code.isnot(None),
+                )
+            )
+            orders_with_promo = with_promo_result.scalar() or 0
+
+            without_promo_result = await session.execute(
+                select(func.count())
+                .select_from(Order)
+                .where(
+                    Order.status != "cancelled",
+                    Order.created_at >= start,
+                    Order.promo_code.is_(None),
+                )
+            )
+            orders_without_promo = without_promo_result.scalar() or 0
+
+            top_promos_result = await session.execute(
+                select(
+                    Order.promo_code,
+                    func.count(Order.id).label("uses"),
+                    func.sum(Order.discount_amount).label("discount"),
+                )
+                .where(
+                    Order.status != "cancelled",
+                    Order.created_at >= start,
+                    Order.promo_code.isnot(None),
+                )
+                .group_by(Order.promo_code)
+                .order_by(func.count(Order.id).desc())
+                .limit(5)
+            )
+
+            top_promos = [
+                {"code": row[0], "uses": row[1], "discount": row[2] or 0}
+                for row in top_promos_result.all()
+            ]
+
+            return {
+                "total_discount": total_discount,
+                "orders_with_promo": orders_with_promo,
+                "orders_without_promo": orders_without_promo,
+                "top_promos": top_promos,
+            }
+
+    @staticmethod
+    async def get_review_stats() -> dict:
+        async with async_session() as session:
+            avg_result = await session.execute(
+                select(func.coalesce(func.avg(Review.rating), 0))
+            )
+            avg_rating = round(avg_result.scalar() or 0, 1)
+
+            dist_result = await session.execute(
+                select(Review.rating, func.count())
+                .group_by(Review.rating)
+            )
+            distribution = {str(r[0]): r[1] for r in dist_result.all()}
+
+            total_result = await session.execute(
+                select(func.count()).select_from(Review)
+            )
+            total = total_result.scalar() or 0
+
+            return {
+                "avg_rating": avg_rating,
+                "total_reviews": total,
+                "distribution": {str(i): distribution.get(str(i), 0) for i in range(1, 6)},
+            }
