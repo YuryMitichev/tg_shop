@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.database.db as db_module
 import app.services.admin_service as admin_service
+import app.services.admin_user_service as admin_user_service
 import app.services.cart_service as cart_service
 import app.services.catalog_service as catalog_service
 import app.services.order_service as order_service
@@ -24,6 +25,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     ProductVariant,
     Review,
     PromoCode,
+    AdminUser,
 )
 
 
@@ -36,6 +38,7 @@ _PATCH_TARGETS = [
     cart_service,
     order_service,
     admin_service,
+    admin_user_service,
     review_service,
     promo_service,
 ]

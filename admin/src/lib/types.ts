@@ -109,3 +109,11 @@ export interface StatusOption {
   value: string;
   label: string;
 }
+
+export interface Admin {
+  id: number;
+  telegram_user_id: number;
+  display_name: string | null;
+  created_at: string | null;
+  is_super: boolean;
+}

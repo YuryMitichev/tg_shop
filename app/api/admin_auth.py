@@ -10,7 +10,7 @@ async def require_admin(authorization: str = Header(...)) -> int:
     """
     token = authorization.replace("Bearer ", "", 1)
 
-    user_id = AdminAuthService.verify_token(token)
+    user_id = await AdminAuthService.verify_token(token)
 
     if user_id is None:
         raise HTTPException(status_code=401, detail="Не авторизован")

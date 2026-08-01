@@ -6,6 +6,7 @@ import jwt
 
 from app.bot.bot import get_bot
 from app.core.config import settings
+from app.services.admin_user_service import AdminUserService
 
 
 class AdminAuthService:
@@ -25,7 +26,7 @@ class AdminAuthService:
 
     @staticmethod
     async def request_code(telegram_user_id: int) -> bool:
-        if telegram_user_id not in settings.admin_id_list:
+        if not await AdminUserService.is_admin(telegram_user_id):
             return False
 
         code = f"{secrets.randbelow(1000000):06d}"
@@ -48,6 +49,36 @@ class AdminAuthService:
         stored = AdminAuthService._codes.get(telegram_user_id)
 
         if stored is None:
+            return None
+
+        stored_code, expires = stored
+
+        if time.time() > expires:
+            AdminAuthService._codes.pop(telegram_user_id, None)
+            return None
+
+        if stored_code != code.strip():
+            return None
+
+        AdminAuthService._codes.pop(telegram_user_id, None)
+
+        return AdminAuthService._create_token(telegram_user_id)
+
+    @staticmethod
+    async def verify_token(token: str) -> int | None:
+        try:
+            payload = jwt.decode(
+                token,
+                settings.resolved_jwt_secret,
+                algorithms=[AdminAuthService.JWT_ALGORITHM],
+            )
+            user_id = int(payload["sub"])
+
+            if not await AdminUserService.is_admin(user_id):
+                return None
+
+            return user_id
+        except Exception:
             return None
 
         stored_code, expires = stored

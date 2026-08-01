@@ -9,6 +9,7 @@ from app.database.db import async_session
 from app.models.product import Product
 from app.services.admin_auth_service import AdminAuthService
 from app.services.admin_service import AdminService
+from app.services.admin_user_service import AdminUserService
 from app.services.catalog_service import CatalogService
 from app.services.message_service import MessageService, DEFAULT_MESSAGES, MESSAGE_LABELS
 from app.services.promo_service import PromoCodeService
@@ -74,6 +75,11 @@ class CreatePromoBody(BaseModel):
 
 class UpdateMessageBody(BaseModel):
     content: str
+
+
+class CreateAdminBody(BaseModel):
+    telegram_user_id: int
+    display_name: str | None = None
 
 
 # ==========================
@@ -382,3 +388,26 @@ async def get_payment_settings(_admin_id: int = Depends(require_admin)):
         "payment_recipient_name": app_settings.payment_recipient_name,
         "tinkoff_enabled": app_settings.tinkoff_enabled,
     }
+
+
+# ==========================
+# Администраторы
+# ==========================
+
+@router.get("/admins")
+async def list_admins(_admin_id: int = Depends(require_admin)):
+    return await AdminUserService.get_all()
+
+
+@router.post("/admins")
+async def create_admin(body: CreateAdminBody, _admin_id: int = Depends(require_admin)):
+    admin_id = await AdminUserService.add(body.telegram_user_id, body.display_name)
+    return {"id": admin_id}
+
+
+@router.delete("/admins/{admin_id}")
+async def delete_admin(admin_id: int, _admin_id: int = Depends(require_admin)):
+    if admin_id < 0:
+        return {"ok": False, "error": "Нельзя удалить супер-админа из .env"}
+    ok = await AdminUserService.delete(admin_id)
+    return {"ok": ok}

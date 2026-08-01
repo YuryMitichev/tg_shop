@@ -12,6 +12,7 @@ import {
   Ticket,
   Star,
   Settings,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
   { href: "/promos", label: "Промокоды", icon: Ticket },
   { href: "/reviews", label: "Отзывы", icon: Star },
+  { href: "/admins", label: "Админы", icon: Shield },
   { href: "/settings", label: "Настройки", icon: Settings },
 ];
 
