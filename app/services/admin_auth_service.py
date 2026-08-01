@@ -65,36 +65,6 @@ class AdminAuthService:
         return AdminAuthService._create_token(telegram_user_id)
 
     @staticmethod
-    async def verify_token(token: str) -> int | None:
-        try:
-            payload = jwt.decode(
-                token,
-                settings.resolved_jwt_secret,
-                algorithms=[AdminAuthService.JWT_ALGORITHM],
-            )
-            user_id = int(payload["sub"])
-
-            if not await AdminUserService.is_admin(user_id):
-                return None
-
-            return user_id
-        except Exception:
-            return None
-
-        stored_code, expires = stored
-
-        if time.time() > expires:
-            AdminAuthService._codes.pop(telegram_user_id, None)
-            return None
-
-        if stored_code != code.strip():
-            return None
-
-        AdminAuthService._codes.pop(telegram_user_id, None)
-
-        return AdminAuthService._create_token(telegram_user_id)
-
-    @staticmethod
     def _create_token(telegram_user_id: int) -> str:
         now = datetime.now(timezone.utc)
         payload = {
@@ -105,7 +75,7 @@ class AdminAuthService:
         return jwt.encode(payload, settings.resolved_jwt_secret, algorithm=AdminAuthService.JWT_ALGORITHM)
 
     @staticmethod
-    def verify_token(token: str) -> int | None:
+    async def verify_token(token: str) -> int | None:
         try:
             payload = jwt.decode(
                 token,
@@ -114,7 +84,7 @@ class AdminAuthService:
             )
             user_id = int(payload["sub"])
 
-            if user_id not in settings.admin_id_list:
+            if not await AdminUserService.is_admin(user_id):
                 return None
 
             return user_id
