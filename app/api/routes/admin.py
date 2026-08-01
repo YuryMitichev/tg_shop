@@ -14,6 +14,7 @@ from app.services.catalog_service import CatalogService
 from app.services.message_service import MessageService, DEFAULT_MESSAGES, MESSAGE_LABELS
 from app.services.promo_service import PromoCodeService
 from app.services.review_service import ReviewService
+from app.services.crm_service import CrmService
 from app.utils.order_status import STATUS_LABELS
 
 router = APIRouter()
@@ -80,6 +81,22 @@ class UpdateMessageBody(BaseModel):
 class CreateAdminBody(BaseModel):
     telegram_user_id: int
     display_name: str | None = None
+
+
+class UpdateNotesBody(BaseModel):
+    notes: str
+
+
+class AddTagBody(BaseModel):
+    tag: str
+
+
+class SendMessageBody(BaseModel):
+    text: str
+
+
+class UpdatePhoneBody(BaseModel):
+    phone: str | None = None
 
 
 # ==========================
@@ -441,3 +458,114 @@ async def delete_admin(admin_id: int, _admin_id: int = Depends(require_admin)):
         return {"ok": False, "error": "Нельзя удалить супер-админа из .env"}
     ok = await AdminUserService.delete(admin_id)
     return {"ok": ok}
+
+
+# ==========================
+# CRM — Пользователи
+# ==========================
+
+@router.get("/crm/users")
+async def crm_list_users(
+    search: str | None = None,
+    tag: str | None = None,
+    page: int = 1,
+    per_page: int = 20,
+    _admin_id: int = Depends(require_admin),
+):
+    return await CrmService.get_users(search, tag, page, per_page)
+
+
+@router.get("/crm/users/{telegram_user_id}")
+async def crm_user_detail(telegram_user_id: int, _admin_id: int = Depends(require_admin)):
+    detail = await CrmService.get_user_detail(telegram_user_id)
+    if detail is None:
+        return {"ok": False, "error": "Пользователь не найден"}
+    return detail
+
+
+@router.put("/crm/users/{telegram_user_id}/notes")
+async def crm_update_notes(
+    telegram_user_id: int,
+    body: UpdateNotesBody,
+    _admin_id: int = Depends(require_admin),
+):
+    ok = await CrmService.update_notes(telegram_user_id, body.notes)
+    return {"ok": ok}
+
+
+@router.put("/crm/users/{telegram_user_id}/phone")
+async def crm_update_phone(
+    telegram_user_id: int,
+    body: UpdatePhoneBody,
+    _admin_id: int = Depends(require_admin),
+):
+    ok = await CrmService.update_phone(telegram_user_id, body.phone)
+    return {"ok": ok}
+
+
+@router.post("/crm/users/{telegram_user_id}/tags")
+async def crm_add_tag(
+    telegram_user_id: int,
+    body: AddTagBody,
+    _admin_id: int = Depends(require_admin),
+):
+    ok = await CrmService.add_tag(telegram_user_id, body.tag)
+    return {"ok": ok}
+
+
+@router.delete("/crm/users/{telegram_user_id}/tags/{tag}")
+async def crm_remove_tag(
+    telegram_user_id: int,
+    tag: str,
+    _admin_id: int = Depends(require_admin),
+):
+    ok = await CrmService.remove_tag(telegram_user_id, tag)
+    return {"ok": ok}
+
+
+@router.get("/crm/tags")
+async def crm_all_tags(_admin_id: int = Depends(require_admin)):
+    return await CrmService.get_all_tags()
+
+
+# ==========================
+# CRM — История коммуникации
+# ==========================
+
+@router.get("/crm/users/{telegram_user_id}/messages")
+async def crm_messages(
+    telegram_user_id: int,
+    page: int = 1,
+    per_page: int = 50,
+    _admin_id: int = Depends(require_admin),
+):
+    return await CrmService.get_communication_history(telegram_user_id, page, per_page)
+
+
+@router.post("/crm/users/{telegram_user_id}/send")
+async def crm_send_message(
+    telegram_user_id: int,
+    body: SendMessageBody,
+    admin_id: int = Depends(require_admin),
+):
+    bot = get_bot()
+    if bot is None:
+        return {"ok": False, "error": "Бот недоступен"}
+
+    text = body.text.strip()
+    if not text:
+        return {"ok": False, "error": "Пустое сообщение"}
+
+    try:
+        await bot.send_message(telegram_user_id, text)
+    except Exception:
+        return {"ok": False, "error": "Не удалось отправить. Возможно, пользователь заблокировал бота."}
+
+    await CrmService.log_message(
+        telegram_user_id=telegram_user_id,
+        direction="out",
+        message_type="text",
+        text=text,
+        admin_id=admin_id,
+    )
+    return {"ok": True}

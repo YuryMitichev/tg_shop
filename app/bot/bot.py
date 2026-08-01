@@ -62,6 +62,8 @@ def create_dispatcher() -> Dispatcher:
 
     dp.message.middleware(ThrottlingMiddleware())
     dp.callback_query.middleware(ThrottlingMiddleware())
+    dp.message.middleware(CrmMiddleware())
+    dp.callback_query.middleware(CrmMiddleware())
 
     dp.include_router(router)
 

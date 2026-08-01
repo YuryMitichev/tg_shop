@@ -62,6 +62,61 @@ export interface User {
   last_order: string | null;
 }
 
+export interface CrmUser {
+  telegram_user_id: number;
+  username: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  full_name: string;
+  phone: string | null;
+  notes: string | null;
+  tags: string[];
+  created_at: string | null;
+  last_seen: string | null;
+  orders_count: number;
+  total_spent: number;
+  last_order: string | null;
+}
+
+export interface CrmUserDetail extends CrmUser {
+  avg_order_value: number;
+  orders: CrmOrder[];
+  favorite_products: { name: string; quantity: number }[];
+}
+
+export interface CrmOrder {
+  id: number;
+  status: string;
+  total_amount: number;
+  promo_code: string | null;
+  discount_amount: number;
+  created_at: string | null;
+  items_count: number;
+}
+
+export interface CrmMessage {
+  id: number;
+  direction: string;
+  message_type: string;
+  text: string | null;
+  admin_id: number | null;
+  created_at: string;
+}
+
+export interface CrmMessagesResponse {
+  messages: CrmMessage[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface CrmUsersResponse {
+  users: CrmUser[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 export interface Promo {
   id: number;
   code: string;

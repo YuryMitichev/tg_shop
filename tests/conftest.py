@@ -11,6 +11,7 @@ import app.services.admin_service as admin_service
 import app.services.admin_user_service as admin_user_service
 import app.services.cart_service as cart_service
 import app.services.catalog_service as catalog_service
+import app.services.crm_service as crm_service
 import app.services.order_service as order_service
 import app.services.review_service as review_service
 import app.services.promo_service as promo_service
@@ -26,6 +27,8 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     Review,
     PromoCode,
     AdminUser,
+    UserProfile,
+    CommunicationLog,
 )
 
 
@@ -39,6 +42,7 @@ _PATCH_TARGETS = [
     order_service,
     admin_service,
     admin_user_service,
+    crm_service,
     review_service,
     promo_service,
 ]
