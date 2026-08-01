@@ -1,14 +1,3 @@
-from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.enums import ParseMode
-
-from app.core.config import settings
-from app.bot.handlers import router
-from app.bot.middlewares.throttling import ThrottlingMiddleware
-from app.database.db import init_db
-from app.database.seed import seed_if_empty
-
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -19,6 +8,7 @@ from aiogram.enums import ParseMode
 from app.core.config import settings
 from app.bot.handlers import router
 from app.bot.middlewares.throttling import ThrottlingMiddleware
+from app.bot.middlewares.crm import CrmMiddleware
 from app.database.db import init_db
 from app.database.seed import seed_if_empty
 
