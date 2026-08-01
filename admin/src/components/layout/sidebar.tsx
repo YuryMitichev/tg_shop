@@ -13,6 +13,7 @@ import {
   Star,
   Settings,
   Shield,
+  Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/categories", label: "Категории", icon: FolderTree },
   { href: "/orders", label: "Заказы", icon: ShoppingCart },
   { href: "/users", label: "Пользователи", icon: Users },
+  { href: "/broadcasts", label: "Рассылки", icon: Megaphone },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
   { href: "/promos", label: "Промокоды", icon: Ticket },
   { href: "/reviews", label: "Отзывы", icon: Star },

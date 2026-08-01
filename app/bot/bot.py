@@ -12,6 +12,7 @@ from app.bot.middlewares.crm import CrmMiddleware
 from app.database.db import init_db
 from app.database.seed import seed_if_empty
 from app.services.crm_service import CrmService
+from app.services.broadcast_service import BroadcastService
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,13 @@ async def start_bot() -> None:
             logger.info("CRM: создано профилей из заказов: %d", backfilled)
     except Exception:
         logger.exception("CRM: ошибка при backfill профилей")
+
+    try:
+        tagged = await BroadcastService.auto_tag_all_users()
+        if tagged:
+            logger.info("Рассылки: авто-тегов обновлено: %d", tagged)
+    except Exception:
+        logger.exception("Рассылки: ошибка при автотегировании")
 
     _bot_instance = create_bot()
     dp = create_dispatcher()

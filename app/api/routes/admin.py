@@ -15,6 +15,7 @@ from app.services.message_service import MessageService, DEFAULT_MESSAGES, MESSA
 from app.services.promo_service import PromoCodeService
 from app.services.review_service import ReviewService
 from app.services.crm_service import CrmService
+from app.services.broadcast_service import BroadcastService
 from app.utils.order_status import STATUS_LABELS
 
 router = APIRouter()
@@ -97,6 +98,18 @@ class SendMessageBody(BaseModel):
 
 class UpdatePhoneBody(BaseModel):
     phone: str | None = None
+
+
+class CreateBroadcastBody(BaseModel):
+    product_id: int
+    discount_percent: int = 0
+    variant_id: int | None = None
+    filter_tags: list[str] | None = None
+    message_text: str | None = None
+
+
+class PreviewRecipientsBody(BaseModel):
+    tags: list[str] | None = None
 
 
 # ==========================
@@ -569,3 +582,65 @@ async def crm_send_message(
         admin_id=admin_id,
     )
     return {"ok": True}
+
+
+# ==========================
+# Рассылки
+# ==========================
+
+@router.get("/broadcasts")
+async def list_broadcasts(
+    page: int = 1,
+    per_page: int = 20,
+    _admin_id: int = Depends(require_admin),
+):
+    return await BroadcastService.get_broadcasts(page, per_page)
+
+
+@router.get("/broadcasts/{broadcast_id}")
+async def get_broadcast(broadcast_id: int, _admin_id: int = Depends(require_admin)):
+    broadcast = await BroadcastService.get_broadcast(broadcast_id)
+    if broadcast is None:
+        return {"ok": False, "error": "Рассылка не найдена"}
+    return broadcast
+
+
+@router.post("/broadcasts/preview")
+async def preview_recipients(
+    body: PreviewRecipientsBody,
+    _admin_id: int = Depends(require_admin),
+):
+    return await BroadcastService.preview_recipients(body.tags)
+
+
+@router.post("/broadcasts")
+async def create_broadcast(
+    body: CreateBroadcastBody,
+    admin_id: int = Depends(require_admin),
+):
+    try:
+        broadcast = await BroadcastService.create_broadcast(
+            product_id=body.product_id,
+            discount_percent=body.discount_percent,
+            filter_tags=body.filter_tags,
+            variant_id=body.variant_id,
+            message_text=body.message_text,
+            created_by=admin_id,
+        )
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+    return {"ok": True, "broadcast_id": broadcast.id}
+
+
+@router.post("/broadcasts/{broadcast_id}/send")
+async def send_broadcast(
+    broadcast_id: int,
+    admin_id: int = Depends(require_admin),
+):
+    bot = get_bot()
+    if bot is None:
+        return {"ok": False, "error": "Бот недоступен"}
+
+    result = await BroadcastService.send_broadcast(broadcast_id, bot)
+    return result

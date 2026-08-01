@@ -223,3 +223,44 @@ export interface Admin {
   created_at: string | null;
   is_super: boolean;
 }
+
+export interface Broadcast {
+  id: number;
+  product_id: number;
+  product_name: string;
+  variant_id: number | null;
+  variant_volume: string | null;
+  original_price: number;
+  discount_percent: number;
+  discounted_price: number;
+  message_text: string | null;
+  filter_tags: string[];
+  status: string;
+  recipients_count: number;
+  sent_count: number;
+  failed_count: number;
+  created_by: number | null;
+  created_at: string | null;
+  completed_at: string | null;
+}
+
+export interface BroadcastsResponse {
+  broadcasts: Broadcast[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface PreviewRecipientsResponse {
+  recipients_count: number;
+}
+
+export interface BroadcastProduct {
+  id: number;
+  name: string;
+  variants: Variant[];
+}
+
+export interface BroadcastTagsResponse {
+  tags: string[];
+}
