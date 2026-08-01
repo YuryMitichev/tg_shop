@@ -40,7 +40,12 @@ class CartService:
 
     @staticmethod
     async def get_items(telegram_user_id: int) -> list[dict]:
-        """Содержимое корзины с текущими данными о товаре (название, объём, цена)."""
+        """Содержимое корзины с текущими данными о товаре (название, объём, цена).
+
+        Применяет персональные скидки (UserOffer), если они есть.
+        """
+        from app.services.offer_service import OfferService
+
         async with async_session() as session:
             result = await session.execute(
                 select(CartItem, Product, ProductVariant)
@@ -53,15 +58,31 @@ class CartService:
             items = []
 
             for cart_item, product, variant in result.all():
+                price = variant.price
+                original_price = None
+                discount_percent = 0
+
+                offer = await OfferService.get_best_offer(
+                    telegram_user_id, product.id, variant.id
+                )
+                if offer and offer.discount_percent > 0:
+                    original_price = variant.price
+                    price = OfferService.calc_discounted_price(
+                        variant.price, offer.discount_percent
+                    )
+                    discount_percent = offer.discount_percent
+
                 items.append({
                     "cart_item_id": cart_item.id,
                     "product_id": product.id,
                     "product_name": product.name,
                     "variant_id": variant.id,
                     "volume": variant.volume,
-                    "price": variant.price,
+                    "price": price,
+                    "original_price": original_price,
+                    "discount_percent": discount_percent,
                     "quantity": cart_item.quantity,
-                    "subtotal": variant.price * cart_item.quantity,
+                    "subtotal": price * cart_item.quantity,
                 })
 
             return items

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.auth import get_current_user
+from app.api.auth import get_current_user, get_optional_user
 from app.bot.bot import get_bot
 from app.core.config import settings
 from app.database.db import async_session
@@ -13,6 +13,7 @@ from app.models.product import Product
 from app.models.product_photo import ProductPhoto
 from app.services.catalog_service import CatalogService
 from app.services.cart_service import CartService
+from app.services.offer_service import OfferService
 from app.services.order_service import OrderService
 from app.services.promo_service import PromoCodeService
 from app.services.review_service import ReviewService
@@ -56,13 +57,22 @@ async def list_categories():
 
 
 @router.get("/products")
-async def list_products(category_id: int = Query(...)):
+async def list_products(category_id: int = Query(...), user: dict | None = Depends(get_optional_user)):
     products = await CatalogService.get_products(category_id)
+    tg_id = user.get("id") if user else None
 
     result = []
     for p in products:
         prices = [v["price"] for v in p["variants"]]
         summary = await ReviewService.get_rating_summary(p["id"])
+
+        has_offer = False
+        if tg_id:
+            for v in p["variants"]:
+                offer = await OfferService.get_best_offer(tg_id, p["id"], v["id"])
+                if offer and offer.discount_percent > 0:
+                    has_offer = True
+                    break
 
         result.append({
             "id": p["id"],
@@ -72,13 +82,14 @@ async def list_products(category_id: int = Query(...)):
             "price_to": max(prices) if prices else 0,
             "photo_id": p["photos"][0]["id"] if p.get("photos") else None,
             "rating": summary,
+            "has_offer": has_offer,
         })
 
     return result
 
 
 @router.get("/products/{product_id}")
-async def get_product_detail(product_id: int):
+async def get_product_detail(product_id: int, user: dict | None = Depends(get_optional_user)):
     product = await CatalogService.get_product(product_id)
 
     if product is None:
@@ -86,6 +97,12 @@ async def get_product_detail(product_id: int):
 
     summary = await ReviewService.get_rating_summary(product_id)
     reviews = await ReviewService.get_product_reviews(product_id, limit=10)
+
+    tg_id = user.get("id") if user else None
+    if tg_id:
+        product["variants"] = await OfferService.apply_to_variants(
+            tg_id, product_id, product["variants"]
+        )
 
     return {
         **product,
@@ -134,6 +151,29 @@ async def get_photo(photo_id: int):
 # ==========================
 # Корзина
 # ==========================
+
+@router.get("/my-offers")
+async def get_my_offers(user: dict = Depends(get_current_user)):
+    from app.models.user_offer import UserOffer
+    tg_id = user["id"]
+    async with async_session() as session:
+        result = await session.execute(
+            select(UserOffer).where(
+                UserOffer.telegram_user_id == tg_id,
+                UserOffer.is_active == True,  # noqa: E712
+            )
+        )
+        offers = result.scalars().all()
+        return [
+            {
+                "id": o.id,
+                "product_id": o.product_id,
+                "variant_id": o.variant_id,
+                "discount_percent": o.discount_percent,
+            }
+            for o in offers
+        ]
+
 
 @router.get("/cart")
 async def get_cart(user: dict = Depends(get_current_user)):

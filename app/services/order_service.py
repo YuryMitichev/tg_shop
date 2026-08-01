@@ -5,6 +5,7 @@ from app.database.db import async_session
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.services.cart_service import CartService
+from app.services.offer_service import OfferService
 from app.services.promo_service import PromoCodeService
 
 
@@ -74,6 +75,12 @@ class OrderService:
             order_id = order.id
 
         await CartService.clear(telegram_user_id)
+
+        for item in items:
+            if item.get("discount_percent", 0) > 0:
+                await OfferService.mark_used(
+                    telegram_user_id, item["product_id"], item["variant_id"]
+                )
 
         if applied_promo:
             await PromoCodeService.increment_usage(applied_promo)

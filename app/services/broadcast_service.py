@@ -150,6 +150,7 @@ class BroadcastService:
     async def send_broadcast(broadcast_id: int, bot) -> dict:
         """Отправляет рассылку всем подходящим получателям."""
         from app.services.crm_service import CrmService
+        from app.services.offer_service import OfferService
 
         async with async_session() as session:
             broadcast = await session.get(Broadcast, broadcast_id)
@@ -206,6 +207,16 @@ class BroadcastService:
                     else:
                         await bot.send_message(tg_id, text)
                     sent += 1
+
+                    if broadcast.discount_percent > 0:
+                        await OfferService.create_offer(
+                            telegram_user_id=tg_id,
+                            product_id=broadcast.product_id,
+                            discount_percent=broadcast.discount_percent,
+                            variant_id=broadcast.variant_id,
+                            broadcast_id=broadcast.id,
+                        )
+
                     await CrmService.log_message(
                         telegram_user_id=tg_id,
                         direction="out",

@@ -22,6 +22,7 @@ const App = {
 
         this.loadCategories();
         this.updateCartBadge();
+        this.loadOffers();
     },
 
     // ==========================
@@ -60,6 +61,25 @@ const App = {
     // ==========================
     // Navigation
     // ==========================
+
+    offers: {},
+
+    async loadOffers() {
+        try {
+            const offers = await this.api("GET", "/my-offers");
+            this.offers = {};
+            if (offers && offers.length) {
+                offers.forEach(o => {
+                    const key = o.variant_id ? `${o.product_id}_${o.variant_id}` : `${o.product_id}`;
+                    this.offers[key] = o;
+                });
+            }
+        } catch (e) { }
+    },
+
+    hasOffer(productId) {
+        return Object.keys(this.offers).some(k => k.startsWith(`${productId}_`) || k === `${productId}`);
+    },
 
     showView(viewId) {
         document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
@@ -122,9 +142,11 @@ const App = {
             grid.innerHTML = products.map(p => {
                 const photo = this.photoUrl(p.photo_id);
                 const rating = p.rating ? `⭐ ${p.rating.avg} (${p.rating.count})` : "";
+                const offerBadge = p.has_offer ? `<div class="offer-badge">🔥 Персональная скидка</div>` : "";
 
                 return `
                     <div class="product-card" onclick="App.openProduct(${p.id})">
+                        ${offerBadge}
                         ${photo
                             ? `<img src="${photo}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
                                <div class="placeholder" style="display:none">${this.catEmoji()}</div>`
@@ -184,11 +206,19 @@ const App = {
 
         p.variants.forEach((v, i) => {
             const active = i === 0 ? "active" : "";
+
+            let priceHtml;
+            if (v.original_price && v.discount_percent > 0) {
+                priceHtml = `<span class="v-price"><span class="price-old">${v.original_price} ₽</span> <span class="price-new">${v.price} ₽</span></span>`;
+            } else {
+                priceHtml = `<span class="v-price">${v.price} ₽</span>`;
+            }
+
             html += `
                 <button class="variant-btn ${active}" data-vid="${v.id}"
                         onclick="App.selectVariant(${v.id})">
                     ${this.esc(v.volume)}
-                    <span class="v-price">${v.price} ₽</span>
+                    ${priceHtml}
                     ${v.burn ? `<span class="v-burn">🔥 ${this.esc(v.burn)}</span>` : ""}
                 </button>
             `;
@@ -278,12 +308,20 @@ const App = {
                 return;
             }
 
-            container.innerHTML = cart.items.map(item => `
+            container.innerHTML = cart.items.map(item => {
+                let priceHtml;
+                if (item.original_price && item.discount_percent > 0) {
+                    priceHtml = `<span class="price-old">${item.original_price} ₽</span> <span class="price-new">${item.price} ₽</span> · ${item.subtotal} ₽`;
+                } else {
+                    priceHtml = `${item.subtotal} ₽`;
+                }
+
+                return `
                 <div class="cart-item">
                     <div class="ci-info">
                         <div class="ci-name">${this.esc(item.product_name)}</div>
                         <div class="ci-variant">${this.esc(item.volume)}</div>
-                        <div class="ci-price">${item.subtotal} ₽</div>
+                        <div class="ci-price">${priceHtml}</div>
                     </div>
                     <div class="ci-controls">
                         <button class="qty-btn" onclick="App.changeQty(${item.cart_item_id}, -1)">−</button>
@@ -291,7 +329,7 @@ const App = {
                         <button class="qty-btn" onclick="App.changeQty(${item.cart_item_id}, 1)">+</button>
                     </div>
                 </div>
-            `).join("");
+            `}).join("");
 
             this.cartTotal = cart.total;
 

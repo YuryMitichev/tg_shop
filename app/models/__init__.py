@@ -12,6 +12,7 @@ from app.models.admin_user import AdminUser
 from app.models.user_profile import UserProfile
 from app.models.communication_log import CommunicationLog
 from app.models.broadcast import Broadcast
+from app.models.user_offer import UserOffer
 
 __all__ = [
     "Category",
@@ -28,4 +29,5 @@ __all__ = [
     "UserProfile",
     "CommunicationLog",
     "Broadcast",
+    "UserOffer",
 ]

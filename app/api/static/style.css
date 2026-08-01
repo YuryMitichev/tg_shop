@@ -638,3 +638,33 @@ body {
 .view-success .bottom-nav {
     display: flex;
 }
+
+/* Offer badge on product card */
+.offer-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: #e53935;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 8px;
+    z-index: 1;
+}
+
+.product-card {
+    position: relative;
+}
+
+/* Discount prices */
+.price-old {
+    text-decoration: line-through;
+    opacity: 0.5;
+    font-size: 12px;
+}
+
+.price-new {
+    color: #e53935;
+    font-weight: 700;
+}

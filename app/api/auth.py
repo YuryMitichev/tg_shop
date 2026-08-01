@@ -61,6 +61,15 @@ async def get_current_user(authorization: str = Header(...)) -> dict:
     return user
 
 
+async def get_optional_user(authorization: str | None = Header(None)) -> dict | None:
+    """Опциональная авторизация — возвращает пользователя или None."""
+    if not authorization:
+        return None
+
+    init_data = authorization.replace("tma ", "", 1)
+    return validate_init_data(init_data, settings.bot_token)
+
+
 async def get_current_user_id(user: dict = None) -> int:
     """Извлекает telegram_user_id из пользователя."""
     return user["id"]

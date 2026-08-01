@@ -16,6 +16,7 @@ import app.services.order_service as order_service
 import app.services.review_service as review_service
 import app.services.promo_service as promo_service
 import app.services.broadcast_service as broadcast_service
+import app.services.offer_service as offer_service
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
     CartItem,
@@ -31,6 +32,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     UserProfile,
     CommunicationLog,
     Broadcast,
+    UserOffer,
 )
 
 
@@ -48,6 +50,7 @@ _PATCH_TARGETS = [
     review_service,
     promo_service,
     broadcast_service,
+    offer_service,
 ]
 
 
