@@ -184,12 +184,14 @@ async def get_cart(user: dict = Depends(get_current_user)):
 
 @router.post("/cart/add")
 async def add_to_cart(req: AddToCartRequest, user: dict = Depends(get_current_user)):
-    await CartService.add_item(
+    error = await CartService.add_item(
         telegram_user_id=user["id"],
         product_id=req.product_id,
         variant_id=req.variant_id,
         quantity=req.quantity,
     )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
     return {"ok": True}
 
 

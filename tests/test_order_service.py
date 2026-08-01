@@ -1,5 +1,6 @@
 from app.services.cart_service import CartService
 from app.services.order_service import OrderService
+from app.models.product_variant import ProductVariant
 
 
 class TestOrderService:
@@ -115,3 +116,93 @@ class TestOrderService:
         order = await OrderService.get_user_order(222, created["order_id"])
 
         assert order is None
+
+    async def test_order_decreases_stock(self, db_session, seed_data):
+        await CartService.add_item(111, product_id=1, variant_id=1, quantity=3)
+
+        await OrderService.create_order(
+            telegram_user_id=111,
+            full_name="Иван",
+            phone="+7",
+            address="Адрес",
+        )
+
+        async with db_session() as session:
+            variant = await session.get(ProductVariant, 1)
+            assert variant.stock == 7
+
+    async def test_cancel_returns_stock(self, db_session, seed_data):
+        from app.services.admin_service import AdminService
+
+        await CartService.add_item(111, product_id=1, variant_id=1, quantity=3)
+
+        created = await OrderService.create_order(
+            telegram_user_id=111,
+            full_name="Иван",
+            phone="+7",
+            address="Адрес",
+        )
+
+        async with db_session() as session:
+            variant = await session.get(ProductVariant, 1)
+            assert variant.stock == 7
+
+        await AdminService.set_order_status(created["order_id"], "cancelled")
+
+        async with db_session() as session:
+            variant = await session.get(ProductVariant, 1)
+            assert variant.stock == 10
+
+    async def test_auto_cancel_stale_orders(self, db_session, seed_data):
+        from datetime import datetime, timedelta
+        from app.services.admin_service import AdminService
+
+        await CartService.add_item(111, product_id=1, variant_id=1, quantity=2)
+
+        created = await OrderService.create_order(
+            telegram_user_id=111,
+            full_name="Иван",
+            phone="+7",
+            address="Адрес",
+        )
+
+        async with db_session() as session:
+            from app.models.order import Order
+            order = await session.get(Order, created["order_id"])
+            order.created_at = datetime.now() - timedelta(days=15)
+            await session.commit()
+
+        cancelled = await OrderService.auto_cancel_stale_orders(days=14)
+
+        assert cancelled == 1
+
+        async with db_session() as session:
+            variant = await session.get(ProductVariant, 1)
+            assert variant.stock == 10
+
+    async def test_auto_cancel_stale_orders(self, db_session, seed_data):
+        from datetime import datetime, timedelta
+        from app.services.admin_service import AdminService
+
+        await CartService.add_item(111, product_id=1, variant_id=1, quantity=2)
+
+        created = await OrderService.create_order(
+            telegram_user_id=111,
+            full_name="Иван",
+            phone="+7",
+            address="Адрес",
+        )
+
+        async with db_session() as session:
+            from app.models.order import Order
+            order = await session.get(Order, created["order_id"])
+            order.created_at = datetime.now() - timedelta(days=15)
+            await session.commit()
+
+        cancelled = await OrderService.auto_cancel_stale_orders(days=14)
+
+        assert cancelled == 1
+
+        async with db_session() as session:
+            variant = await session.get(ProductVariant, 1)
+            assert variant.stock == 10

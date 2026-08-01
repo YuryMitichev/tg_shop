@@ -14,9 +14,17 @@ class CartService:
         product_id: int,
         variant_id: int,
         quantity: int = 1,
-    ) -> None:
-        """Добавить товар в корзину (или увеличить количество, если уже есть)."""
+    ) -> str | None:
+        """Добавить товар в корзину (или увеличить количество, если уже есть).
+
+        Возвращает None при успехе, либо сообщение об ошибке (нет в наличии).
+        """
         async with async_session() as session:
+            variant = await session.get(ProductVariant, variant_id)
+
+            if variant and variant.stock == 0:
+                return "Этого товара нет в наличии"
+
             result = await session.execute(
                 select(CartItem).where(
                     CartItem.telegram_user_id == telegram_user_id,
@@ -25,6 +33,11 @@ class CartService:
                 )
             )
             item = result.scalar_one_or_none()
+
+            new_quantity = (item.quantity if item else 0) + quantity
+
+            if variant and variant.stock > 0 and new_quantity > variant.stock:
+                return f"На складе осталось только {variant.stock} шт."
 
             if item:
                 item.quantity += quantity
@@ -37,6 +50,7 @@ class CartService:
                 ))
 
             await session.commit()
+            return None
 
     @staticmethod
     async def get_items(telegram_user_id: int) -> list[dict]:

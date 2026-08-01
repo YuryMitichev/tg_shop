@@ -31,6 +31,7 @@ class Order(Base):
     payment_id: Mapped[str | None] = mapped_column(nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    status_updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order",

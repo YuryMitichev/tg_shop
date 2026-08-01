@@ -32,9 +32,9 @@ async def seed_if_empty() -> None:
                 name="Кашемир и амбровая кожа",
                 description="Теплый древесный аромат.",
                 variants=[
-                    ProductVariant(id=1, volume="75 г", price=450, burn="10 часов"),
-                    ProductVariant(id=2, volume="200 г", price=990, burn="45 часов"),
-                    ProductVariant(id=3, volume="400 г", price=1650, burn="90 часов"),
+                    ProductVariant(id=1, volume="75 г", price=450, burn="10 часов", stock=10),
+                    ProductVariant(id=2, volume="200 г", price=990, burn="45 часов", stock=10),
+                    ProductVariant(id=3, volume="400 г", price=1650, burn="90 часов", stock=5),
                 ],
             ),
             Product(
@@ -43,8 +43,8 @@ async def seed_if_empty() -> None:
                 name="Белый чай",
                 description="Легкий свежий аромат.",
                 variants=[
-                    ProductVariant(id=4, volume="75 г", price=450, burn="10 часов"),
-                    ProductVariant(id=5, volume="200 г", price=990, burn="45 часов"),
+                    ProductVariant(id=4, volume="75 г", price=450, burn="10 часов", stock=10),
+                    ProductVariant(id=5, volume="200 г", price=990, burn="45 часов", stock=10),
                 ],
             ),
             Product(
@@ -53,7 +53,7 @@ async def seed_if_empty() -> None:
                 name="Кашемир и амбровая кожа",
                 description="Диффузор для дома.",
                 variants=[
-                    ProductVariant(id=6, volume="100 мл", price=1290),
+                    ProductVariant(id=6, volume="100 мл", price=1290, stock=5),
                 ],
             ),
         ])

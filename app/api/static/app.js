@@ -206,6 +206,11 @@ const App = {
 
         p.variants.forEach((v, i) => {
             const active = i === 0 ? "active" : "";
+            const outOfStock = v.stock !== undefined && v.stock === 0;
+            const stockHint = v.stock !== undefined && v.stock > 0 && v.stock <= 5
+                ? `<span class="v-stock-low">осталось ${v.stock} шт</span>`
+                : "";
+            const stockBadge = outOfStock ? `<span class="v-out-of-stock">нет в наличии</span>` : stockHint;
 
             let priceHtml;
             if (v.original_price && v.discount_percent > 0) {
@@ -218,11 +223,12 @@ const App = {
             }
 
             html += `
-                <button class="variant-btn ${active}" data-vid="${v.id}"
+                <button class="variant-btn ${active} ${outOfStock ? 'variant-oos' : ''}" data-vid="${v.id}"
                         onclick="App.selectVariant(${v.id})">
                     ${this.esc(v.volume)}
                     ${priceHtml}
                     ${v.burn ? `<span class="v-burn">🔥 ${this.esc(v.burn)}</span>` : ""}
+                    ${stockBadge}
                 </button>
             `;
         });
@@ -234,7 +240,14 @@ const App = {
 
         html += `</div>`;
 
-        html += `<button class="btn-primary btn-add" onclick="App.addToCart(${p.id})">🛒 Добавить в корзину</button>`;
+        const selected = p.variants[0] || {};
+        const allOutOfStock = p.variants.every(v => v.stock !== undefined && v.stock === 0);
+
+        if (allOutOfStock) {
+            html += `<button class="btn-primary btn-add" disabled>Нет в наличии</button>`;
+        } else {
+            html += `<button class="btn-primary btn-add" onclick="App.addToCart(${p.id})">🛒 Добавить в корзину</button>`;
+        }
 
         if (p.reviews && p.reviews.length > 0) {
             html += `<div class="reviews-section">`;
@@ -254,10 +267,16 @@ const App = {
     },
 
     selectVariant(variantId) {
+        const btn = document.querySelector(`.variant-btn[data-vid="${variantId}"]`);
+        if (btn && btn.classList.contains("variant-oos")) {
+            this.toast("Этот вариант нет в наличии");
+            return;
+        }
+
         this.selectedVariant = { id: variantId };
 
-        document.querySelectorAll(".variant-btn").forEach(btn => {
-            btn.classList.toggle("active", parseInt(btn.dataset.vid) === variantId);
+        document.querySelectorAll(".variant-btn").forEach(b => {
+            b.classList.toggle("active", parseInt(b.dataset.vid) === variantId);
         });
 
         this.tg.HapticFeedback?.selectionChanged();

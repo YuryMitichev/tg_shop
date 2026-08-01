@@ -26,6 +26,7 @@ interface VariantRow {
   volume: string;
   price: string;
   burn: string;
+  stock: string;
 }
 
 export default function NewProductPage() {
@@ -36,12 +37,12 @@ export default function NewProductPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [variants, setVariants] = useState<VariantRow[]>([
-    { volume: "", price: "", burn: "" },
+    { volume: "", price: "", burn: "", stock: "" },
   ]);
   const [loading, setLoading] = useState(false);
 
   function addVariant() {
-    setVariants([...variants, { volume: "", price: "", burn: "" }]);
+    setVariants([...variants, { volume: "", price: "", burn: "", stock: "" }]);
   }
 
   function removeVariant(index: number) {
@@ -85,6 +86,7 @@ export default function NewProductPage() {
           volume: v.volume,
           price: Number(v.price),
           burn: v.burn || null,
+          stock: v.stock ? Number(v.stock) : 0,
         })),
       });
 
@@ -181,6 +183,15 @@ export default function NewProductPage() {
                     placeholder="~40 ч"
                     value={variant.burn}
                     onChange={(e) => updateVariant(i, "burn", e.target.value)}
+                  />
+                </div>
+                <div className="w-24 space-y-1">
+                  <Label className="text-xs">Остаток</Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={variant.stock}
+                    onChange={(e) => updateVariant(i, "stock", e.target.value)}
                   />
                 </div>
                 {variants.length > 1 && (

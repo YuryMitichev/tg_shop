@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Trash2, Upload, Star } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Upload, Star, Package } from "lucide-react";
 import Link from "next/link";
 import type { Product, Category } from "@/lib/types";
 
@@ -167,8 +167,28 @@ export default function EditProductPage() {
                   {v.burn && (
                     <p className="text-xs text-muted-foreground">{v.burn}</p>
                   )}
+                  <p className="text-sm font-semibold mt-1">{v.price}₽</p>
                 </div>
-                <span className="font-semibold">{v.price}₽</span>
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="number"
+                    className="w-20"
+                    defaultValue={v.stock ?? 0}
+                    onChange={async (e) => {
+                      const val = Number(e.target.value);
+                      if (!Number.isNaN(val)) {
+                        await api.patch(`/variants/${v.id}/stock`, { stock: val });
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const val = Number(e.target.value);
+                      if (!Number.isNaN(val)) {
+                        toast.success(`Остаток: ${val}`);
+                      }
+                    }}
+                  />
+                </div>
               </div>
             ))}
             <p className="pt-2 text-xs text-muted-foreground">

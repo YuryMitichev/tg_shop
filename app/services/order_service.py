@@ -4,6 +4,7 @@ from sqlalchemy.orm import selectinload
 from app.database.db import async_session
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.product_variant import ProductVariant
 from app.services.cart_service import CartService
 from app.services.offer_service import OfferService
 from app.services.promo_service import PromoCodeService
@@ -61,12 +62,20 @@ class OrderService:
                 OrderItem(
                     product_name=item["product_name"],
                     product_id=item["product_id"],
+                    variant_id=item.get("variant_id"),
                     variant_volume=item["volume"],
                     price=item["price"],
                     quantity=item["quantity"],
                 )
                 for item in items
             ]
+
+            for item in items:
+                variant_id = item.get("variant_id")
+                if variant_id:
+                    variant = await session.get(ProductVariant, variant_id)
+                    if variant:
+                        variant.stock = max(0, variant.stock - item["quantity"])
 
             session.add(order)
             await session.commit()
@@ -183,3 +192,47 @@ class OrderService:
                     for item in order.items
                 ],
             }
+
+    @staticmethod
+    async def auto_cancel_stale_orders(days: int = 14) -> int:
+        """Отменяет заказы, которые не сменили статус за указанное число дней.
+
+        Проверяет status_updated_at (или created_at, если поле пустое —
+        старые заказы). Не трогает финальные статусы (done, cancelled, shipped).
+        Возвращает количество отменённых заказов.
+        """
+        from datetime import datetime, timedelta
+        from app.models.product_variant import ProductVariant
+
+        cutoff = datetime.now() - timedelta(days=days)
+
+        async with async_session() as session:
+            from sqlalchemy import or_
+            result = await session.execute(
+                select(Order)
+                .options(selectinload(Order.items))
+                .where(
+                    Order.status.in_(["new", "confirmed", "paid"]),
+                    or_(
+                        Order.status_updated_at.is_(None),
+                        Order.status_updated_at < cutoff,
+                    ),
+                    Order.created_at < cutoff,
+                )
+            )
+            stale = result.scalars().all()
+
+            for order in stale:
+                order.status = "cancelled"
+                order.status_updated_at = datetime.now()
+
+                for item in order.items:
+                    if item.variant_id:
+                        variant = await session.get(ProductVariant, item.variant_id)
+                        if variant:
+                            variant.stock += item.quantity
+
+            if stale:
+                await session.commit()
+
+            return len(stale)

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -13,6 +14,7 @@ from app.database.db import init_db
 from app.database.seed import seed_if_empty
 from app.services.crm_service import CrmService
 from app.services.broadcast_service import BroadcastService
+from app.services.order_service import OrderService
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,18 @@ def create_dispatcher() -> Dispatcher:
     return dp
 
 
+async def _auto_cancel_loop() -> None:
+    """Фоновая задача: авто-отмена заказов без смены статуса 14 дней."""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            cancelled = await OrderService.auto_cancel_stale_orders(days=14)
+            if cancelled:
+                logger.info("Авто-отмена: отменено заказов старше 14 дней: %d", cancelled)
+        except Exception:
+            logger.exception("Авто-отмена: ошибка")
+
+
 async def start_bot() -> None:
     """
     Запуск Telegram-бота.
@@ -85,9 +99,18 @@ async def start_bot() -> None:
     except Exception:
         logger.exception("Рассылки: ошибка при автотегировании")
 
+    try:
+        cancelled = await OrderService.auto_cancel_stale_orders(days=14)
+        if cancelled:
+            logger.info("Авто-отмена при запуске: отменено %d заказов", cancelled)
+    except Exception:
+        logger.exception("Авто-отмена: ошибка при запуске")
+
     _bot_instance = create_bot()
     dp = create_dispatcher()
 
     logger.info("Telegram Bot успешно запущен")
+
+    asyncio.create_task(_auto_cancel_loop())
 
     await dp.start_polling(_bot_instance)

@@ -49,6 +49,7 @@ class VariantCreate(BaseModel):
     volume: str
     price: int
     burn: str | None = None
+    stock: int = 0
 
 
 class CreateProductBody(BaseModel):
@@ -63,6 +64,10 @@ class UpdateProductBody(BaseModel):
     description: str | None = None
     category_id: int | None = None
     is_active: bool | None = None
+
+
+class UpdateVariantStockBody(BaseModel):
+    stock: int
 
 
 class UpdateOrderStatusBody(BaseModel):
@@ -314,6 +319,18 @@ async def upload_photo(
 @router.delete("/products/{product_id}/photos/{photo_id}")
 async def delete_photo(product_id: int, photo_id: int, _admin_id: int = Depends(require_admin)):
     await AdminService.delete_photo(photo_id)
+    return {"ok": True}
+
+
+@router.patch("/variants/{variant_id}/stock")
+async def update_variant_stock(
+    variant_id: int,
+    body: UpdateVariantStockBody,
+    _admin_id: int = Depends(require_admin),
+):
+    ok = await AdminService.update_variant_stock(variant_id, body.stock)
+    if not ok:
+        return {"ok": False, "error": "Вариант не найден"}
     return {"ok": True}
 
 

@@ -22,6 +22,10 @@ class OrderItem(Base):
     # nullable: старые заказы (до миграции) не содержат это поле.
     product_id: Mapped[int | None] = mapped_column(nullable=True)
 
+    # variant_id нужен для возврата остатка при отмене заказа.
+    # nullable: старые заказы (до миграции) не содержат это поле.
+    variant_id: Mapped[int | None] = mapped_column(nullable=True)
+
     product_name: Mapped[str] = mapped_column(nullable=False)
     variant_volume: Mapped[str] = mapped_column(nullable=False)
     price: Mapped[int] = mapped_column(nullable=False)

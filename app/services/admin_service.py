@@ -34,6 +34,7 @@ def _product_to_dict(product: Product) -> dict:
                 "volume": variant.volume,
                 "price": variant.price,
                 "burn": variant.burn,
+                "stock": variant.stock,
             }
             for variant in product.variants
         ],
@@ -174,6 +175,7 @@ class AdminService:
                     volume=variant["volume"],
                     price=variant["price"],
                     burn=variant.get("burn"),
+                    stock=variant.get("stock", 0),
                 )
                 for variant in variants
             ]
@@ -230,6 +232,18 @@ class AdminService:
                 product.description = description
 
             await session.commit()
+
+    @staticmethod
+    async def update_variant_stock(variant_id: int, stock: int) -> bool:
+        async with async_session() as session:
+            variant = await session.get(ProductVariant, variant_id)
+
+            if not variant:
+                return False
+
+            variant.stock = max(0, stock)
+            await session.commit()
+            return True
 
     @staticmethod
     async def add_photo(product_id: int, file_id: str) -> int | None:
@@ -315,12 +329,31 @@ class AdminService:
 
     @staticmethod
     async def set_order_status(order_id: int, status: str) -> None:
-        async with async_session() as session:
-            order = await session.get(Order, order_id)
+        from datetime import datetime
 
-            if order:
-                order.status = status
-                await session.commit()
+        async with async_session() as session:
+            result = await session.execute(
+                select(Order)
+                .options(selectinload(Order.items))
+                .where(Order.id == order_id)
+            )
+            order = result.scalar_one_or_none()
+
+            if not order:
+                return
+
+            old_status = order.status
+            order.status = status
+            order.status_updated_at = datetime.now()
+
+            if old_status != "cancelled" and status == "cancelled":
+                for item in order.items:
+                    if item.variant_id:
+                        variant = await session.get(ProductVariant, item.variant_id)
+                        if variant:
+                            variant.stock += item.quantity
+
+            await session.commit()
 
     # ==========================
     # Статистика

@@ -180,6 +180,31 @@ class TestAdminProducts:
         product = await AdminService.get_product(1)
         assert len(product["photos"]) == 0
 
+    async def test_product_to_dict_includes_stock(self, db_session, seed_data):
+        product = await AdminService.get_product(1)
+
+        assert "stock" in product["variants"][0]
+        assert product["variants"][0]["stock"] == 10
+
+    async def test_update_variant_stock(self, db_session, seed_data):
+        ok = await AdminService.update_variant_stock(1, 50)
+
+        assert ok is True
+
+        product = await AdminService.get_product(1)
+        assert product["variants"][0]["stock"] == 50
+
+    async def test_update_variant_stock_not_found(self, db_session, seed_data):
+        ok = await AdminService.update_variant_stock(999, 50)
+
+        assert ok is False
+
+    async def test_update_variant_stock_clamps_negative(self, db_session, seed_data):
+        await AdminService.update_variant_stock(1, -5)
+
+        product = await AdminService.get_product(1)
+        assert product["variants"][0]["stock"] == 0
+
 
 class TestAdminOrders:
 

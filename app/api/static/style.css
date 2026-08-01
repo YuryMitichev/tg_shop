@@ -676,3 +676,23 @@ body {
     font-weight: 600;
     margin-top: 2px;
 }
+
+.variant-oos {
+    opacity: 0.5;
+}
+
+.v-out-of-stock {
+    display: block;
+    font-size: 11px;
+    color: #e53935;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.v-stock-low {
+    display: block;
+    font-size: 11px;
+    color: #f57c00;
+    font-weight: 600;
+    margin-top: 2px;
+}

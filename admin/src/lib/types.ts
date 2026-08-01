@@ -9,6 +9,7 @@ export interface Variant {
   volume: string;
   price: number;
   burn?: string | null;
+  stock?: number;
 }
 
 export interface Photo {

@@ -14,5 +14,6 @@ class ProductVariant(Base):
     price: Mapped[int] = mapped_column(nullable=False)
     burn: Mapped[str | None] = mapped_column(nullable=True)
     photo: Mapped[str | None] = mapped_column(nullable=True)
+    stock: Mapped[int] = mapped_column(default=0, nullable=False)
 
     product: Mapped["Product"] = relationship(back_populates="variants")

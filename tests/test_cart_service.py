@@ -113,3 +113,20 @@ class TestCartService:
         items_222 = await CartService.get_items(222)
         assert items_111 == []
         assert len(items_222) == 1
+
+    async def test_add_out_of_stock(self, db_session, seed_data):
+        error = await CartService.add_item(111, product_id=2, variant_id=3, quantity=1)
+
+        assert error is not None
+        assert "нет в наличии" in error
+
+    async def test_add_exceeding_stock(self, db_session, seed_data):
+        error = await CartService.add_item(111, product_id=1, variant_id=1, quantity=15)
+
+        assert error is not None
+        assert "осталось" in error
+
+    async def test_add_within_stock_ok(self, db_session, seed_data):
+        error = await CartService.add_item(111, product_id=1, variant_id=1, quantity=5)
+
+        assert error is None
