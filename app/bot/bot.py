@@ -11,6 +11,7 @@ from app.bot.middlewares.throttling import ThrottlingMiddleware
 from app.bot.middlewares.crm import CrmMiddleware
 from app.database.db import init_db
 from app.database.seed import seed_if_empty
+from app.services.crm_service import CrmService
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,9 @@ async def start_bot() -> None:
 
     await init_db()
     await seed_if_empty()
+    backfilled = await CrmService.backfill_from_orders()
+    if backfilled:
+        logger.info("CRM: создано профилей из заказов: %d", backfilled)
 
     _bot_instance = create_bot()
     dp = create_dispatcher()

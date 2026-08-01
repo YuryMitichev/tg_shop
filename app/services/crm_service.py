@@ -11,6 +11,47 @@ from app.models.order_item import OrderItem
 
 class CrmService:
     @staticmethod
+    async def backfill_from_orders() -> int:
+        """Создаёт профили для пользователей из заказов, у которых ещё нет профиля."""
+        async with async_session() as session:
+            tg_ids_result = await session.execute(
+                select(Order.telegram_user_id)
+                .where(Order.status != "cancelled")
+                .distinct()
+            )
+            tg_ids = [r[0] for r in tg_ids_result.all()]
+
+            count = 0
+            for tg_id in tg_ids:
+                existing = await session.get(UserProfile, tg_id)
+                if existing is None:
+                    last_order_result = await session.execute(
+                        select(Order.full_name, Order.phone)
+                        .where(Order.telegram_user_id == tg_id)
+                        .order_by(Order.created_at.desc())
+                        .limit(1)
+                    )
+                    last_order = last_order_result.one_or_none()
+
+                    full_name = last_order[0] if last_order else ""
+                    parts = full_name.split(" ", 1)
+                    first_name = parts[0] if parts else full_name or None
+                    last_name = parts[1] if len(parts) > 1 else None
+
+                    profile = UserProfile(
+                        telegram_user_id=tg_id,
+                        first_name=first_name,
+                        last_name=last_name,
+                        phone=last_order[1] if last_order else None,
+                    )
+                    session.add(profile)
+                    count += 1
+
+            if count:
+                await session.commit()
+            return count
+
+    @staticmethod
     async def get_or_create_profile(
         telegram_user_id: int,
         username: str | None = None,
