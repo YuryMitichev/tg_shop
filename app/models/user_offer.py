@@ -26,3 +26,5 @@ class UserOffer(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     used_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    expires_at: Mapped[datetime | None] = mapped_column(nullable=True)

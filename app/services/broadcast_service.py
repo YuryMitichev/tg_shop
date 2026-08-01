@@ -96,6 +96,7 @@ class BroadcastService:
         variant_id: int | None = None,
         message_text: str | None = None,
         created_by: int | None = None,
+        expires_at: datetime | None = None,
     ) -> Broadcast:
         async with async_session() as session:
             product = await session.get(Product, product_id)
@@ -140,6 +141,7 @@ class BroadcastService:
                 filter_tags=tags_str,
                 recipients_count=preview["recipients_count"],
                 created_by=created_by,
+                expires_at=expires_at,
             )
             session.add(broadcast)
             await session.commit()
@@ -198,6 +200,9 @@ class BroadcastService:
                 text += f" ({broadcast.variant_volume})"
             text += discount_info
             text += custom_text
+            if broadcast.expires_at:
+                deadline_str = broadcast.expires_at.strftime("%d.%m.%Y %H:%M")
+                text += f"\n\n⏰ Скидка действует до <b>{deadline_str}</b>!"
             text += "\n\n🛒 Откройте каталог, чтобы заказать!"
 
             for tg_id in tg_ids:
@@ -215,6 +220,7 @@ class BroadcastService:
                             discount_percent=broadcast.discount_percent,
                             variant_id=broadcast.variant_id,
                             broadcast_id=broadcast.id,
+                            expires_at=broadcast.expires_at,
                         )
 
                     await CrmService.log_message(
@@ -255,6 +261,7 @@ class BroadcastService:
             "created_by": broadcast.created_by,
             "created_at": broadcast.created_at.isoformat() if broadcast.created_at else None,
             "completed_at": broadcast.completed_at.isoformat() if broadcast.completed_at else None,
+            "expires_at": broadcast.expires_at.isoformat() if broadcast.expires_at else None,
         }
 
     @staticmethod

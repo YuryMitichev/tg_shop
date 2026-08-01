@@ -668,3 +668,11 @@ body {
     color: #e53935;
     font-weight: 700;
 }
+
+.v-timer {
+    display: block;
+    font-size: 11px;
+    color: #e53935;
+    font-weight: 600;
+    margin-top: 2px;
+}

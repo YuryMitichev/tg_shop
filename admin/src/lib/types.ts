@@ -242,6 +242,7 @@ export interface Broadcast {
   created_by: number | null;
   created_at: string | null;
   completed_at: string | null;
+  expires_at: string | null;
 }
 
 export interface BroadcastsResponse {

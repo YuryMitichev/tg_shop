@@ -209,7 +209,10 @@ const App = {
 
             let priceHtml;
             if (v.original_price && v.discount_percent > 0) {
-                priceHtml = `<span class="v-price"><span class="price-old">${v.original_price} ₽</span> <span class="price-new">${v.price} ₽</span></span>`;
+                const timerHtml = v.offer_expires_at
+                    ? `<span class="v-timer" id="offer-timer-${v.id}"></span>`
+                    : "";
+                priceHtml = `<span class="v-price"><span class="price-old">${v.original_price} ₽</span> <span class="price-new">${v.price} ₽</span> ${timerHtml}</span>`;
             } else {
                 priceHtml = `<span class="v-price">${v.price} ₽</span>`;
             }
@@ -223,6 +226,11 @@ const App = {
                 </button>
             `;
         });
+
+        const firstWithExpiry = p.variants.find(v => v.offer_expires_at);
+        if (firstWithExpiry) {
+            this.startOfferTimer(firstWithExpiry.offer_expires_at, `offer-timer-${firstWithExpiry.id}`);
+        }
 
         html += `</div>`;
 
@@ -538,6 +546,40 @@ const App = {
     // ==========================
     // Utils
     // ==========================
+
+    _offerTimerInterval: null,
+
+    startOfferTimer(isoStr, elementId) {
+        if (this._offerTimerInterval) {
+            clearInterval(this._offerTimerInterval);
+        }
+
+        const target = new Date(isoStr).getTime();
+
+        const update = () => {
+            const el = document.getElementById(elementId);
+            if (!el) {
+                clearInterval(this._offerTimerInterval);
+                return;
+            }
+
+            const remaining = target - Date.now();
+            if (remaining <= 0) {
+                el.textContent = "истекло";
+                clearInterval(this._offerTimerInterval);
+                return;
+            }
+
+            const h = Math.floor(remaining / 3600000);
+            const m = Math.floor((remaining % 3600000) / 60000);
+            const s = Math.floor((remaining % 60000) / 1000);
+
+            el.textContent = `⏰ ${h}ч ${m}м ${s}с`;
+        };
+
+        update();
+        this._offerTimerInterval = setInterval(update, 1000);
+    },
 
     toast(msg) {
         if (this.tg.HapticFeedback) {

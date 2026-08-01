@@ -38,7 +38,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Megaphone, Send, Users } from "lucide-react";
+import { Megaphone, Send, Users, Clock } from "lucide-react";
 import { formatPrice, formatDate } from "@/lib/format";
 import type {
   Product,
@@ -58,6 +58,7 @@ export default function BroadcastsPage() {
   const [discount, setDiscount] = useState<string>("10");
   const [messageText, setMessageText] = useState<string>("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [expiresAt, setExpiresAt] = useState<string>("");
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -119,6 +120,9 @@ export default function BroadcastsPage() {
           variant_id: variantId ? parseInt(variantId) : null,
           filter_tags: selectedTags.length ? selectedTags : null,
           message_text: messageText.trim() || null,
+          expires_at: expiresAt
+            ? new Date(expiresAt).toISOString()
+            : null,
         },
       );
 
@@ -149,6 +153,7 @@ export default function BroadcastsPage() {
       setDiscount("10");
       setMessageText("");
       setSelectedTags([]);
+      setExpiresAt("");
       setPreviewCount(null);
       mutate();
     } catch (e) {
@@ -250,6 +255,30 @@ export default function BroadcastsPage() {
                   onChange={(e) => setMessageText(e.target.value)}
                   rows={2}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Срок действия предложения</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="datetime-local"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                    className="max-w-xs"
+                  />
+                  {expiresAt && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setExpiresAt("")}
+                    >
+                      Сбросить
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Скидка автоматически деактивируется после этой даты. Необязательно.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -361,6 +390,11 @@ export default function BroadcastsPage() {
                     💬 {messageText.trim()}
                   </p>
                 )}
+                {expiresAt && (
+                  <p className="mt-2 font-medium text-orange-600">
+                    ⏰ До {new Date(expiresAt).toLocaleString("ru-RU")}
+                  </p>
+                )}
                 <p className="mt-3 text-xs text-muted-foreground">
                   🛒 Откройте каталог, чтобы заказать!
                 </p>
@@ -391,6 +425,7 @@ export default function BroadcastsPage() {
                     <TableHead>Дата</TableHead>
                     <TableHead>Товар</TableHead>
                     <TableHead className="text-center">Скидка</TableHead>
+                    <TableHead>Срок</TableHead>
                     <TableHead>Теги</TableHead>
                     <TableHead className="text-center">Статус</TableHead>
                     <TableHead className="text-center">Отправлено</TableHead>
@@ -413,6 +448,9 @@ export default function BroadcastsPage() {
                         ) : (
                           "—"
                         )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {b.expires_at ? formatDate(b.expires_at) : "∞"}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">

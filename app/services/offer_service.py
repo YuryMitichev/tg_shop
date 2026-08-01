@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 from app.database.db import async_session
 from app.models.user_offer import UserOffer
@@ -15,6 +15,7 @@ class OfferService:
         discount_percent: int,
         variant_id: int | None = None,
         broadcast_id: int | None = None,
+        expires_at: datetime | None = None,
     ) -> UserOffer:
         async with async_session() as session:
             offer = UserOffer(
@@ -23,6 +24,7 @@ class OfferService:
                 discount_percent=discount_percent,
                 variant_id=variant_id,
                 broadcast_id=broadcast_id,
+                expires_at=expires_at,
                 is_active=True,
             )
             session.add(offer)
@@ -36,12 +38,17 @@ class OfferService:
         product_id: int,
         variant_id: int | None = None,
     ) -> UserOffer | None:
-        """Возвращает лучшую активную скидку для товара/варианта пользователя."""
+        """Возвращает лучшую активную и не истёкшую скидку."""
         async with async_session() as session:
+            now = datetime.now()
             query = select(UserOffer).where(
                 UserOffer.telegram_user_id == telegram_user_id,
                 UserOffer.product_id == product_id,
                 UserOffer.is_active == True,  # noqa: E712
+                or_(
+                    UserOffer.expires_at.is_(None),
+                    UserOffer.expires_at > now,
+                ),
             )
 
             if variant_id:
@@ -94,6 +101,7 @@ class OfferService:
                     "original_price": original,
                     "price": discounted,
                     "discount_percent": offer.discount_percent,
+                    "offer_expires_at": offer.expires_at.isoformat() if offer.expires_at else None,
                 })
             else:
                 result.append(v)

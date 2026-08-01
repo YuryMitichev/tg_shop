@@ -34,6 +34,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     Broadcast,
     UserOffer,
 )
+# noqa регистрирует таблицы в metadata
 
 
 

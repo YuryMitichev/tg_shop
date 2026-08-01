@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, UploadFile, File
 from pydantic import BaseModel
 from aiogram.types import BufferedInputFile
+from datetime import datetime
 
 from app.api.admin_auth import require_admin
 from app.bot.bot import get_bot
@@ -106,6 +107,7 @@ class CreateBroadcastBody(BaseModel):
     variant_id: int | None = None
     filter_tags: list[str] | None = None
     message_text: str | None = None
+    expires_at: str | None = None
 
 
 class PreviewRecipientsBody(BaseModel):
@@ -619,6 +621,10 @@ async def create_broadcast(
     admin_id: int = Depends(require_admin),
 ):
     try:
+        expires_dt = None
+        if body.expires_at:
+            expires_dt = datetime.fromisoformat(body.expires_at)
+
         broadcast = await BroadcastService.create_broadcast(
             product_id=body.product_id,
             discount_percent=body.discount_percent,
@@ -626,6 +632,7 @@ async def create_broadcast(
             variant_id=body.variant_id,
             message_text=body.message_text,
             created_by=admin_id,
+            expires_at=expires_dt,
         )
     except ValueError as e:
         return {"ok": False, "error": str(e)}
