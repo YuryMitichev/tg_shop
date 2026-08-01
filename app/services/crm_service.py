@@ -22,17 +22,18 @@ class CrmService:
             tg_ids = [r[0] for r in tg_ids_result.all()]
 
             count = 0
+            updated = 0
             for tg_id in tg_ids:
+                last_order_result = await session.execute(
+                    select(Order.full_name, Order.phone, Order.created_at)
+                    .where(Order.telegram_user_id == tg_id)
+                    .order_by(Order.created_at.desc())
+                    .limit(1)
+                )
+                last_order = last_order_result.one_or_none()
+
                 existing = await session.get(UserProfile, tg_id)
                 if existing is None:
-                    last_order_result = await session.execute(
-                        select(Order.full_name, Order.phone)
-                        .where(Order.telegram_user_id == tg_id)
-                        .order_by(Order.created_at.desc())
-                        .limit(1)
-                    )
-                    last_order = last_order_result.one_or_none()
-
                     full_name = last_order[0] if last_order else ""
                     parts = full_name.split(" ", 1)
                     first_name = parts[0] if parts else full_name or None
@@ -43,13 +44,24 @@ class CrmService:
                         first_name=first_name,
                         last_name=last_name,
                         phone=last_order[1] if last_order else None,
+                        last_seen=last_order[2] if last_order else None,
                     )
                     session.add(profile)
                     count += 1
+                else:
+                    changed = False
+                    if not existing.phone and last_order and last_order[1]:
+                        existing.phone = last_order[1]
+                        changed = True
+                    if not existing.last_seen and last_order and last_order[2]:
+                        existing.last_seen = last_order[2]
+                        changed = True
+                    if changed:
+                        updated += 1
 
-            if count:
+            if count or updated:
                 await session.commit()
-            return count
+            return count + updated
 
     @staticmethod
     async def get_or_create_profile(
