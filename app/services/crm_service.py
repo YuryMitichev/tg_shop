@@ -11,6 +11,13 @@ from app.models.order_item import OrderItem
 
 class CrmService:
     @staticmethod
+    async def _get_profile(session, telegram_user_id: int) -> UserProfile | None:
+        result = await session.execute(
+            select(UserProfile).where(UserProfile.telegram_user_id == telegram_user_id)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def backfill_from_orders() -> int:
         """Создаёт профили для пользователей из заказов, у которых ещё нет профиля."""
         async with async_session() as session:
@@ -32,7 +39,7 @@ class CrmService:
                 )
                 last_order = last_order_result.one_or_none()
 
-                existing = await session.get(UserProfile, tg_id)
+                existing = await CrmService._get_profile(session, tg_id)
                 if existing is None:
                     full_name = last_order[0] if last_order else ""
                     parts = full_name.split(" ", 1)
@@ -71,7 +78,7 @@ class CrmService:
         last_name: str | None = None,
     ) -> UserProfile:
         async with async_session() as session:
-            profile = await session.get(UserProfile, telegram_user_id)
+            profile = await CrmService._get_profile(session, telegram_user_id)
             if profile is None:
                 profile = UserProfile(
                     telegram_user_id=telegram_user_id,
@@ -100,7 +107,7 @@ class CrmService:
     @staticmethod
     async def update_last_seen(telegram_user_id: int) -> None:
         async with async_session() as session:
-            profile = await session.get(UserProfile, telegram_user_id)
+            profile = await CrmService._get_profile(session, telegram_user_id)
             if profile:
                 profile.last_seen = datetime.now()
                 await session.commit()
@@ -214,7 +221,7 @@ class CrmService:
     @staticmethod
     async def get_user_detail(telegram_user_id: int) -> dict | None:
         async with async_session() as session:
-            profile = await session.get(UserProfile, telegram_user_id)
+            profile = await CrmService._get_profile(session, telegram_user_id)
             if profile is None:
                 return None
 
@@ -300,7 +307,7 @@ class CrmService:
     @staticmethod
     async def update_notes(telegram_user_id: int, notes: str) -> bool:
         async with async_session() as session:
-            profile = await session.get(UserProfile, telegram_user_id)
+            profile = await CrmService._get_profile(session, telegram_user_id)
             if profile is None:
                 return False
             profile.notes = notes.strip() or None
@@ -310,7 +317,7 @@ class CrmService:
     @staticmethod
     async def add_tag(telegram_user_id: int, tag: str) -> bool:
         async with async_session() as session:
-            profile = await session.get(UserProfile, telegram_user_id)
+            profile = await CrmService._get_profile(session, telegram_user_id)
             if profile is None:
                 return False
             tags = CrmService._parse_tags(profile.tags)
@@ -324,7 +331,7 @@ class CrmService:
     @staticmethod
     async def remove_tag(telegram_user_id: int, tag: str) -> bool:
         async with async_session() as session:
-            profile = await session.get(UserProfile, telegram_user_id)
+            profile = await CrmService._get_profile(session, telegram_user_id)
             if profile is None:
                 return False
             tags = CrmService._parse_tags(profile.tags)
@@ -347,7 +354,7 @@ class CrmService:
     @staticmethod
     async def update_phone(telegram_user_id: int, phone: str | None) -> bool:
         async with async_session() as session:
-            profile = await session.get(UserProfile, telegram_user_id)
+            profile = await CrmService._get_profile(session, telegram_user_id)
             if profile is None:
                 return False
             profile.phone = phone

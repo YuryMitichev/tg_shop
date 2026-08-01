@@ -70,9 +70,12 @@ async def start_bot() -> None:
 
     await init_db()
     await seed_if_empty()
-    backfilled = await CrmService.backfill_from_orders()
-    if backfilled:
-        logger.info("CRM: создано профилей из заказов: %d", backfilled)
+    try:
+        backfilled = await CrmService.backfill_from_orders()
+        if backfilled:
+            logger.info("CRM: создано профилей из заказов: %d", backfilled)
+    except Exception:
+        logger.exception("CRM: ошибка при backfill профилей")
 
     _bot_instance = create_bot()
     dp = create_dispatcher()
