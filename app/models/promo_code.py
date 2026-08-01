@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.db import Base
@@ -8,10 +8,15 @@ from app.database.db import Base
 
 class PromoCode(Base):
     __tablename__ = "promo_codes"
+    __table_args__ = (
+        UniqueConstraint("shop_id", "code", name="uq_promo_shop_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    code: Mapped[str] = mapped_column(unique=True, index=True)
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"), index=True, default=1)
+
+    code: Mapped[str] = mapped_column(index=True)
 
     # "percent" или "fixed"
     discount_type: Mapped[str] = mapped_column(default="percent")

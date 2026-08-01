@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import func, UniqueConstraint
+from sqlalchemy import func, UniqueConstraint, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.db import Base
@@ -13,6 +13,8 @@ class Review(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"), index=True, default=1)
 
     product_id: Mapped[int] = mapped_column(index=True)
 

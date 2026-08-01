@@ -3,10 +3,12 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import jwt
+from sqlalchemy import select
 
 from app.bot.bot import get_bot
 from app.core.config import settings
-from app.services.admin_user_service import AdminUserService
+from app.database.db import async_session
+from app.models.admin_user import AdminUser
 
 
 class AdminAuthService:
@@ -16,6 +18,8 @@ class AdminAuthService:
     Flow:
     1. POST /request-code → бот присылает 6-значный код (живёт 5 мин)
     2. POST /verify → проверка кода, выдача JWT (живёт 24 часа)
+
+    JWT содержит shop_id — к какому магазину у админа доступ.
     """
 
     _codes: dict[int, tuple[str, float]] = {}
@@ -25,8 +29,25 @@ class AdminAuthService:
     JWT_EXPIRES = timedelta(hours=24)
 
     @staticmethod
+    async def _resolve_shop_id(telegram_user_id: int) -> int | None:
+        """Определяет shop_id для пользователя при входе."""
+        if telegram_user_id in settings.admin_id_list:
+            return 1
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(AdminUser).where(AdminUser.telegram_user_id == telegram_user_id)
+            )
+            admin = result.scalar_one_or_none()
+            if admin:
+                return admin.shop_id
+
+        return None
+
+    @staticmethod
     async def request_code(telegram_user_id: int) -> bool:
-        if not await AdminUserService.is_admin(telegram_user_id):
+        shop_id = await AdminAuthService._resolve_shop_id(telegram_user_id)
+        if shop_id is None:
             return False
 
         code = f"{secrets.randbelow(1000000):06d}"
@@ -65,28 +86,32 @@ class AdminAuthService:
         return AdminAuthService._create_token(telegram_user_id)
 
     @staticmethod
-    def _create_token(telegram_user_id: int) -> str:
+    def _create_token(telegram_user_id: int, shop_id: int = 1) -> str:
         now = datetime.now(timezone.utc)
         payload = {
             "sub": str(telegram_user_id),
+            "shop_id": shop_id,
             "iat": now,
             "exp": now + AdminAuthService.JWT_EXPIRES,
         }
         return jwt.encode(payload, settings.resolved_jwt_secret, algorithm=AdminAuthService.JWT_ALGORITHM)
 
     @staticmethod
-    async def verify_token(token: str) -> int | None:
+    async def verify_token(token: str) -> dict | None:
+        """Возвращает {'admin_id': int, 'shop_id': int} или None."""
         try:
             payload = jwt.decode(
                 token,
                 settings.resolved_jwt_secret,
                 algorithms=[AdminAuthService.JWT_ALGORITHM],
             )
-            user_id = int(payload["sub"])
+            admin_id = int(payload["sub"])
+            shop_id = int(payload.get("shop_id", 1))
 
-            if not await AdminUserService.is_admin(user_id):
+            from app.services.admin_user_service import AdminUserService
+            if not await AdminUserService.is_admin(shop_id, admin_id):
                 return None
 
-            return user_id
+            return {"admin_id": admin_id, "shop_id": shop_id}
         except Exception:
             return None

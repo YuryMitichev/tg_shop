@@ -8,6 +8,8 @@ from app.services.message_service import MessageService
 
 router = Router()
 
+SHOP_ID = 1
+
 _EMPTY_KB = InlineKeyboardMarkup(inline_keyboard=[])
 
 
@@ -29,7 +31,7 @@ async def show_delivery_msg(message: Message, state: FSMContext):
     await show_screen(
         message,
         state,
-        await MessageService.get("delivery"),
+        await MessageService.get(SHOP_ID, "delivery"),
         reply_markup=_EMPTY_KB,
     )
 
@@ -41,7 +43,7 @@ async def show_payment_msg(message: Message, state: FSMContext):
     await show_screen(
         message,
         state,
-        await MessageService.get("payment"),
+        await MessageService.get(SHOP_ID, "payment"),
         reply_markup=_EMPTY_KB,
     )
 
@@ -53,7 +55,7 @@ async def show_delivery_cb(callback: CallbackQuery, state: FSMContext):
         callback.bot,
         callback.message.chat.id,
         state,
-        await MessageService.get("delivery"),
+        await MessageService.get(SHOP_ID, "delivery"),
         reply_markup=_back_keyboard(),
     )
     await callback.answer()
@@ -66,7 +68,7 @@ async def show_payment_cb(callback: CallbackQuery, state: FSMContext):
         callback.bot,
         callback.message.chat.id,
         state,
-        await MessageService.get("payment"),
+        await MessageService.get(SHOP_ID, "payment"),
         reply_markup=_back_keyboard(),
     )
     await callback.answer()

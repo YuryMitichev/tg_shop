@@ -32,10 +32,12 @@ class BroadcastService:
         return [t.strip() for t in tags_str.split(",") if t.strip()]
 
     @staticmethod
-    async def auto_tag_all_users() -> int:
+    async def auto_tag_all_users(shop_id: int) -> int:
         """Проставляет автоматические теги всем пользователям на основе их истории заказов."""
         async with async_session() as session:
-            profiles_result = await session.execute(select(UserProfile))
+            profiles_result = await session.execute(
+                select(UserProfile).where(UserProfile.shop_id == shop_id)
+            )
             profiles = profiles_result.scalars().all()
             updated = 0
 
@@ -45,6 +47,7 @@ class BroadcastService:
                         func.count(Order.id).label("orders"),
                         func.coalesce(func.sum(Order.total_amount), 0).label("spent"),
                     ).where(
+                        Order.shop_id == shop_id,
                         Order.telegram_user_id == p.telegram_user_id,
                         Order.status != "cancelled",
                     )
@@ -77,10 +80,12 @@ class BroadcastService:
             return updated
 
     @staticmethod
-    async def preview_recipients(tags: list[str] | None = None) -> dict:
+    async def preview_recipients(shop_id: int, tags: list[str] | None = None) -> dict:
         """Возвращает количество получателей по выбранным тегам."""
         async with async_session() as session:
-            query = select(UserProfile.telegram_user_id)
+            query = select(UserProfile.telegram_user_id).where(
+                UserProfile.shop_id == shop_id
+            )
             if tags:
                 conditions = [UserProfile.tags.ilike(f"%{t}%") for t in tags]
                 query = query.where(or_(*conditions))
@@ -90,6 +95,7 @@ class BroadcastService:
 
     @staticmethod
     async def create_broadcast(
+        shop_id: int,
         product_id: int,
         discount_percent: int,
         filter_tags: list[str] | None = None,
@@ -127,9 +133,10 @@ class BroadcastService:
 
             tags_str = ", ".join(filter_tags) if filter_tags else None
 
-            preview = await BroadcastService.preview_recipients(filter_tags)
+            preview = await BroadcastService.preview_recipients(shop_id, filter_tags)
 
             broadcast = Broadcast(
+                shop_id=shop_id,
                 product_id=product_id,
                 product_name=product.name,
                 variant_id=variant_id,
@@ -149,7 +156,7 @@ class BroadcastService:
             return broadcast
 
     @staticmethod
-    async def send_broadcast(broadcast_id: int, bot) -> dict:
+    async def send_broadcast(shop_id: int, broadcast_id: int, bot) -> dict:
         """Отправляет рассылку всем подходящим получателям."""
         from app.services.crm_service import CrmService
         from app.services.offer_service import OfferService
@@ -166,7 +173,7 @@ class BroadcastService:
             await session.commit()
 
             tags = BroadcastService._parse_tags(broadcast.filter_tags)
-            preview = await BroadcastService.preview_recipients(tags)
+            preview = await BroadcastService.preview_recipients(shop_id, tags)
             tg_ids = preview["telegram_ids"]
 
             sent = 0
@@ -215,6 +222,7 @@ class BroadcastService:
 
                     if broadcast.discount_percent > 0:
                         await OfferService.create_offer(
+                            shop_id=shop_id,
                             telegram_user_id=tg_id,
                             product_id=broadcast.product_id,
                             discount_percent=broadcast.discount_percent,
@@ -224,6 +232,7 @@ class BroadcastService:
                         )
 
                     await CrmService.log_message(
+                        shop_id=shop_id,
                         telegram_user_id=tg_id,
                         direction="out",
                         message_type="broadcast",
@@ -265,9 +274,13 @@ class BroadcastService:
         }
 
     @staticmethod
-    async def get_broadcasts(page: int = 1, per_page: int = 20) -> dict:
+    async def get_broadcasts(shop_id: int, page: int = 1, per_page: int = 20) -> dict:
         async with async_session() as session:
-            query = select(Broadcast).order_by(Broadcast.id.desc())
+            query = (
+                select(Broadcast)
+                .where(Broadcast.shop_id == shop_id)
+                .order_by(Broadcast.id.desc())
+            )
             count_query = select(func.count()).select_from(query.subquery())
             total = (await session.execute(count_query)).scalar() or 0
             result = await session.execute(
@@ -277,9 +290,9 @@ class BroadcastService:
             return {"broadcasts": broadcasts, "total": total, "page": page, "per_page": per_page}
 
     @staticmethod
-    async def get_broadcast(broadcast_id: int) -> dict | None:
+    async def get_broadcast(shop_id: int, broadcast_id: int) -> dict | None:
         async with async_session() as session:
             broadcast = await session.get(Broadcast, broadcast_id)
-            if broadcast is None:
+            if broadcast is None or broadcast.shop_id != shop_id:
                 return None
             return BroadcastService._to_dict(broadcast)

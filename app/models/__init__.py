@@ -1,3 +1,4 @@
+from app.models.shop import Shop
 from app.models.category import Category
 from app.models.product import Product
 from app.models.product_variant import ProductVariant
@@ -15,6 +16,7 @@ from app.models.broadcast import Broadcast
 from app.models.user_offer import UserOffer
 
 __all__ = [
+    "Shop",
     "Category",
     "Product",
     "ProductVariant",

@@ -86,14 +86,14 @@ async def start_bot() -> None:
     await init_db()
     await seed_if_empty()
     try:
-        backfilled = await CrmService.backfill_from_orders()
+        backfilled = await CrmService.backfill_from_orders(1)
         if backfilled:
             logger.info("CRM: создано профилей из заказов: %d", backfilled)
     except Exception:
         logger.exception("CRM: ошибка при backfill профилей")
 
     try:
-        tagged = await BroadcastService.auto_tag_all_users()
+        tagged = await BroadcastService.auto_tag_all_users(1)
         if tagged:
             logger.info("Рассылки: авто-тегов обновлено: %d", tagged)
     except Exception:

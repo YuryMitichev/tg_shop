@@ -9,6 +9,8 @@ class CartItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"), index=True, default=1)
+
     telegram_user_id: Mapped[int] = mapped_column(index=True)
 
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))

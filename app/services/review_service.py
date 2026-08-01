@@ -1,4 +1,4 @@
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func
 
 from app.database.db import async_session
 from app.models.review import Review
@@ -8,6 +8,7 @@ class ReviewService:
 
     @staticmethod
     async def create_or_update(
+        shop_id: int,
         product_id: int,
         telegram_user_id: int,
         rating: int,
@@ -17,6 +18,7 @@ class ReviewService:
         async with async_session() as session:
             result = await session.execute(
                 select(Review).where(
+                    Review.shop_id == shop_id,
                     Review.product_id == product_id,
                     Review.telegram_user_id == telegram_user_id,
                 )
@@ -28,6 +30,7 @@ class ReviewService:
                 review.text = text
             else:
                 session.add(Review(
+                    shop_id=shop_id,
                     product_id=product_id,
                     telegram_user_id=telegram_user_id,
                     rating=rating,
@@ -37,12 +40,15 @@ class ReviewService:
             await session.commit()
 
     @staticmethod
-    async def get_product_reviews(product_id: int, limit: int = 5) -> list[dict]:
+    async def get_product_reviews(shop_id: int, product_id: int, limit: int = 5) -> list[dict]:
         """Последние отзывы о товаре."""
         async with async_session() as session:
             result = await session.execute(
                 select(Review)
-                .where(Review.product_id == product_id)
+                .where(
+                    Review.shop_id == shop_id,
+                    Review.product_id == product_id,
+                )
                 .order_by(Review.created_at.desc())
                 .limit(limit)
             )
@@ -55,7 +61,7 @@ class ReviewService:
             ]
 
     @staticmethod
-    async def get_rating_summary(product_id: int) -> dict | None:
+    async def get_rating_summary(shop_id: int, product_id: int) -> dict | None:
         """Средняя оценка и количество отзывов."""
         async with async_session() as session:
             result = await session.execute(
@@ -63,7 +69,10 @@ class ReviewService:
                     func.avg(Review.rating),
                     func.count(Review.id),
                 )
-                .where(Review.product_id == product_id)
+                .where(
+                    Review.shop_id == shop_id,
+                    Review.product_id == product_id,
+                )
             )
             avg, count = result.one()
 

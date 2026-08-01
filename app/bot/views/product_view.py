@@ -38,6 +38,7 @@ async def show_product(
     )
 
     position, total = await CatalogService.get_product_position(
+        1,
         category_id,
         product["id"]
     )

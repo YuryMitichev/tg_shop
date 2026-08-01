@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.db import Base
@@ -8,10 +8,15 @@ from app.database.db import Base
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
+    __table_args__ = (
+        UniqueConstraint("shop_id", "telegram_user_id", name="uq_profile_shop_user"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    telegram_user_id: Mapped[int] = mapped_column(unique=True, index=True)
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"), index=True, default=1)
+
+    telegram_user_id: Mapped[int] = mapped_column(index=True)
 
     username: Mapped[str | None] = mapped_column(nullable=True)
 

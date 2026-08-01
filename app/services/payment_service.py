@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 class PaymentService:
     """
     Связывает заказы с платёжной системой Тинькофф.
+    order_id — глобально уникальный PK, поэтому shop_id не обязателен
+    для запросов по order_id. Передаётся для консистентности.
     """
 
     @staticmethod
@@ -21,7 +23,7 @@ class PaymentService:
         return f"{settings.app_base_url}/payments/tinkoff/webhook"
 
     @staticmethod
-    async def create_payment(order_id: int, amount: int, description: str) -> dict | None:
+    async def create_payment(shop_id: int, order_id: int, amount: int, description: str) -> dict | None:
         """
         Создаёт платёж и получает QR-код.
 
@@ -69,6 +71,7 @@ class PaymentService:
     async def process_notification(data: dict) -> bool:
         """
         Обрабатывает вебхук от Тинькофф.
+        order_id — глобально уникальный, shop_id не нужен.
 
         Возвращает True если заказ найден и статус обработан.
         """
@@ -107,12 +110,12 @@ class PaymentService:
         return True
 
     @staticmethod
-    async def get_order_with_user(order_id: int) -> dict | None:
+    async def get_order_with_user(shop_id: int, order_id: int) -> dict | None:
         """Возвращает заказ с telegram_user_id для уведомлений."""
         async with async_session() as session:
             order = await session.get(Order, order_id)
 
-            if not order:
+            if not order or order.shop_id != shop_id:
                 return None
 
             return {

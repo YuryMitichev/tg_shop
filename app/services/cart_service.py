@@ -10,6 +10,7 @@ class CartService:
 
     @staticmethod
     async def add_item(
+        shop_id: int,
         telegram_user_id: int,
         product_id: int,
         variant_id: int,
@@ -20,13 +21,20 @@ class CartService:
         Возвращает None при успехе, либо сообщение об ошибке (нет в наличии).
         """
         async with async_session() as session:
-            variant = await session.get(ProductVariant, variant_id)
+            result = await session.execute(
+                select(ProductVariant).where(
+                    ProductVariant.shop_id == shop_id,
+                    ProductVariant.id == variant_id,
+                )
+            )
+            variant = result.scalar_one_or_none()
 
             if variant and variant.stock == 0:
                 return "Этого товара нет в наличии"
 
             result = await session.execute(
                 select(CartItem).where(
+                    CartItem.shop_id == shop_id,
                     CartItem.telegram_user_id == telegram_user_id,
                     CartItem.product_id == product_id,
                     CartItem.variant_id == variant_id,
@@ -43,6 +51,7 @@ class CartService:
                 item.quantity += quantity
             else:
                 session.add(CartItem(
+                    shop_id=shop_id,
                     telegram_user_id=telegram_user_id,
                     product_id=product_id,
                     variant_id=variant_id,
@@ -53,7 +62,7 @@ class CartService:
             return None
 
     @staticmethod
-    async def get_items(telegram_user_id: int) -> list[dict]:
+    async def get_items(shop_id: int, telegram_user_id: int) -> list[dict]:
         """Содержимое корзины с текущими данными о товаре (название, объём, цена).
 
         Применяет персональные скидки (UserOffer), если они есть.
@@ -65,7 +74,10 @@ class CartService:
                 select(CartItem, Product, ProductVariant)
                 .join(Product, CartItem.product_id == Product.id)
                 .join(ProductVariant, CartItem.variant_id == ProductVariant.id)
-                .where(CartItem.telegram_user_id == telegram_user_id)
+                .where(
+                    CartItem.shop_id == shop_id,
+                    CartItem.telegram_user_id == telegram_user_id,
+                )
                 .order_by(CartItem.id)
             )
 
@@ -77,7 +89,7 @@ class CartService:
                 discount_percent = 0
 
                 offer = await OfferService.get_best_offer(
-                    telegram_user_id, product.id, variant.id
+                    shop_id, telegram_user_id, product.id, variant.id
                 )
                 if offer and offer.discount_percent > 0:
                     original_price = variant.price
@@ -102,12 +114,19 @@ class CartService:
             return items
 
     @staticmethod
-    async def change_quantity(telegram_user_id: int, cart_item_id: int, delta: int) -> None:
+    async def change_quantity(shop_id: int, telegram_user_id: int, cart_item_id: int, delta: int) -> None:
         """Изменить количество; при уходе в 0 и меньше — удалить позицию."""
         async with async_session() as session:
-            item = await session.get(CartItem, cart_item_id)
+            result = await session.execute(
+                select(CartItem).where(
+                    CartItem.shop_id == shop_id,
+                    CartItem.id == cart_item_id,
+                    CartItem.telegram_user_id == telegram_user_id,
+                )
+            )
+            item = result.scalar_one_or_none()
 
-            if not item or item.telegram_user_id != telegram_user_id:
+            if not item:
                 return
 
             item.quantity += delta
@@ -118,19 +137,29 @@ class CartService:
             await session.commit()
 
     @staticmethod
-    async def remove_item(telegram_user_id: int, cart_item_id: int) -> None:
+    async def remove_item(shop_id: int, telegram_user_id: int, cart_item_id: int) -> None:
         async with async_session() as session:
-            item = await session.get(CartItem, cart_item_id)
+            result = await session.execute(
+                select(CartItem).where(
+                    CartItem.shop_id == shop_id,
+                    CartItem.id == cart_item_id,
+                    CartItem.telegram_user_id == telegram_user_id,
+                )
+            )
+            item = result.scalar_one_or_none()
 
-            if item and item.telegram_user_id == telegram_user_id:
+            if item:
                 await session.delete(item)
                 await session.commit()
 
     @staticmethod
-    async def clear(telegram_user_id: int) -> None:
+    async def clear(shop_id: int, telegram_user_id: int) -> None:
         async with async_session() as session:
             result = await session.execute(
-                select(CartItem).where(CartItem.telegram_user_id == telegram_user_id)
+                select(CartItem).where(
+                    CartItem.shop_id == shop_id,
+                    CartItem.telegram_user_id == telegram_user_id,
+                )
             )
 
             for item in result.scalars().all():

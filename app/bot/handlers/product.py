@@ -12,6 +12,8 @@ from app.services.review_service import ReviewService
 
 router = Router()
 
+SHOP_ID = 1
+
 
 def _rating_keyboard() -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
@@ -42,7 +44,7 @@ async def select_variant(
         await callback.answer("Товар не найден, откройте каталог заново.", show_alert=True)
         return
 
-    product = await CatalogService.get_product(product_id)
+    product = await CatalogService.get_product(SHOP_ID, product_id)
 
     if product is None:
         await callback.answer("Товар больше не найден.", show_alert=True)
@@ -73,6 +75,7 @@ async def add_to_cart(
         return
 
     await CartService.add_item(
+        SHOP_ID,
         telegram_user_id=callback.from_user.id,
         product_id=product_id,
         variant_id=variant_id,
@@ -92,7 +95,7 @@ async def start_review(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Товар не найден, откройте каталог заново.", show_alert=True)
         return
 
-    has_bought = await OrderService.has_purchased(callback.from_user.id, product_id)
+    has_bought = await OrderService.has_purchased(SHOP_ID, callback.from_user.id, product_id)
 
     if not has_bought:
         await callback.answer(
@@ -165,6 +168,7 @@ async def _save_review(event: CallbackQuery | Message, state: FSMContext, text: 
         return
 
     await ReviewService.create_or_update(
+        SHOP_ID,
         product_id=product_id,
         telegram_user_id=event.from_user.id,
         rating=rating,
@@ -189,7 +193,7 @@ async def _back_to_product(event: CallbackQuery | Message, state: FSMContext):
     if not product_id:
         return
 
-    product = await CatalogService.get_product(product_id)
+    product = await CatalogService.get_product(SHOP_ID, product_id)
     if product is None:
         return
 
@@ -220,7 +224,7 @@ async def cancel_review(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    product = await CatalogService.get_product(product_id)
+    product = await CatalogService.get_product(SHOP_ID, product_id)
     if product is None:
         await callback.answer()
         return

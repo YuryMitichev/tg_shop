@@ -20,6 +20,8 @@ from app.services.review_service import ReviewService
 
 router = APIRouter()
 
+SHOP_ID = 1
+
 
 # ==========================
 # Pydantic схемы
@@ -52,24 +54,24 @@ class ValidatePromoRequest(BaseModel):
 
 @router.get("/categories")
 async def list_categories():
-    categories = await CatalogService.get_categories()
+    categories = await CatalogService.get_categories(SHOP_ID)
     return categories
 
 
 @router.get("/products")
 async def list_products(category_id: int = Query(...), user: dict | None = Depends(get_optional_user)):
-    products = await CatalogService.get_products(category_id)
+    products = await CatalogService.get_products(SHOP_ID, category_id)
     tg_id = user.get("id") if user else None
 
     result = []
     for p in products:
         prices = [v["price"] for v in p["variants"]]
-        summary = await ReviewService.get_rating_summary(p["id"])
+        summary = await ReviewService.get_rating_summary(SHOP_ID, p["id"])
 
         has_offer = False
         if tg_id:
             for v in p["variants"]:
-                offer = await OfferService.get_best_offer(tg_id, p["id"], v["id"])
+                offer = await OfferService.get_best_offer(SHOP_ID, tg_id, p["id"], v["id"])
                 if offer and offer.discount_percent > 0:
                     has_offer = True
                     break
@@ -90,18 +92,18 @@ async def list_products(category_id: int = Query(...), user: dict | None = Depen
 
 @router.get("/products/{product_id}")
 async def get_product_detail(product_id: int, user: dict | None = Depends(get_optional_user)):
-    product = await CatalogService.get_product(product_id)
+    product = await CatalogService.get_product(SHOP_ID, product_id)
 
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    summary = await ReviewService.get_rating_summary(product_id)
-    reviews = await ReviewService.get_product_reviews(product_id, limit=10)
+    summary = await ReviewService.get_rating_summary(SHOP_ID, product_id)
+    reviews = await ReviewService.get_product_reviews(SHOP_ID, product_id, limit=10)
 
     tg_id = user.get("id") if user else None
     if tg_id:
         product["variants"] = await OfferService.apply_to_variants(
-            tg_id, product_id, product["variants"]
+            SHOP_ID, tg_id, product_id, product["variants"]
         )
 
     return {
@@ -154,30 +156,14 @@ async def get_photo(photo_id: int):
 
 @router.get("/my-offers")
 async def get_my_offers(user: dict = Depends(get_current_user)):
-    from app.models.user_offer import UserOffer
     tg_id = user["id"]
-    async with async_session() as session:
-        result = await session.execute(
-            select(UserOffer).where(
-                UserOffer.telegram_user_id == tg_id,
-                UserOffer.is_active == True,  # noqa: E712
-            )
-        )
-        offers = result.scalars().all()
-        return [
-            {
-                "id": o.id,
-                "product_id": o.product_id,
-                "variant_id": o.variant_id,
-                "discount_percent": o.discount_percent,
-            }
-            for o in offers
-        ]
+    offers = await OfferService.get_user_offers(SHOP_ID, tg_id)
+    return offers
 
 
 @router.get("/cart")
 async def get_cart(user: dict = Depends(get_current_user)):
-    items = await CartService.get_items(user["id"])
+    items = await CartService.get_items(SHOP_ID, user["id"])
     total = sum(item["subtotal"] for item in items)
     return {"items": items, "total": total}
 
@@ -185,6 +171,7 @@ async def get_cart(user: dict = Depends(get_current_user)):
 @router.post("/cart/add")
 async def add_to_cart(req: AddToCartRequest, user: dict = Depends(get_current_user)):
     error = await CartService.add_item(
+        SHOP_ID,
         telegram_user_id=user["id"],
         product_id=req.product_id,
         variant_id=req.variant_id,
@@ -197,19 +184,19 @@ async def add_to_cart(req: AddToCartRequest, user: dict = Depends(get_current_us
 
 @router.post("/cart/inc/{cart_item_id}")
 async def inc_cart_item(cart_item_id: int, user: dict = Depends(get_current_user)):
-    await CartService.change_quantity(user["id"], cart_item_id, +1)
+    await CartService.change_quantity(SHOP_ID, user["id"], cart_item_id, +1)
     return {"ok": True}
 
 
 @router.post("/cart/dec/{cart_item_id}")
 async def dec_cart_item(cart_item_id: int, user: dict = Depends(get_current_user)):
-    await CartService.change_quantity(user["id"], cart_item_id, -1)
+    await CartService.change_quantity(SHOP_ID, user["id"], cart_item_id, -1)
     return {"ok": True}
 
 
 @router.delete("/cart/{cart_item_id}")
 async def remove_cart_item(cart_item_id: int, user: dict = Depends(get_current_user)):
-    await CartService.remove_item(user["id"], cart_item_id)
+    await CartService.remove_item(SHOP_ID, user["id"], cart_item_id)
     return {"ok": True}
 
 
@@ -219,13 +206,13 @@ async def remove_cart_item(cart_item_id: int, user: dict = Depends(get_current_u
 
 @router.post("/promo/validate")
 async def validate_promo(req: ValidatePromoRequest, user: dict = Depends(get_current_user)):
-    cart = await CartService.get_items(user["id"])
+    cart = await CartService.get_items(SHOP_ID, user["id"])
     cart_total = sum(item["subtotal"] for item in cart)
 
     if cart_total == 0:
         raise HTTPException(status_code=400, detail="Корзина пуста")
 
-    result = await PromoCodeService.validate(req.code, cart_total)
+    result = await PromoCodeService.validate(SHOP_ID, req.code, cart_total)
 
     if result is None:
         raise HTTPException(status_code=404, detail="Промокод недействителен")
@@ -239,13 +226,14 @@ async def validate_promo(req: ValidatePromoRequest, user: dict = Depends(get_cur
 
 @router.get("/orders")
 async def list_orders(user: dict = Depends(get_current_user)):
-    orders = await OrderService.get_user_orders(user["id"], limit=20)
+    orders = await OrderService.get_user_orders(SHOP_ID, user["id"], limit=20)
     return orders
 
 
 @router.post("/orders")
 async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current_user)):
     order = await OrderService.create_order(
+        SHOP_ID,
         telegram_user_id=user["id"],
         full_name=req.full_name,
         phone=req.phone,
@@ -277,7 +265,7 @@ async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current
 
 @router.get("/orders/{order_id}")
 async def get_order_detail(order_id: int, user: dict = Depends(get_current_user)):
-    order = await OrderService.get_user_order(user["id"], order_id)
+    order = await OrderService.get_user_order(SHOP_ID, user["id"], order_id)
 
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")

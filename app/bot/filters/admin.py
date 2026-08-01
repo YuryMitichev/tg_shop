@@ -8,4 +8,4 @@ class IsAdmin(BaseFilter):
     async def __call__(self, obj: TelegramObject) -> bool:
         if obj.from_user is None:
             return False
-        return await AdminUserService.is_admin(obj.from_user.id)
+        return await AdminUserService.is_admin(1, obj.from_user.id)

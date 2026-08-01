@@ -15,7 +15,7 @@ async def menu_callback(callback: CallbackQuery, state: FSMContext):
 
     await state.clear()
 
-    text = await MessageService.get("menu")
+    text = await MessageService.get(1, "menu")
 
     await replace_with_text(
         callback.message,

@@ -9,7 +9,7 @@ from app.models.promo_code import PromoCode
 class PromoCodeService:
 
     @staticmethod
-    async def validate(code: str, cart_total: int) -> dict | None:
+    async def validate(shop_id: int, code: str, cart_total: int) -> dict | None:
         """
         Проверяет промокод и возвращает информацию о скидке или None.
         Не увеличивает счётчик использований — это делается в create_order.
@@ -18,7 +18,10 @@ class PromoCodeService:
 
         async with async_session() as session:
             result = await session.execute(
-                select(PromoCode).where(PromoCode.code == code)
+                select(PromoCode).where(
+                    PromoCode.shop_id == shop_id,
+                    PromoCode.code == code,
+                )
             )
             promo = result.scalar_one_or_none()
 
@@ -51,13 +54,16 @@ class PromoCodeService:
         }
 
     @staticmethod
-    async def increment_usage(code: str) -> None:
+    async def increment_usage(shop_id: int, code: str) -> None:
         """Увеличивает счётчик использований промокода."""
         code = code.strip().upper()
 
         async with async_session() as session:
             result = await session.execute(
-                select(PromoCode).where(PromoCode.code == code)
+                select(PromoCode).where(
+                    PromoCode.shop_id == shop_id,
+                    PromoCode.code == code,
+                )
             )
             promo = result.scalar_one_or_none()
 
@@ -67,6 +73,7 @@ class PromoCodeService:
 
     @staticmethod
     async def create(
+        shop_id: int,
         code: str,
         discount_type: str,
         discount_value: int,
@@ -78,6 +85,7 @@ class PromoCodeService:
 
         async with async_session() as session:
             promo = PromoCode(
+                shop_id=shop_id,
                 code=code,
                 discount_type=discount_type,
                 discount_value=discount_value,
@@ -90,11 +98,13 @@ class PromoCodeService:
             return promo.id
 
     @staticmethod
-    async def get_all() -> list[dict]:
+    async def get_all(shop_id: int) -> list[dict]:
         """Все промокоды для админки."""
         async with async_session() as session:
             result = await session.execute(
-                select(PromoCode).order_by(PromoCode.id.desc())
+                select(PromoCode)
+                .where(PromoCode.shop_id == shop_id)
+                .order_by(PromoCode.id.desc())
             )
             return [
                 {
@@ -111,21 +121,19 @@ class PromoCodeService:
             ]
 
     @staticmethod
-    async def toggle_active(promo_id: int) -> None:
+    async def toggle_active(shop_id: int, promo_id: int) -> None:
         """Включить/выключить промокод."""
         async with async_session() as session:
             promo = await session.get(PromoCode, promo_id)
-
-            if promo:
+            if promo and promo.shop_id == shop_id:
                 promo.is_active = not promo.is_active
                 await session.commit()
 
     @staticmethod
-    async def delete(promo_id: int) -> None:
+    async def delete(shop_id: int, promo_id: int) -> None:
         """Удалить промокод."""
         async with async_session() as session:
             promo = await session.get(PromoCode, promo_id)
-
-            if promo:
+            if promo and promo.shop_id == shop_id:
                 await session.delete(promo)
                 await session.commit()

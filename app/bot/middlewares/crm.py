@@ -20,13 +20,15 @@ class CrmMiddleware(BaseMiddleware):
             msg_type = "text" if event.text else ("photo" if event.photo else "other")
             if user:
                 await CrmService.get_or_create_profile(
+                    1,
                     telegram_user_id=user.id,
                     username=user.username,
                     first_name=user.first_name,
                     last_name=user.last_name,
                 )
-                await CrmService.update_last_seen(user.id)
+                await CrmService.update_last_seen(1, user.id)
                 await CrmService.log_message(
+                    1,
                     telegram_user_id=user.id,
                     direction="in",
                     message_type=msg_type,
@@ -35,8 +37,9 @@ class CrmMiddleware(BaseMiddleware):
         elif isinstance(event, CallbackQuery):
             user = event.from_user
             if user:
-                await CrmService.update_last_seen(user.id)
+                await CrmService.update_last_seen(1, user.id)
                 await CrmService.log_message(
+                    1,
                     telegram_user_id=user.id,
                     direction="in",
                     message_type="callback",

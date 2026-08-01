@@ -10,6 +10,7 @@ class OfferService:
 
     @staticmethod
     async def create_offer(
+        shop_id: int,
         telegram_user_id: int,
         product_id: int,
         discount_percent: int,
@@ -19,6 +20,7 @@ class OfferService:
     ) -> UserOffer:
         async with async_session() as session:
             offer = UserOffer(
+                shop_id=shop_id,
                 telegram_user_id=telegram_user_id,
                 product_id=product_id,
                 discount_percent=discount_percent,
@@ -34,6 +36,7 @@ class OfferService:
 
     @staticmethod
     async def get_best_offer(
+        shop_id: int,
         telegram_user_id: int,
         product_id: int,
         variant_id: int | None = None,
@@ -42,6 +45,7 @@ class OfferService:
         async with async_session() as session:
             now = datetime.now()
             query = select(UserOffer).where(
+                UserOffer.shop_id == shop_id,
                 UserOffer.telegram_user_id == telegram_user_id,
                 UserOffer.product_id == product_id,
                 UserOffer.is_active == True,  # noqa: E712
@@ -78,6 +82,7 @@ class OfferService:
 
     @staticmethod
     async def apply_to_variants(
+        shop_id: int,
         telegram_user_id: int | None,
         product_id: int,
         variants: list[dict],
@@ -89,7 +94,7 @@ class OfferService:
         result = []
         for v in variants:
             offer = await OfferService.get_best_offer(
-                telegram_user_id, product_id, v["id"]
+                shop_id, telegram_user_id, product_id, v["id"]
             )
             if offer and offer.discount_percent > 0:
                 original = v["price"]
@@ -109,6 +114,7 @@ class OfferService:
 
     @staticmethod
     async def mark_used(
+        shop_id: int,
         telegram_user_id: int,
         product_id: int,
         variant_id: int,
@@ -116,9 +122,35 @@ class OfferService:
         """Помечает offer как использованный после заказа."""
         async with async_session() as session:
             offer = await OfferService.get_best_offer(
-                telegram_user_id, product_id, variant_id
+                shop_id, telegram_user_id, product_id, variant_id
             )
             if offer:
                 offer.is_active = False
                 offer.used_at = datetime.now()
                 await session.commit()
+
+    @staticmethod
+    async def get_user_offers(shop_id: int, telegram_user_id: int) -> list[dict]:
+        """Активные предложения пользователя для Mini App."""
+        async with async_session() as session:
+            now = datetime.now()
+            result = await session.execute(
+                select(UserOffer).where(
+                    UserOffer.shop_id == shop_id,
+                    UserOffer.telegram_user_id == telegram_user_id,
+                    UserOffer.is_active == True,  # noqa: E712
+                    or_(
+                        UserOffer.expires_at.is_(None),
+                        UserOffer.expires_at > now,
+                    ),
+                )
+            )
+            return [
+                {
+                    "product_id": o.product_id,
+                    "variant_id": o.variant_id,
+                    "discount_percent": o.discount_percent,
+                    "expires_at": o.expires_at.isoformat() if o.expires_at else None,
+                }
+                for o in result.scalars().all()
+            ]

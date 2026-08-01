@@ -60,61 +60,84 @@ class AdminService:
     # ==========================
 
     @staticmethod
-    async def get_categories() -> list[dict]:
+    async def get_categories(shop_id: int) -> list[dict]:
         async with async_session() as session:
-            result = await session.execute(select(Category).order_by(Category.id))
+            result = await session.execute(
+                select(Category)
+                .where(Category.shop_id == shop_id)
+                .order_by(Category.id)
+            )
             return [_category_to_dict(c) for c in result.scalars().all()]
 
     @staticmethod
-    async def create_category(name: str, emoji: str | None = None) -> int:
+    async def create_category(shop_id: int, name: str, emoji: str | None = None) -> int:
         async with async_session() as session:
-            category = Category(name=name, emoji=emoji or None)
+            category = Category(shop_id=shop_id, name=name, emoji=emoji or None)
             session.add(category)
             await session.commit()
             await session.refresh(category)
             return category.id
 
     @staticmethod
-    async def rename_category(category_id: int, name: str) -> None:
+    async def rename_category(shop_id: int, category_id: int, name: str) -> None:
         async with async_session() as session:
-            category = await session.get(Category, category_id)
-
+            result = await session.execute(
+                select(Category).where(
+                    Category.shop_id == shop_id,
+                    Category.id == category_id,
+                )
+            )
+            category = result.scalar_one_or_none()
             if category:
                 category.name = name
                 await session.commit()
 
     @staticmethod
-    async def update_category_emoji(category_id: int, emoji: str | None) -> None:
+    async def update_category_emoji(shop_id: int, category_id: int, emoji: str | None) -> None:
         async with async_session() as session:
-            category = await session.get(Category, category_id)
-
+            result = await session.execute(
+                select(Category).where(
+                    Category.shop_id == shop_id,
+                    Category.id == category_id,
+                )
+            )
+            category = result.scalar_one_or_none()
             if category:
                 category.emoji = emoji or None
                 await session.commit()
 
     @staticmethod
-    async def count_products_in_category(category_id: int) -> int:
+    async def count_products_in_category(shop_id: int, category_id: int) -> int:
         async with async_session() as session:
             result = await session.execute(
                 select(func.count())
                 .select_from(Product)
-                .where(Product.category_id == category_id)
+                .where(
+                    Product.shop_id == shop_id,
+                    Product.category_id == category_id,
+                )
             )
             return result.scalar() or 0
 
     @staticmethod
-    async def delete_category(category_id: int) -> bool:
+    async def delete_category(shop_id: int, category_id: int) -> bool:
         """
         Удаляет категорию.
         Возвращает False, если в категории есть товары.
         """
-        count = await AdminService.count_products_in_category(category_id)
+        count = await AdminService.count_products_in_category(shop_id, category_id)
 
         if count > 0:
             return False
 
         async with async_session() as session:
-            category = await session.get(Category, category_id)
+            result = await session.execute(
+                select(Category).where(
+                    Category.shop_id == shop_id,
+                    Category.id == category_id,
+                )
+            )
+            category = result.scalar_one_or_none()
 
             if category:
                 await session.delete(category)
@@ -127,7 +150,7 @@ class AdminService:
     # ==========================
 
     @staticmethod
-    async def get_products(category_id: int) -> list[dict]:
+    async def get_products(shop_id: int, category_id: int) -> list[dict]:
         async with async_session() as session:
             result = await session.execute(
                 select(Product)
@@ -135,13 +158,16 @@ class AdminService:
                     selectinload(Product.variants),
                     selectinload(Product.photos),
                 )
-                .where(Product.category_id == category_id)
+                .where(
+                    Product.shop_id == shop_id,
+                    Product.category_id == category_id,
+                )
                 .order_by(Product.id)
             )
             return [_product_to_dict(p) for p in result.scalars().all()]
 
     @staticmethod
-    async def get_product(product_id: int) -> dict | None:
+    async def get_product(shop_id: int, product_id: int) -> dict | None:
         async with async_session() as session:
             result = await session.execute(
                 select(Product)
@@ -149,13 +175,17 @@ class AdminService:
                     selectinload(Product.variants),
                     selectinload(Product.photos),
                 )
-                .where(Product.id == product_id)
+                .where(
+                    Product.shop_id == shop_id,
+                    Product.id == product_id,
+                )
             )
             product = result.scalar_one_or_none()
             return _product_to_dict(product) if product else None
 
     @staticmethod
     async def create_product(
+        shop_id: int,
         category_id: int,
         name: str,
         description: str,
@@ -164,6 +194,7 @@ class AdminService:
     ) -> int:
         async with async_session() as session:
             product = Product(
+                shop_id=shop_id,
                 category_id=category_id,
                 name=name,
                 description=description,
@@ -172,6 +203,7 @@ class AdminService:
 
             product.variants = [
                 ProductVariant(
+                    shop_id=shop_id,
                     volume=variant["volume"],
                     price=variant["price"],
                     burn=variant.get("burn"),
@@ -182,7 +214,7 @@ class AdminService:
 
             if photos:
                 product.photos = [
-                    ProductPhoto(file_id=file_id, position=i)
+                    ProductPhoto(shop_id=shop_id, file_id=file_id, position=i)
                     for i, file_id in enumerate(photos)
                 ]
 
@@ -193,18 +225,29 @@ class AdminService:
             return product.id
 
     @staticmethod
-    async def delete_product(product_id: int) -> None:
+    async def delete_product(shop_id: int, product_id: int) -> None:
         async with async_session() as session:
-            product = await session.get(Product, product_id)
-
+            result = await session.execute(
+                select(Product).where(
+                    Product.shop_id == shop_id,
+                    Product.id == product_id,
+                )
+            )
+            product = result.scalar_one_or_none()
             if product:
                 await session.delete(product)
                 await session.commit()
 
     @staticmethod
-    async def toggle_active(product_id: int) -> bool | None:
+    async def toggle_active(shop_id: int, product_id: int) -> bool | None:
         async with async_session() as session:
-            product = await session.get(Product, product_id)
+            result = await session.execute(
+                select(Product).where(
+                    Product.shop_id == shop_id,
+                    Product.id == product_id,
+                )
+            )
+            product = result.scalar_one_or_none()
 
             if not product:
                 return None
@@ -216,12 +259,19 @@ class AdminService:
 
     @staticmethod
     async def update_product(
+        shop_id: int,
         product_id: int,
         name: str | None = None,
         description: str | None = None,
     ) -> None:
         async with async_session() as session:
-            product = await session.get(Product, product_id)
+            result = await session.execute(
+                select(Product).where(
+                    Product.shop_id == shop_id,
+                    Product.id == product_id,
+                )
+            )
+            product = result.scalar_one_or_none()
 
             if not product:
                 return
@@ -234,9 +284,15 @@ class AdminService:
             await session.commit()
 
     @staticmethod
-    async def update_variant_stock(variant_id: int, stock: int) -> bool:
+    async def update_variant_stock(shop_id: int, variant_id: int, stock: int) -> bool:
         async with async_session() as session:
-            variant = await session.get(ProductVariant, variant_id)
+            result = await session.execute(
+                select(ProductVariant).where(
+                    ProductVariant.shop_id == shop_id,
+                    ProductVariant.id == variant_id,
+                )
+            )
+            variant = result.scalar_one_or_none()
 
             if not variant:
                 return False
@@ -246,16 +302,20 @@ class AdminService:
             return True
 
     @staticmethod
-    async def add_photo(product_id: int, file_id: str) -> int | None:
+    async def add_photo(shop_id: int, product_id: int, file_id: str) -> int | None:
         async with async_session() as session:
             result = await session.execute(
                 select(func.count())
                 .select_from(ProductPhoto)
-                .where(ProductPhoto.product_id == product_id)
+                .where(
+                    ProductPhoto.shop_id == shop_id,
+                    ProductPhoto.product_id == product_id,
+                )
             )
             position = result.scalar() or 0
 
             photo = ProductPhoto(
+                shop_id=shop_id,
                 product_id=product_id,
                 file_id=file_id,
                 position=position,
@@ -267,10 +327,15 @@ class AdminService:
             return photo.id
 
     @staticmethod
-    async def delete_photo(photo_id: int) -> None:
+    async def delete_photo(shop_id: int, photo_id: int) -> None:
         async with async_session() as session:
-            photo = await session.get(ProductPhoto, photo_id)
-
+            result = await session.execute(
+                select(ProductPhoto).where(
+                    ProductPhoto.shop_id == shop_id,
+                    ProductPhoto.id == photo_id,
+                )
+            )
+            photo = result.scalar_one_or_none()
             if photo:
                 await session.delete(photo)
                 await session.commit()
@@ -280,10 +345,13 @@ class AdminService:
     # ==========================
 
     @staticmethod
-    async def get_orders(limit: int = 10) -> list[dict]:
+    async def get_orders(shop_id: int, limit: int = 10) -> list[dict]:
         async with async_session() as session:
             result = await session.execute(
-                select(Order).order_by(Order.id.desc()).limit(limit)
+                select(Order)
+                .where(Order.shop_id == shop_id)
+                .order_by(Order.id.desc())
+                .limit(limit)
             )
 
             return [
@@ -297,12 +365,15 @@ class AdminService:
             ]
 
     @staticmethod
-    async def get_order(order_id: int) -> dict | None:
+    async def get_order(shop_id: int, order_id: int) -> dict | None:
         async with async_session() as session:
             result = await session.execute(
                 select(Order)
                 .options(selectinload(Order.items))
-                .where(Order.id == order_id)
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.id == order_id,
+                )
             )
             order = result.scalar_one_or_none()
 
@@ -328,14 +399,15 @@ class AdminService:
             }
 
     @staticmethod
-    async def set_order_status(order_id: int, status: str) -> None:
-        from datetime import datetime
-
+    async def set_order_status(shop_id: int, order_id: int, status: str) -> None:
         async with async_session() as session:
             result = await session.execute(
                 select(Order)
                 .options(selectinload(Order.items))
-                .where(Order.id == order_id)
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.id == order_id,
+                )
             )
             order = result.scalar_one_or_none()
 
@@ -349,7 +421,13 @@ class AdminService:
             if old_status != "cancelled" and status == "cancelled":
                 for item in order.items:
                     if item.variant_id:
-                        variant = await session.get(ProductVariant, item.variant_id)
+                        result_v = await session.execute(
+                            select(ProductVariant).where(
+                                ProductVariant.shop_id == shop_id,
+                                ProductVariant.id == item.variant_id,
+                            )
+                        )
+                        variant = result_v.scalar_one_or_none()
                         if variant:
                             variant.stock += item.quantity
 
@@ -360,15 +438,15 @@ class AdminService:
     # ==========================
 
     @staticmethod
-    async def get_stats() -> dict:
+    async def get_stats(shop_id: int) -> dict:
         """
         Сводная статистика по магазину.
         Выручка считается по заказам, не отменённым (status != 'cancelled').
         """
         async with async_session() as session:
-            # Кол-во заказов по статусам
             result = await session.execute(
                 select(Order.status, func.count())
+                .where(Order.shop_id == shop_id)
                 .group_by(Order.status)
             )
             status_counts = {row[0]: row[1] for row in result.all()}
@@ -377,18 +455,20 @@ class AdminService:
             new_orders = status_counts.get("new", 0)
             cancelled_orders = status_counts.get("cancelled", 0)
 
-            # Выручка за всё время (исключая отменённые)
             revenue_result = await session.execute(
                 select(func.coalesce(func.sum(Order.total_amount), 0))
-                .where(Order.status != "cancelled")
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != "cancelled",
+                )
             )
             total_revenue = revenue_result.scalar() or 0
 
-            # Выручка за текущий месяц
             now = datetime.now()
             month_revenue_result = await session.execute(
                 select(func.coalesce(func.sum(Order.total_amount), 0))
                 .where(
+                    Order.shop_id == shop_id,
                     Order.status != "cancelled",
                     extract("year", Order.created_at) == now.year,
                     extract("month", Order.created_at) == now.month,
@@ -396,7 +476,6 @@ class AdminService:
             )
             month_revenue = month_revenue_result.scalar() or 0
 
-            # Топ-5 товаров по выручке
             top_result = await session.execute(
                 select(
                     OrderItem.product_name,
@@ -404,7 +483,10 @@ class AdminService:
                     func.sum(OrderItem.price * OrderItem.quantity).label("revenue"),
                 )
                 .join(Order, OrderItem.order_id == Order.id)
-                .where(Order.status != "cancelled")
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != "cancelled",
+                )
                 .group_by(OrderItem.product_name)
                 .order_by(func.sum(OrderItem.price * OrderItem.quantity).desc())
                 .limit(5)
@@ -433,7 +515,7 @@ class AdminService:
     # ==========================
 
     @staticmethod
-    async def get_all_products() -> list[dict]:
+    async def get_all_products(shop_id: int) -> list[dict]:
         async with async_session() as session:
             result = await session.execute(
                 select(Product)
@@ -442,6 +524,7 @@ class AdminService:
                     selectinload(Product.photos),
                     selectinload(Product.category),
                 )
+                .where(Product.shop_id == shop_id)
                 .order_by(Product.id.desc())
             )
             products = result.scalars().all()
@@ -460,12 +543,17 @@ class AdminService:
 
     @staticmethod
     async def get_orders_filtered(
+        shop_id: int,
         status: str | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> dict:
         async with async_session() as session:
-            query = select(Order).order_by(Order.id.desc())
+            query = (
+                select(Order)
+                .where(Order.shop_id == shop_id)
+                .order_by(Order.id.desc())
+            )
 
             if status:
                 query = query.where(Order.status == status)
@@ -500,12 +588,15 @@ class AdminService:
             }
 
     @staticmethod
-    async def get_order_detail(order_id: int) -> dict | None:
+    async def get_order_detail(shop_id: int, order_id: int) -> dict | None:
         async with async_session() as session:
             result = await session.execute(
                 select(Order)
                 .options(selectinload(Order.items))
-                .where(Order.id == order_id)
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.id == order_id,
+                )
             )
             order = result.scalar_one_or_none()
 
@@ -540,7 +631,7 @@ class AdminService:
     # ==========================
 
     @staticmethod
-    async def get_users() -> list[dict]:
+    async def get_users(shop_id: int) -> list[dict]:
         async with async_session() as session:
             result = await session.execute(
                 select(
@@ -551,7 +642,10 @@ class AdminService:
                     func.sum(Order.total_amount).label("total_spent"),
                     func.max(Order.created_at).label("last_order"),
                 )
-                .where(Order.status != "cancelled")
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != "cancelled",
+                )
                 .group_by(Order.telegram_user_id, Order.full_name, Order.phone)
                 .order_by(func.sum(Order.total_amount).desc())
             )
@@ -573,18 +667,22 @@ class AdminService:
     # ==========================
 
     @staticmethod
-    async def get_all_reviews() -> list[dict]:
+    async def get_all_reviews(shop_id: int) -> list[dict]:
         async with async_session() as session:
             result = await session.execute(
-                select(Review).order_by(Review.created_at.desc())
+                select(Review)
+                .where(Review.shop_id == shop_id)
+                .order_by(Review.created_at.desc())
             )
 
             reviews = []
             for r in result.scalars().all():
                 product_name = None
                 if r.product_id:
-                    product = await session.get(Product, r.product_id)
-                    product_name = product.name if product else None
+                    prod_result = await session.execute(
+                        select(Product.name).where(Product.id == r.product_id)
+                    )
+                    product_name = prod_result.scalar_one_or_none()
 
                 reviews.append({
                     "id": r.id,
@@ -599,9 +697,15 @@ class AdminService:
             return reviews
 
     @staticmethod
-    async def delete_review(review_id: int) -> bool:
+    async def delete_review(shop_id: int, review_id: int) -> bool:
         async with async_session() as session:
-            review = await session.get(Review, review_id)
+            result = await session.execute(
+                select(Review).where(
+                    Review.shop_id == shop_id,
+                    Review.id == review_id,
+                )
+            )
+            review = result.scalar_one_or_none()
 
             if review:
                 await session.delete(review)
@@ -615,7 +719,7 @@ class AdminService:
     # ==========================
 
     @staticmethod
-    async def get_revenue_chart(days: int = 30) -> list[dict]:
+    async def get_revenue_chart(shop_id: int, days: int = 30) -> list[dict]:
         from datetime import timedelta
 
         async with async_session() as session:
@@ -629,6 +733,7 @@ class AdminService:
                     func.count(Order.id).label("orders"),
                 )
                 .where(
+                    Order.shop_id == shop_id,
                     Order.status != "cancelled",
                     Order.created_at >= start,
                 )
@@ -650,7 +755,7 @@ class AdminService:
     # ==========================
 
     @staticmethod
-    async def get_analytics_overview(days: int = 30) -> dict:
+    async def get_analytics_overview(shop_id: int, days: int = 30) -> dict:
         from datetime import timedelta
 
         now = datetime.now()
@@ -658,27 +763,31 @@ class AdminService:
         prev_start = cur_start - timedelta(days=days)
 
         async with async_session() as session:
-            cur_rev = await AdminService._period_revenue(session, cur_start, now)
-            prev_rev = await AdminService._period_revenue(session, prev_start, cur_start)
+            cur_rev = await AdminService._period_revenue(session, shop_id, cur_start, now)
+            prev_rev = await AdminService._period_revenue(session, shop_id, prev_start, cur_start)
 
-            cur_orders = await AdminService._period_orders(session, cur_start, now)
-            prev_orders = await AdminService._period_orders(session, prev_start, cur_start)
+            cur_orders = await AdminService._period_orders(session, shop_id, cur_start, now)
+            prev_orders = await AdminService._period_orders(session, shop_id, prev_start, cur_start)
 
             cur_aov = cur_rev / cur_orders if cur_orders else 0
             prev_aov = prev_rev / prev_orders if prev_orders else 0
 
-            cur_customers = await AdminService._period_unique_customers(session, cur_start, now)
-            prev_customers = await AdminService._period_unique_customers(session, prev_start, cur_start)
+            cur_customers = await AdminService._period_unique_customers(session, shop_id, cur_start, now)
+            prev_customers = await AdminService._period_unique_customers(session, shop_id, prev_start, cur_start)
 
-            cur_repeat = await AdminService._period_repeat_customers(session, cur_start, now)
+            cur_repeat = await AdminService._period_repeat_customers(session, shop_id, cur_start, now)
 
-            cur_items = await AdminService._period_total_items(session, cur_start, now)
+            cur_items = await AdminService._period_total_items(session, shop_id, cur_start, now)
             avg_items = cur_items / cur_orders if cur_orders else 0
 
             completed_result = await session.execute(
                 select(func.count())
                 .select_from(Order)
-                .where(Order.status == "done", Order.created_at >= cur_start)
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status == "done",
+                    Order.created_at >= cur_start,
+                )
             )
             completed = completed_result.scalar() or 0
 
@@ -701,10 +810,11 @@ class AdminService:
             }
 
     @staticmethod
-    async def _period_revenue(session, start, end) -> int:
+    async def _period_revenue(session, shop_id: int, start, end) -> int:
         result = await session.execute(
             select(func.coalesce(func.sum(Order.total_amount), 0))
             .where(
+                Order.shop_id == shop_id,
                 Order.status != "cancelled",
                 Order.created_at >= start,
                 Order.created_at < end,
@@ -713,11 +823,12 @@ class AdminService:
         return result.scalar() or 0
 
     @staticmethod
-    async def _period_orders(session, start, end) -> int:
+    async def _period_orders(session, shop_id: int, start, end) -> int:
         result = await session.execute(
             select(func.count())
             .select_from(Order)
             .where(
+                Order.shop_id == shop_id,
                 Order.status != "cancelled",
                 Order.created_at >= start,
                 Order.created_at < end,
@@ -726,10 +837,11 @@ class AdminService:
         return result.scalar() or 0
 
     @staticmethod
-    async def _period_unique_customers(session, start, end) -> int:
+    async def _period_unique_customers(session, shop_id: int, start, end) -> int:
         result = await session.execute(
             select(func.count(func.distinct(Order.telegram_user_id)))
             .where(
+                Order.shop_id == shop_id,
                 Order.status != "cancelled",
                 Order.created_at >= start,
                 Order.created_at < end,
@@ -738,10 +850,11 @@ class AdminService:
         return result.scalar() or 0
 
     @staticmethod
-    async def _period_repeat_customers(session, start, end) -> int:
+    async def _period_repeat_customers(session, shop_id: int, start, end) -> int:
         result = await session.execute(
             select(Order.telegram_user_id, func.count(Order.id).label("cnt"))
             .where(
+                Order.shop_id == shop_id,
                 Order.status != "cancelled",
                 Order.created_at >= start,
                 Order.created_at < end,
@@ -751,11 +864,12 @@ class AdminService:
         return sum(1 for row in result.all() if row[1] > 1)
 
     @staticmethod
-    async def _period_total_items(session, start, end) -> int:
+    async def _period_total_items(session, shop_id: int, start, end) -> int:
         result = await session.execute(
             select(func.coalesce(func.sum(OrderItem.quantity), 0))
             .join(Order, OrderItem.order_id == Order.id)
             .where(
+                Order.shop_id == shop_id,
                 Order.status != "cancelled",
                 Order.created_at >= start,
                 Order.created_at < end,
@@ -770,7 +884,7 @@ class AdminService:
         return round((current - previous) / previous * 100, 1)
 
     @staticmethod
-    async def get_category_breakdown(days: int = 30) -> list[dict]:
+    async def get_category_breakdown(shop_id: int, days: int = 30) -> list[dict]:
         from datetime import timedelta
 
         now = datetime.now()
@@ -789,6 +903,7 @@ class AdminService:
                 .join(OrderItem, OrderItem.product_id == Product.id, isouter=True)
                 .join(Order, OrderItem.order_id == Order.id, isouter=True)
                 .where(
+                    Category.shop_id == shop_id,
                     Order.status != "cancelled",
                     Order.created_at >= start,
                 )
@@ -808,7 +923,7 @@ class AdminService:
             ]
 
     @staticmethod
-    async def get_product_stats(days: int = 30, limit: int = 10) -> list[dict]:
+    async def get_product_stats(shop_id: int, days: int = 30, limit: int = 10) -> list[dict]:
         from datetime import timedelta
 
         now = datetime.now()
@@ -823,6 +938,7 @@ class AdminService:
                 )
                 .join(Order, OrderItem.order_id == Order.id)
                 .where(
+                    Order.shop_id == shop_id,
                     Order.status != "cancelled",
                     Order.created_at >= start,
                 )
@@ -841,7 +957,7 @@ class AdminService:
             ]
 
     @staticmethod
-    async def get_customer_stats(days: int = 30) -> dict:
+    async def get_customer_stats(shop_id: int, days: int = 30) -> dict:
         from datetime import timedelta
 
         now = datetime.now()
@@ -850,7 +966,10 @@ class AdminService:
         async with async_session() as session:
             first_order_result = await session.execute(
                 select(Order.telegram_user_id, func.min(Order.created_at).label("first"))
-                .where(Order.status != "cancelled")
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != "cancelled",
+                )
                 .group_by(Order.telegram_user_id)
             )
             all_customers = first_order_result.all()
@@ -860,7 +979,10 @@ class AdminService:
 
             total_rev_result = await session.execute(
                 select(func.coalesce(func.sum(Order.total_amount), 0))
-                .where(Order.status != "cancelled")
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != "cancelled",
+                )
             )
             total_revenue = total_rev_result.scalar() or 0
 
@@ -872,7 +994,10 @@ class AdminService:
                     func.count(Order.id).label("orders"),
                     func.sum(Order.total_amount).label("spent"),
                 )
-                .where(Order.status != "cancelled")
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != "cancelled",
+                )
                 .group_by(Order.full_name)
                 .order_by(func.sum(Order.total_amount).desc())
                 .limit(5)
@@ -892,7 +1017,7 @@ class AdminService:
             }
 
     @staticmethod
-    async def get_promo_stats(days: int = 30) -> dict:
+    async def get_promo_stats(shop_id: int, days: int = 30) -> dict:
         from datetime import timedelta
 
         now = datetime.now()
@@ -902,6 +1027,7 @@ class AdminService:
             total_discount_result = await session.execute(
                 select(func.coalesce(func.sum(Order.discount_amount), 0))
                 .where(
+                    Order.shop_id == shop_id,
                     Order.status != "cancelled",
                     Order.created_at >= start,
                     Order.discount_amount > 0,
@@ -913,6 +1039,7 @@ class AdminService:
                 select(func.count())
                 .select_from(Order)
                 .where(
+                    Order.shop_id == shop_id,
                     Order.status != "cancelled",
                     Order.created_at >= start,
                     Order.promo_code.isnot(None),
@@ -924,6 +1051,7 @@ class AdminService:
                 select(func.count())
                 .select_from(Order)
                 .where(
+                    Order.shop_id == shop_id,
                     Order.status != "cancelled",
                     Order.created_at >= start,
                     Order.promo_code.is_(None),
@@ -938,6 +1066,7 @@ class AdminService:
                     func.sum(Order.discount_amount).label("discount"),
                 )
                 .where(
+                    Order.shop_id == shop_id,
                     Order.status != "cancelled",
                     Order.created_at >= start,
                     Order.promo_code.isnot(None),
@@ -960,21 +1089,25 @@ class AdminService:
             }
 
     @staticmethod
-    async def get_review_stats() -> dict:
+    async def get_review_stats(shop_id: int) -> dict:
         async with async_session() as session:
             avg_result = await session.execute(
                 select(func.coalesce(func.avg(Review.rating), 0))
+                .where(Review.shop_id == shop_id)
             )
             avg_rating = round(avg_result.scalar() or 0, 1)
 
             dist_result = await session.execute(
                 select(Review.rating, func.count())
+                .where(Review.shop_id == shop_id)
                 .group_by(Review.rating)
             )
             distribution = {str(r[0]): r[1] for r in dist_result.all()}
 
             total_result = await session.execute(
-                select(func.count()).select_from(Review)
+                select(func.count())
+                .select_from(Review)
+                .where(Review.shop_id == shop_id)
             )
             total = total_result.scalar() or 0
 

@@ -9,10 +9,12 @@ from app.services.message_service import MessageService
 
 router = Router()
 
+SHOP_ID = 1
+
 
 async def _render_cart_text(items: list[dict]) -> str:
     if not items:
-        return await MessageService.get("cart_empty")
+        return await MessageService.get(SHOP_ID, "cart_empty")
 
     lines = ["🛒 <b>Ваша корзина</b>\n"]
 
@@ -31,7 +33,7 @@ async def _render_cart_text(items: list[dict]) -> str:
 
 
 async def _render_cart_cb(callback: CallbackQuery, state: FSMContext) -> None:
-    items = await CartService.get_items(callback.from_user.id)
+    items = await CartService.get_items(SHOP_ID, callback.from_user.id)
 
     await replace_with_text(
         callback.message,
@@ -49,7 +51,7 @@ async def _render_cart_cb(callback: CallbackQuery, state: FSMContext) -> None:
 async def open_cart_msg(message: Message, state: FSMContext):
     await state.clear()
 
-    items = await CartService.get_items(message.from_user.id)
+    items = await CartService.get_items(SHOP_ID, message.from_user.id)
 
     await show_screen(
         message,
@@ -68,9 +70,9 @@ async def open_cart_cb(callback: CallbackQuery, state: FSMContext):
 async def increase_quantity(callback: CallbackQuery):
     cart_item_id = int(callback.data.split(":")[1])
 
-    await CartService.change_quantity(callback.from_user.id, cart_item_id, +1)
+    await CartService.change_quantity(SHOP_ID, callback.from_user.id, cart_item_id, +1)
 
-    items = await CartService.get_items(callback.from_user.id)
+    items = await CartService.get_items(SHOP_ID, callback.from_user.id)
 
     await callback.message.edit_text(
         await _render_cart_text(items),
@@ -83,9 +85,9 @@ async def increase_quantity(callback: CallbackQuery):
 async def decrease_quantity(callback: CallbackQuery):
     cart_item_id = int(callback.data.split(":")[1])
 
-    await CartService.change_quantity(callback.from_user.id, cart_item_id, -1)
+    await CartService.change_quantity(SHOP_ID, callback.from_user.id, cart_item_id, -1)
 
-    items = await CartService.get_items(callback.from_user.id)
+    items = await CartService.get_items(SHOP_ID, callback.from_user.id)
 
     await callback.message.edit_text(
         await _render_cart_text(items),
@@ -98,9 +100,9 @@ async def decrease_quantity(callback: CallbackQuery):
 async def remove_item(callback: CallbackQuery):
     cart_item_id = int(callback.data.split(":")[1])
 
-    await CartService.remove_item(callback.from_user.id, cart_item_id)
+    await CartService.remove_item(SHOP_ID, callback.from_user.id, cart_item_id)
 
-    items = await CartService.get_items(callback.from_user.id)
+    items = await CartService.get_items(SHOP_ID, callback.from_user.id)
 
     await callback.message.edit_text(
         await _render_cart_text(items),

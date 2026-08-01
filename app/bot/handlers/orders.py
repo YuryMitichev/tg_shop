@@ -13,6 +13,8 @@ from app.utils.escape import esc
 
 router = Router()
 
+SHOP_ID = 1
+
 _EMPTY_KB = None
 
 
@@ -77,7 +79,7 @@ def _render_order_detail(order: dict) -> str:
 async def my_orders_message(message: Message, state: FSMContext):
     await state.clear()
 
-    orders = await OrderService.get_user_orders(message.from_user.id)
+    orders = await OrderService.get_user_orders(SHOP_ID, message.from_user.id)
 
     await show_screen(
         message,
@@ -89,7 +91,7 @@ async def my_orders_message(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "my_orders")
 async def my_orders_callback(callback: CallbackQuery, state: FSMContext):
-    orders = await OrderService.get_user_orders(callback.from_user.id)
+    orders = await OrderService.get_user_orders(SHOP_ID, callback.from_user.id)
 
     await replace_with_text(
         callback.message,
@@ -108,6 +110,7 @@ async def show_user_order(callback: CallbackQuery, state: FSMContext):
     order_id = int(callback.data.split(":")[1])
 
     order = await OrderService.get_user_order(
+        SHOP_ID,
         callback.from_user.id,
         order_id,
     )

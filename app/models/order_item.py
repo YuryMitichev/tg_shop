@@ -16,6 +16,7 @@ class OrderItem(Base):
     __tablename__ = "order_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"), index=True, default=1)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
 
     # product_id добавлен для проверки покупки при отзывах.

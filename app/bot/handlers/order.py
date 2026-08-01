@@ -11,6 +11,8 @@ from app.utils.escape import esc
 
 router = Router()
 
+SHOP_ID = 1
+
 _EMPTY_KB = InlineKeyboardMarkup(inline_keyboard=[])
 
 
@@ -54,7 +56,7 @@ async def process_receipt_order_id(message: Message, state: FSMContext):
 
     order_id = int(text)
 
-    order = await OrderService.get_user_order(message.from_user.id, order_id)
+    order = await OrderService.get_user_order(SHOP_ID, message.from_user.id, order_id)
 
     if order is None:
         await show_screen(
@@ -91,7 +93,7 @@ async def process_receipt(message: Message, state: FSMContext):
 
     if settings.manager_chat_id:
         try:
-            order = await OrderService.get_user_order(message.from_user.id, order_id)
+            order = await OrderService.get_user_order(SHOP_ID, message.from_user.id, order_id)
 
             if order:
                 items_text = "\n".join(

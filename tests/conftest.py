@@ -34,6 +34,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     Broadcast,
     UserOffer,
 )
+from app.models.shop import Shop
 # noqa регистрирует таблицы в metadata
 
 
@@ -105,9 +106,11 @@ async def seed_data(db_session):
     session_maker = db_session
 
     async with session_maker() as session:
+        session.add(Shop(id=1, name="Test Shop", bot_token="test:token", owner_telegram_id=1))
+
         session.add_all([
-            Category(id=1, name="Свечи", emoji="🕯"),
-            Category(id=2, name="Диффузоры", emoji="🏠"),
+            Category(id=1, name="Свечи", emoji="🕯", shop_id=1),
+            Category(id=2, name="Диффузоры", emoji="🏠", shop_id=1),
         ])
 
         session.add_all([

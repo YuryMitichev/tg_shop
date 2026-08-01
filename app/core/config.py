@@ -58,6 +58,8 @@ class Settings(BaseSettings):
 
     app_name: str = "TG Shop"
 
+    shop_name: str = Field(default="Магазин по умолчанию", alias="SHOP_NAME")
+
     app_version: str = "0.1.0"
 
     # ==========================

@@ -8,6 +8,7 @@ class Product(Base):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"), index=True, default=1)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
 
     name: Mapped[str] = mapped_column(nullable=False)

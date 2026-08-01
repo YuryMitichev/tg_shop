@@ -11,19 +11,25 @@ from app.models.order_item import OrderItem
 
 class CrmService:
     @staticmethod
-    async def _get_profile(session, telegram_user_id: int) -> UserProfile | None:
+    async def _get_profile(session, shop_id: int, telegram_user_id: int) -> UserProfile | None:
         result = await session.execute(
-            select(UserProfile).where(UserProfile.telegram_user_id == telegram_user_id)
+            select(UserProfile).where(
+                UserProfile.shop_id == shop_id,
+                UserProfile.telegram_user_id == telegram_user_id,
+            )
         )
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def backfill_from_orders() -> int:
+    async def backfill_from_orders(shop_id: int) -> int:
         """Создаёт профили для пользователей из заказов, у которых ещё нет профиля."""
         async with async_session() as session:
             tg_ids_result = await session.execute(
                 select(Order.telegram_user_id)
-                .where(Order.status != "cancelled")
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != "cancelled",
+                )
                 .distinct()
             )
             tg_ids = [r[0] for r in tg_ids_result.all()]
@@ -33,13 +39,16 @@ class CrmService:
             for tg_id in tg_ids:
                 last_order_result = await session.execute(
                     select(Order.full_name, Order.phone, Order.created_at)
-                    .where(Order.telegram_user_id == tg_id)
+                    .where(
+                        Order.shop_id == shop_id,
+                        Order.telegram_user_id == tg_id,
+                    )
                     .order_by(Order.created_at.desc())
                     .limit(1)
                 )
                 last_order = last_order_result.one_or_none()
 
-                existing = await CrmService._get_profile(session, tg_id)
+                existing = await CrmService._get_profile(session, shop_id, tg_id)
                 if existing is None:
                     full_name = last_order[0] if last_order else ""
                     parts = full_name.split(" ", 1)
@@ -47,6 +56,7 @@ class CrmService:
                     last_name = parts[1] if len(parts) > 1 else None
 
                     profile = UserProfile(
+                        shop_id=shop_id,
                         telegram_user_id=tg_id,
                         first_name=first_name,
                         last_name=last_name,
@@ -72,15 +82,17 @@ class CrmService:
 
     @staticmethod
     async def get_or_create_profile(
+        shop_id: int,
         telegram_user_id: int,
         username: str | None = None,
         first_name: str | None = None,
         last_name: str | None = None,
     ) -> UserProfile:
         async with async_session() as session:
-            profile = await CrmService._get_profile(session, telegram_user_id)
+            profile = await CrmService._get_profile(session, shop_id, telegram_user_id)
             if profile is None:
                 profile = UserProfile(
+                    shop_id=shop_id,
                     telegram_user_id=telegram_user_id,
                     username=username,
                     first_name=first_name,
@@ -105,15 +117,16 @@ class CrmService:
             return profile
 
     @staticmethod
-    async def update_last_seen(telegram_user_id: int) -> None:
+    async def update_last_seen(shop_id: int, telegram_user_id: int) -> None:
         async with async_session() as session:
-            profile = await CrmService._get_profile(session, telegram_user_id)
+            profile = await CrmService._get_profile(session, shop_id, telegram_user_id)
             if profile:
                 profile.last_seen = datetime.now()
                 await session.commit()
 
     @staticmethod
     async def log_message(
+        shop_id: int,
         telegram_user_id: int,
         direction: str = "in",
         message_type: str = "text",
@@ -123,6 +136,7 @@ class CrmService:
         truncated = text[:500] if text else None
         async with async_session() as session:
             log = CommunicationLog(
+                shop_id=shop_id,
                 telegram_user_id=telegram_user_id,
                 direction=direction,
                 message_type=message_type,
@@ -160,13 +174,18 @@ class CrmService:
 
     @staticmethod
     async def get_users(
+        shop_id: int,
         search: str | None = None,
         tag: str | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> dict:
         async with async_session() as session:
-            query = select(UserProfile).order_by(UserProfile.last_seen.desc().nullslast())
+            query = (
+                select(UserProfile)
+                .where(UserProfile.shop_id == shop_id)
+                .order_by(UserProfile.last_seen.desc().nullslast())
+            )
 
             if search:
                 pattern = f"%{search}%"
@@ -193,13 +212,13 @@ class CrmService:
 
             users = []
             for p in profiles:
-                stats = await CrmService._quick_stats(session, p.telegram_user_id)
+                stats = await CrmService._quick_stats(session, shop_id, p.telegram_user_id)
                 users.append(CrmService._profile_to_dict(p, stats))
 
             return {"users": users, "total": total, "page": page, "per_page": per_page}
 
     @staticmethod
-    async def _quick_stats(session, telegram_user_id: int) -> dict:
+    async def _quick_stats(session, shop_id: int, telegram_user_id: int) -> dict:
         result = await session.execute(
             select(
                 func.count(Order.id).label("orders"),
@@ -207,6 +226,7 @@ class CrmService:
                 func.max(Order.created_at).label("last_order"),
             )
             .where(
+                Order.shop_id == shop_id,
                 Order.telegram_user_id == telegram_user_id,
                 Order.status != "cancelled",
             )
@@ -219,17 +239,20 @@ class CrmService:
         }
 
     @staticmethod
-    async def get_user_detail(telegram_user_id: int) -> dict | None:
+    async def get_user_detail(shop_id: int, telegram_user_id: int) -> dict | None:
         async with async_session() as session:
-            profile = await CrmService._get_profile(session, telegram_user_id)
+            profile = await CrmService._get_profile(session, shop_id, telegram_user_id)
             if profile is None:
                 return None
 
-            stats = await CrmService._quick_stats(session, telegram_user_id)
+            stats = await CrmService._quick_stats(session, shop_id, telegram_user_id)
 
             orders_result = await session.execute(
                 select(Order)
-                .where(Order.telegram_user_id == telegram_user_id)
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.telegram_user_id == telegram_user_id,
+                )
                 .order_by(Order.id.desc())
             )
             orders = [
@@ -249,6 +272,7 @@ class CrmService:
                 select(OrderItem.product_name, func.sum(OrderItem.quantity).label("qty"))
                 .join(Order, OrderItem.order_id == Order.id)
                 .where(
+                    Order.shop_id == shop_id,
                     Order.telegram_user_id == telegram_user_id,
                     Order.status != "cancelled",
                 )
@@ -272,6 +296,7 @@ class CrmService:
 
     @staticmethod
     async def get_communication_history(
+        shop_id: int,
         telegram_user_id: int,
         page: int = 1,
         per_page: int = 50,
@@ -279,7 +304,10 @@ class CrmService:
         async with async_session() as session:
             query = (
                 select(CommunicationLog)
-                .where(CommunicationLog.telegram_user_id == telegram_user_id)
+                .where(
+                    CommunicationLog.shop_id == shop_id,
+                    CommunicationLog.telegram_user_id == telegram_user_id,
+                )
                 .order_by(CommunicationLog.id.desc())
             )
 
@@ -305,9 +333,9 @@ class CrmService:
             return {"messages": messages, "total": total, "page": page, "per_page": per_page}
 
     @staticmethod
-    async def update_notes(telegram_user_id: int, notes: str) -> bool:
+    async def update_notes(shop_id: int, telegram_user_id: int, notes: str) -> bool:
         async with async_session() as session:
-            profile = await CrmService._get_profile(session, telegram_user_id)
+            profile = await CrmService._get_profile(session, shop_id, telegram_user_id)
             if profile is None:
                 return False
             profile.notes = notes.strip() or None
@@ -315,9 +343,9 @@ class CrmService:
             return True
 
     @staticmethod
-    async def add_tag(telegram_user_id: int, tag: str) -> bool:
+    async def add_tag(shop_id: int, telegram_user_id: int, tag: str) -> bool:
         async with async_session() as session:
-            profile = await CrmService._get_profile(session, telegram_user_id)
+            profile = await CrmService._get_profile(session, shop_id, telegram_user_id)
             if profile is None:
                 return False
             tags = CrmService._parse_tags(profile.tags)
@@ -329,9 +357,9 @@ class CrmService:
             return True
 
     @staticmethod
-    async def remove_tag(telegram_user_id: int, tag: str) -> bool:
+    async def remove_tag(shop_id: int, telegram_user_id: int, tag: str) -> bool:
         async with async_session() as session:
-            profile = await CrmService._get_profile(session, telegram_user_id)
+            profile = await CrmService._get_profile(session, shop_id, telegram_user_id)
             if profile is None:
                 return False
             tags = CrmService._parse_tags(profile.tags)
@@ -341,10 +369,13 @@ class CrmService:
             return True
 
     @staticmethod
-    async def get_all_tags() -> list[str]:
+    async def get_all_tags(shop_id: int) -> list[str]:
         async with async_session() as session:
             result = await session.execute(
-                select(UserProfile.tags).where(UserProfile.tags.isnot(None))
+                select(UserProfile.tags).where(
+                    UserProfile.shop_id == shop_id,
+                    UserProfile.tags.isnot(None),
+                )
             )
             all_tags = set()
             for row in result.all():
@@ -352,9 +383,9 @@ class CrmService:
             return sorted(all_tags)
 
     @staticmethod
-    async def update_phone(telegram_user_id: int, phone: str | None) -> bool:
+    async def update_phone(shop_id: int, telegram_user_id: int, phone: str | None) -> bool:
         async with async_session() as session:
-            profile = await CrmService._get_profile(session, telegram_user_id)
+            profile = await CrmService._get_profile(session, shop_id, telegram_user_id)
             if profile is None:
                 return False
             profile.phone = phone

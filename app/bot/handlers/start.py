@@ -25,7 +25,7 @@ async def cmd_start(message: Message, state: FSMContext):
             ),
         )
 
-    text = await MessageService.get("welcome")
+    text = await MessageService.get(1, "welcome")
 
     msg = await message.answer(
         text=text,

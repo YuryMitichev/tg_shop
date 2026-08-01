@@ -8,6 +8,7 @@ class ProductPhoto(Base):
     __tablename__ = "product_photos"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"), index=True, default=1)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
 
     file_id: Mapped[str] = mapped_column(nullable=False)

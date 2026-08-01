@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.db import Base
@@ -10,6 +10,8 @@ class CommunicationLog(Base):
     __tablename__ = "communication_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"), index=True, default=1)
 
     telegram_user_id: Mapped[int] = mapped_column(index=True)
 

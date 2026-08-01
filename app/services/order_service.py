@@ -1,4 +1,4 @@
-from sqlalchemy import select, exists
+from sqlalchemy import select, exists, or_
 from sqlalchemy.orm import selectinload
 
 from app.database.db import async_session
@@ -14,6 +14,7 @@ class OrderService:
 
     @staticmethod
     async def create_order(
+        shop_id: int,
         telegram_user_id: int,
         full_name: str,
         phone: str,
@@ -26,7 +27,7 @@ class OrderService:
 
         Возвращает None, если корзина пуста.
         """
-        items = await CartService.get_items(telegram_user_id)
+        items = await CartService.get_items(shop_id, telegram_user_id)
 
         if not items:
             return None
@@ -37,7 +38,7 @@ class OrderService:
         applied_promo = None
 
         if promo_code:
-            promo_info = await PromoCodeService.validate(promo_code, total)
+            promo_info = await PromoCodeService.validate(shop_id, promo_code, total)
 
             if promo_info:
                 discount = promo_info["discount_amount"]
@@ -47,6 +48,7 @@ class OrderService:
 
         async with async_session() as session:
             order = Order(
+                shop_id=shop_id,
                 telegram_user_id=telegram_user_id,
                 status="new",
                 full_name=full_name,
@@ -60,6 +62,7 @@ class OrderService:
 
             order.items = [
                 OrderItem(
+                    shop_id=shop_id,
                     product_name=item["product_name"],
                     product_id=item["product_id"],
                     variant_id=item.get("variant_id"),
@@ -73,7 +76,13 @@ class OrderService:
             for item in items:
                 variant_id = item.get("variant_id")
                 if variant_id:
-                    variant = await session.get(ProductVariant, variant_id)
+                    result = await session.execute(
+                        select(ProductVariant).where(
+                            ProductVariant.shop_id == shop_id,
+                            ProductVariant.id == variant_id,
+                        )
+                    )
+                    variant = result.scalar_one_or_none()
                     if variant:
                         variant.stock = max(0, variant.stock - item["quantity"])
 
@@ -83,16 +92,16 @@ class OrderService:
 
             order_id = order.id
 
-        await CartService.clear(telegram_user_id)
+        await CartService.clear(shop_id, telegram_user_id)
 
         for item in items:
             if item.get("discount_percent", 0) > 0:
                 await OfferService.mark_used(
-                    telegram_user_id, item["product_id"], item["variant_id"]
+                    shop_id, telegram_user_id, item["product_id"], item["variant_id"]
                 )
 
         if applied_promo:
-            await PromoCodeService.increment_usage(applied_promo)
+            await PromoCodeService.increment_usage(shop_id, applied_promo)
 
         return {
             "order_id": order_id,
@@ -108,16 +117,19 @@ class OrderService:
         }
 
     @staticmethod
-    async def get_order_owner(order_id: int) -> int | None:
+    async def get_order_owner(shop_id: int, order_id: int) -> int | None:
         """Возвращает telegram_user_id владельца заказа."""
         async with async_session() as session:
             result = await session.execute(
-                select(Order.telegram_user_id).where(Order.id == order_id)
+                select(Order.telegram_user_id).where(
+                    Order.shop_id == shop_id,
+                    Order.id == order_id,
+                )
             )
             return result.scalar_one_or_none()
 
     @staticmethod
-    async def has_purchased(telegram_user_id: int, product_id: int) -> bool:
+    async def has_purchased(shop_id: int, telegram_user_id: int, product_id: int) -> bool:
         """Проверяет, покупал ли пользователь данный товар (заказ не отменён)."""
         async with async_session() as session:
             result = await session.execute(
@@ -126,6 +138,7 @@ class OrderService:
                     .where(
                         OrderItem.product_id == product_id,
                         OrderItem.order_id == Order.id,
+                        Order.shop_id == shop_id,
                         Order.telegram_user_id == telegram_user_id,
                         Order.status != "cancelled",
                     )
@@ -134,12 +147,15 @@ class OrderService:
             return bool(result.scalar())
 
     @staticmethod
-    async def get_user_orders(telegram_user_id: int, limit: int = 10) -> list[dict]:
+    async def get_user_orders(shop_id: int, telegram_user_id: int, limit: int = 10) -> list[dict]:
         """Последние заказы пользователя (краткая информация)."""
         async with async_session() as session:
             result = await session.execute(
                 select(Order)
-                .where(Order.telegram_user_id == telegram_user_id)
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.telegram_user_id == telegram_user_id,
+                )
                 .order_by(Order.id.desc())
                 .limit(limit)
             )
@@ -155,6 +171,7 @@ class OrderService:
 
     @staticmethod
     async def get_user_order(
+        shop_id: int,
         telegram_user_id: int,
         order_id: int,
     ) -> dict | None:
@@ -164,6 +181,7 @@ class OrderService:
                 select(Order)
                 .options(selectinload(Order.items))
                 .where(
+                    Order.shop_id == shop_id,
                     Order.id == order_id,
                     Order.telegram_user_id == telegram_user_id,
                 )
@@ -202,12 +220,10 @@ class OrderService:
         Возвращает количество отменённых заказов.
         """
         from datetime import datetime, timedelta
-        from app.models.product_variant import ProductVariant
 
         cutoff = datetime.now() - timedelta(days=days)
 
         async with async_session() as session:
-            from sqlalchemy import or_
             result = await session.execute(
                 select(Order)
                 .options(selectinload(Order.items))
@@ -228,7 +244,10 @@ class OrderService:
 
                 for item in order.items:
                     if item.variant_id:
-                        variant = await session.get(ProductVariant, item.variant_id)
+                        result_v = await session.execute(
+                            select(ProductVariant).where(ProductVariant.id == item.variant_id)
+                        )
+                        variant = result_v.scalar_one_or_none()
                         if variant:
                             variant.stock += item.quantity
 

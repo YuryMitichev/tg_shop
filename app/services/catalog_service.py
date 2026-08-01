@@ -56,23 +56,32 @@ class CatalogService:
     """
 
     @staticmethod
-    async def get_categories() -> list[dict]:
+    async def get_categories(shop_id: int) -> list[dict]:
         """Получить список категорий."""
         async with async_session() as session:
             result = await session.execute(
-                select(Category).order_by(Category.id)
+                select(Category)
+                .where(Category.shop_id == shop_id)
+                .order_by(Category.id)
             )
             return [_category_to_dict(c) for c in result.scalars().all()]
 
     @staticmethod
-    async def get_category(category_id: int) -> dict | None:
+    async def get_category(shop_id: int, category_id: int) -> dict | None:
         """Получить категорию по ID."""
         async with async_session() as session:
-            category = await session.get(Category, category_id)
+            result = await session.execute(
+                select(Category)
+                .where(
+                    Category.shop_id == shop_id,
+                    Category.id == category_id,
+                )
+            )
+            category = result.scalar_one_or_none()
             return _category_to_dict(category) if category else None
 
     @staticmethod
-    async def get_products(category_id: int) -> list[dict]:
+    async def get_products(shop_id: int, category_id: int) -> list[dict]:
         """Получить товары категории (только видимые покупателям)."""
         async with async_session() as session:
             result = await session.execute(
@@ -82,6 +91,7 @@ class CatalogService:
                     selectinload(Product.photos),
                 )
                 .where(
+                    Product.shop_id == shop_id,
                     Product.category_id == category_id,
                     Product.is_active == True,  # noqa: E712
                 )
@@ -90,7 +100,7 @@ class CatalogService:
             return [_product_to_dict(p) for p in result.scalars().all()]
 
     @staticmethod
-    async def get_product(product_id: int) -> dict | None:
+    async def get_product(shop_id: int, product_id: int) -> dict | None:
         """Получить товар по ID (только если виден покупателям)."""
         async with async_session() as session:
             result = await session.execute(
@@ -100,6 +110,7 @@ class CatalogService:
                     selectinload(Product.photos),
                 )
                 .where(
+                    Product.shop_id == shop_id,
                     Product.id == product_id,
                     Product.is_active == True,  # noqa: E712
                 )
@@ -108,15 +119,15 @@ class CatalogService:
             return _product_to_dict(product) if product else None
 
     @staticmethod
-    async def get_first_product(category_id: int) -> dict | None:
+    async def get_first_product(shop_id: int, category_id: int) -> dict | None:
         """Первый товар категории."""
-        products = await CatalogService.get_products(category_id)
+        products = await CatalogService.get_products(shop_id, category_id)
         return products[0] if products else None
 
     @staticmethod
-    async def get_next_product(category_id: int, current_product_id: int) -> dict | None:
+    async def get_next_product(shop_id: int, category_id: int, current_product_id: int) -> dict | None:
         """Следующий товар (циклически)."""
-        products = await CatalogService.get_products(category_id)
+        products = await CatalogService.get_products(shop_id, category_id)
 
         if not products:
             return None
@@ -128,9 +139,9 @@ class CatalogService:
         return products[0]
 
     @staticmethod
-    async def get_previous_product(category_id: int, current_product_id: int) -> dict | None:
+    async def get_previous_product(shop_id: int, category_id: int, current_product_id: int) -> dict | None:
         """Предыдущий товар (циклически)."""
-        products = await CatalogService.get_products(category_id)
+        products = await CatalogService.get_products(shop_id, category_id)
 
         if not products:
             return None
@@ -159,12 +170,12 @@ class CatalogService:
         return product["variants"][0]
 
     @staticmethod
-    async def get_product_position(category_id: int, product_id: int) -> tuple[int, int]:
+    async def get_product_position(shop_id: int, category_id: int, product_id: int) -> tuple[int, int]:
         """
         Возвращает:
         (текущая_позиция, всего_товаров)
         """
-        products = await CatalogService.get_products(category_id)
+        products = await CatalogService.get_products(shop_id, category_id)
 
         total = len(products)
 

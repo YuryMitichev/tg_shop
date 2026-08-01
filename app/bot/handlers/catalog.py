@@ -10,10 +10,12 @@ from app.services.message_service import MessageService
 
 router = Router()
 
+SHOP_ID = 1
+
 
 async def _render_catalog(callback: CallbackQuery, state: FSMContext) -> None:
     keyboard = await get_catalog_keyboard()
-    text = await MessageService.get("catalog")
+    text = await MessageService.get(SHOP_ID, "catalog")
 
     await replace_with_text(
         callback.message,
@@ -32,7 +34,7 @@ async def open_catalog_msg(message: Message, state: FSMContext):
     await state.clear()
 
     keyboard = await get_catalog_keyboard()
-    text = await MessageService.get("catalog")
+    text = await MessageService.get(SHOP_ID, "catalog")
 
     await show_screen(
         message,
@@ -54,7 +56,7 @@ async def open_category(
 ):
     category_id = int(callback.data.split("_")[1])
 
-    product = await CatalogService.get_first_product(category_id)
+    product = await CatalogService.get_first_product(SHOP_ID, category_id)
 
     if product is None:
         await callback.answer(
@@ -82,6 +84,7 @@ async def next_product(
     data = await state.get_data()
 
     product = await CatalogService.get_next_product(
+        SHOP_ID,
         data["category_id"],
         data["product_id"]
     )
@@ -101,6 +104,7 @@ async def prev_product(
     data = await state.get_data()
 
     product = await CatalogService.get_previous_product(
+        SHOP_ID,
         data["category_id"],
         data["product_id"]
     )

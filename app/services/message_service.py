@@ -54,22 +54,27 @@ class MessageService:
     """
 
     @staticmethod
-    async def get(key: str) -> str:
+    async def get(shop_id: int, key: str) -> str:
         """Получить текст сообщения по ключу."""
         async with async_session() as session:
             result = await session.execute(
-                select(SystemMessage.content).where(SystemMessage.key == key)
+                select(SystemMessage.content).where(
+                    SystemMessage.shop_id == shop_id,
+                    SystemMessage.key == key,
+                )
             )
             content = result.scalar_one_or_none()
 
         return content if content is not None else DEFAULT_MESSAGES.get(key, "")
 
     @staticmethod
-    async def get_all() -> list[dict]:
+    async def get_all(shop_id: int) -> list[dict]:
         """Все сообщения с метаданными для админки."""
         async with async_session() as session:
             result = await session.execute(
-                select(SystemMessage).order_by(SystemMessage.key)
+                select(SystemMessage)
+                .where(SystemMessage.shop_id == shop_id)
+                .order_by(SystemMessage.key)
             )
             db_messages = {m.key: m.content for m in result.scalars().all()}
 
@@ -85,14 +90,17 @@ class MessageService:
         return messages
 
     @staticmethod
-    async def get_one(key: str) -> dict | None:
+    async def get_one(shop_id: int, key: str) -> dict | None:
         """Одно сообщение для редактирования."""
         if key not in DEFAULT_MESSAGES:
             return None
 
         async with async_session() as session:
             result = await session.execute(
-                select(SystemMessage.content).where(SystemMessage.key == key)
+                select(SystemMessage.content).where(
+                    SystemMessage.shop_id == shop_id,
+                    SystemMessage.key == key,
+                )
             )
             content = result.scalar_one_or_none()
 
@@ -104,27 +112,33 @@ class MessageService:
         }
 
     @staticmethod
-    async def update(key: str, content: str) -> None:
+    async def update(shop_id: int, key: str, content: str) -> None:
         """Обновить или создать сообщение."""
         async with async_session() as session:
             result = await session.execute(
-                select(SystemMessage).where(SystemMessage.key == key)
+                select(SystemMessage).where(
+                    SystemMessage.shop_id == shop_id,
+                    SystemMessage.key == key,
+                )
             )
             msg = result.scalar_one_or_none()
 
             if msg:
                 msg.content = content
             else:
-                session.add(SystemMessage(key=key, content=content))
+                session.add(SystemMessage(shop_id=shop_id, key=key, content=content))
 
             await session.commit()
 
     @staticmethod
-    async def reset(key: str) -> None:
+    async def reset(shop_id: int, key: str) -> None:
         """Сбросить сообщение к значению по умолчанию."""
         async with async_session() as session:
             result = await session.execute(
-                select(SystemMessage).where(SystemMessage.key == key)
+                select(SystemMessage).where(
+                    SystemMessage.shop_id == shop_id,
+                    SystemMessage.key == key,
+                )
             )
             msg = result.scalar_one_or_none()
 

@@ -7,7 +7,7 @@ async def get_catalog_keyboard():
 
     builder = InlineKeyboardBuilder()
 
-    for category in await CatalogService.get_categories():
+    for category in await CatalogService.get_categories(1):
         emoji = category.get("emoji")
         label = f"{emoji} {category['name']}" if emoji else category["name"]
 

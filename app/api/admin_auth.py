@@ -3,16 +3,16 @@ from fastapi import Header, HTTPException
 from app.services.admin_auth_service import AdminAuthService
 
 
-async def require_admin(authorization: str = Header(...)) -> int:
+async def require_admin(authorization: str = Header(...)) -> dict:
     """
     FastAPI dependency: проверяет JWT-токен администратора.
-    Возвращает telegram_user_id.
+    Возвращает {'admin_id': int, 'shop_id': int}.
     """
     token = authorization.replace("Bearer ", "", 1)
 
-    user_id = await AdminAuthService.verify_token(token)
+    result = await AdminAuthService.verify_token(token)
 
-    if user_id is None:
+    if result is None:
         raise HTTPException(status_code=401, detail="Не авторизован")
 
-    return user_id
+    return result
