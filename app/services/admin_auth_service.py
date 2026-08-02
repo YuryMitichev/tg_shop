@@ -22,17 +22,23 @@ class AdminAuthService:
     JWT содержит shop_id — к какому магазину у админа доступ.
     """
 
-    _codes: dict[int, tuple[str, float]] = {}
+    _codes: dict[int, tuple[str, float, int, bool]] = {}
 
     CODE_TTL = 300
     JWT_ALGORITHM = "HS256"
     JWT_EXPIRES = timedelta(hours=24)
 
     @staticmethod
-    async def _resolve_shop_id(telegram_user_id: int) -> int | None:
-        """Определяет shop_id для пользователя при входе."""
+    async def _resolve_shop_id(telegram_user_id: int) -> tuple[int, bool] | None:
+        """Определяет shop_id и флаг супер-админа для пользователя.
+
+        Возвращает (shop_id, is_super_admin) или None.
+        """
+        if telegram_user_id in settings.super_admin_id_list:
+            return (1, True)
+
         if telegram_user_id in settings.admin_id_list:
-            return 1
+            return (1, False)
 
         async with async_session() as session:
             result = await session.execute(
@@ -40,18 +46,20 @@ class AdminAuthService:
             )
             admin = result.scalar_one_or_none()
             if admin:
-                return admin.shop_id
+                return (admin.shop_id, False)
 
         return None
 
     @staticmethod
     async def request_code(telegram_user_id: int) -> bool:
-        shop_id = await AdminAuthService._resolve_shop_id(telegram_user_id)
-        if shop_id is None:
+        resolved = await AdminAuthService._resolve_shop_id(telegram_user_id)
+        if resolved is None:
             return False
 
+        shop_id, is_super = resolved
+
         code = f"{secrets.randbelow(1000000):06d}"
-        AdminAuthService._codes[telegram_user_id] = (code, time.time() + AdminAuthService.CODE_TTL)
+        AdminAuthService._codes[telegram_user_id] = (code, time.time() + AdminAuthService.CODE_TTL, shop_id, is_super)
 
         bot = get_bot()
         if bot is None:
@@ -72,7 +80,7 @@ class AdminAuthService:
         if stored is None:
             return None
 
-        stored_code, expires = stored
+        stored_code, expires, shop_id, is_super = stored
 
         if time.time() > expires:
             AdminAuthService._codes.pop(telegram_user_id, None)
@@ -83,14 +91,15 @@ class AdminAuthService:
 
         AdminAuthService._codes.pop(telegram_user_id, None)
 
-        return AdminAuthService._create_token(telegram_user_id)
+        return AdminAuthService._create_token(telegram_user_id, shop_id, is_super)
 
     @staticmethod
-    def _create_token(telegram_user_id: int, shop_id: int = 1) -> str:
+    def _create_token(telegram_user_id: int, shop_id: int = 1, is_super_admin: bool = False) -> str:
         now = datetime.now(timezone.utc)
         payload = {
             "sub": str(telegram_user_id),
             "shop_id": shop_id,
+            "super_admin": is_super_admin,
             "iat": now,
             "exp": now + AdminAuthService.JWT_EXPIRES,
         }
@@ -98,7 +107,7 @@ class AdminAuthService:
 
     @staticmethod
     async def verify_token(token: str) -> dict | None:
-        """Возвращает {'admin_id': int, 'shop_id': int} или None."""
+        """Возвращает {'admin_id': int, 'shop_id': int, 'is_super_admin': bool} или None."""
         try:
             payload = jwt.decode(
                 token,
@@ -107,11 +116,13 @@ class AdminAuthService:
             )
             admin_id = int(payload["sub"])
             shop_id = int(payload.get("shop_id", 1))
+            is_super = bool(payload.get("super_admin", False))
 
-            from app.services.admin_user_service import AdminUserService
-            if not await AdminUserService.is_admin(shop_id, admin_id):
-                return None
+            if not is_super:
+                from app.services.admin_user_service import AdminUserService
+                if not await AdminUserService.is_admin(shop_id, admin_id):
+                    return None
 
-            return {"admin_id": admin_id, "shop_id": shop_id}
+            return {"admin_id": admin_id, "shop_id": shop_id, "is_super_admin": is_super}
         except Exception:
             return None

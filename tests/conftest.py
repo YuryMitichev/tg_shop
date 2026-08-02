@@ -17,6 +17,7 @@ import app.services.review_service as review_service
 import app.services.promo_service as promo_service
 import app.services.broadcast_service as broadcast_service
 import app.services.offer_service as offer_service
+import app.services.shop_service as shop_service
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
     CartItem,
@@ -53,6 +54,7 @@ _PATCH_TARGETS = [
     promo_service,
     broadcast_service,
     offer_service,
+    shop_service,
 ]
 
 

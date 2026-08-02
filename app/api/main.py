@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes.payments import router as payments_router
 from app.api.routes.shop import router as shop_router
 from app.api.routes.admin import router as admin_router
+from app.api.routes.super_admin import router as super_admin_router
 
 
 def create_app() -> FastAPI:
@@ -23,6 +24,7 @@ def create_app() -> FastAPI:
     app.include_router(payments_router, prefix="/payments", tags=["payments"])
     app.include_router(shop_router, prefix="/api/shop", tags=["shop"])
     app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+    app.include_router(super_admin_router, prefix="/api/super-admin", tags=["super-admin"])
 
     static_dir = Path(__file__).parent / "static"
 

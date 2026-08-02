@@ -60,6 +60,14 @@ class Settings(BaseSettings):
 
     shop_name: str = Field(default="Магазин по умолчанию", alias="SHOP_NAME")
 
+    # Telegram ID супер-админов SaaS-платформы (через запятую).
+    # Супер-админ может создавать/редактировать/удалять магазины.
+    super_admin_ids: str = Field(default="", alias="SUPER_ADMIN_IDS")
+
+    @property
+    def super_admin_id_list(self) -> list[int]:
+        return [int(x.strip()) for x in self.super_admin_ids.split(",") if x.strip()]
+
     app_version: str = "0.1.0"
 
     # ==========================
