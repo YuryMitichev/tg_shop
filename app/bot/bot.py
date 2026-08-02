@@ -163,6 +163,12 @@ async def start_all_bots() -> None:
             logger.exception("Магазин %d: ошибка при автотегировании", sid)
 
     asyncio.create_task(_auto_cancel_loop())
+    asyncio.create_task(_subscription_check_loop())
+
+    if settings.platform_bot_token:
+        asyncio.create_task(_run_platform_bot())
+    else:
+        logger.warning("PLATFORM_BOT_TOKEN не задан — платформенный бот не запущен")
 
     if not shops:
         logger.warning("Нет активных магазинов для запуска ботов")
@@ -174,3 +180,43 @@ async def start_all_bots() -> None:
     ]
 
     await asyncio.gather(*tasks)
+
+
+async def _run_platform_bot() -> None:
+    """Запускает платформенный бот (registrar) для онбординга."""
+    from app.bot.platform.bot import get_platform_router
+
+    session = None
+    if settings.bot_proxy:
+        session = AiohttpSession(proxy=settings.bot_proxy)
+
+    bot = Bot(
+        token=settings.platform_bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        session=session,
+    )
+    dp = get_platform_router()
+
+    logger.info("Платформенный бот запущен")
+
+    try:
+        await dp.start_polling(bot)
+    except Exception:
+        logger.exception("Платформенный бот: ошибка polling")
+    finally:
+        await bot.session.close()
+
+
+async def _subscription_check_loop() -> None:
+    """Фоновая задача: отключает боты с истекшей подпиской."""
+    from app.services.subscription_service import SubscriptionService
+
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            expired = await SubscriptionService.get_expired_shops()
+            for shop_id in expired:
+                logger.info("Подписка магазина %d истекла — останавливаю бота", shop_id)
+                await stop_shop_bot(shop_id)
+        except Exception:
+            logger.exception("Проверка подписок: ошибка")

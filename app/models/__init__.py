@@ -14,6 +14,7 @@ from app.models.user_profile import UserProfile
 from app.models.communication_log import CommunicationLog
 from app.models.broadcast import Broadcast
 from app.models.user_offer import UserOffer
+from app.models.subscription import SubscriptionPlan, Subscription
 
 __all__ = [
     "Shop",
@@ -32,4 +33,6 @@ __all__ = [
     "CommunicationLog",
     "Broadcast",
     "UserOffer",
+    "SubscriptionPlan",
+    "Subscription",
 ]

@@ -90,3 +90,6 @@ async def init_db() -> None:
 
         for table, column, definition in _MIGRATIONS:
             await conn.run_sync(_add_column_if_missing, table, column, definition)
+
+    from app.services.subscription_service import SubscriptionService
+    await SubscriptionService.ensure_default_plans()

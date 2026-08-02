@@ -23,6 +23,9 @@ class Settings(BaseSettings):
 
     bot_token: str = Field(..., alias="BOT_TOKEN")
 
+    # Токен платформенного бота (registrar) — для онбординга новых магазинов.
+    platform_bot_token: str | None = Field(default=None, alias="PLATFORM_BOT_TOKEN")
+
     # ID чата/пользователя, куда бот присылает уведомления о новых
     # заказах. Необязателен — если не задан, уведомления просто не
     # отправляются. Узнать свой chat_id можно, например, у @userinfobot.
