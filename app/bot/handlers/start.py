@@ -27,7 +27,7 @@ def setup_router() -> Router:
                 ),
             )
 
-        text = await MessageService.get(1, "welcome")
+        text = await MessageService.get(get_shop_id(), "welcome")
 
         msg = await message.answer(
             text=text,

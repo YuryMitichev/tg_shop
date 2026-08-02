@@ -17,7 +17,7 @@ def setup_router() -> Router:
 
         await state.clear()
 
-        text = await MessageService.get(1, "menu")
+        text = await MessageService.get(get_shop_id(), "menu")
 
         await replace_with_text(
             callback.message,
