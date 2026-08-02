@@ -30,36 +30,7 @@ class AdminUserService:
             )
             admins = result.scalars().all()
 
-            db_ids = {a.telegram_user_id for a in admins}
-
-            env_super_ids = set(settings.super_admin_id_list)
-            env_admin_ids = set(settings.admin_id_list) - env_super_ids
-
-            super_admins = [
-                {
-                    "id": -uid,
-                    "telegram_user_id": uid,
-                    "display_name": "Супер-админ (env)",
-                    "created_at": None,
-                    "is_super": True,
-                }
-                for uid in sorted(env_super_ids)
-                if uid not in db_ids
-            ]
-
-            regular_env_admins = [
-                {
-                    "id": -uid,
-                    "telegram_user_id": uid,
-                    "display_name": "Админ (env)",
-                    "created_at": None,
-                    "is_super": False,
-                }
-                for uid in sorted(env_admin_ids)
-                if uid not in db_ids
-            ]
-
-            db_admins = [
+            return [
                 {
                     "id": a.id,
                     "telegram_user_id": a.telegram_user_id,
@@ -69,8 +40,6 @@ class AdminUserService:
                 }
                 for a in admins
             ]
-
-            return super_admins + regular_env_admins + db_admins
 
     @staticmethod
     async def add(shop_id: int, telegram_user_id: int, display_name: str | None = None) -> int:
