@@ -57,7 +57,7 @@ _MIGRATIONS = [
 ]
 
 
-async def _ensure_default_shop(conn) -> None:
+def _ensure_default_shop(conn) -> None:
     """Создаёт магазин по умолчанию (id=1), если его ещё нет."""
     from sqlalchemy import text
 
