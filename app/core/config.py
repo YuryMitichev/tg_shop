@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # Узнать свой ID можно у @userinfobot.
     admin_ids: str = Field(default="", alias="ADMIN_IDS")
 
+    # URL админ-панели (отдельный поддомен).
+    admin_panel_url: str | None = Field(default=None, alias="ADMIN_PANEL_URL")
+
     @property
     def admin_id_list(self) -> list[int]:
         return [int(x.strip()) for x in self.admin_ids.split(",") if x.strip()]

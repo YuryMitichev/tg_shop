@@ -22,6 +22,7 @@ from aiogram.types import (
 from app.core.config import settings
 from app.services.shop_service import ShopService
 from app.services.subscription_service import SubscriptionService
+from app.services.admin_user_service import AdminUserService
 from app.bot.bot import start_shop_bot
 
 logger = logging.getLogger(__name__)
@@ -157,6 +158,12 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
         owner_telegram_id=message.from_user.id,
     )
 
+    await AdminUserService.add(
+        shop_id=shop["id"],
+        telegram_user_id=message.from_user.id,
+        display_name=message.from_user.full_name,
+    )
+
     await SubscriptionService.start_trial(shop["id"])
 
     await message.answer(
@@ -176,10 +183,7 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
         await state.clear()
         return
 
-    admin_url = None
-    if settings.app_base_url:
-        admin_url = f"{settings.app_base_url.rstrip('/')}/admin/"
-
+    admin_url = settings.admin_panel_url
     webapp_url = None
     if settings.app_base_url:
         webapp_url = f"{settings.app_base_url.rstrip('/')}/app/"
@@ -200,8 +204,10 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
     text += "2. Зайдите в админ-панель — добавьте товары\n"
     text += "3. Настройте каталог и цены\n"
 
-    kb_rows = [[InlineKeyboardButton(text="📊 Открыть админ-панель", url=admin_url)]]
-    kb = InlineKeyboardMarkup(inline_keyboard=kb_rows)
+    kb_rows = []
+    if admin_url:
+        kb_rows.append([InlineKeyboardButton(text="📊 Открыть админ-панель", url=admin_url)])
+    kb = InlineKeyboardMarkup(inline_keyboard=kb_rows) if kb_rows else None
 
     await message.answer(text, reply_markup=kb, disable_web_page_preview=True)
 
