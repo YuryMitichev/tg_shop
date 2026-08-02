@@ -199,10 +199,11 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
     if webapp_url:
         text += f"📱 <b>Мини-приложение:</b>\n{webapp_url}\n\n"
 
-    text += "Что можно сделать сейчас:\n"
-    text += "1. Откройте бота @{} — нажмите /start\n".format(bot_info["username"])
-    text += "2. Зайдите в админ-панель — добавьте товары\n"
-    text += "3. Настройте каталог и цены\n"
+    text += "Что нужно сделать:\n"
+    text += "1. Узнайте свой Telegram ID у @userinfobot — он понадобится для входа в админку\n"
+    text += "2. Зайдите в админ-панель — код входа придёт от бота @{}\n".format(bot_info["username"])
+    text += "3. Добавьте товары, настройте каталог\n"
+    text += "4. Откройте бота @{} — нажмите /start\n".format(bot_info["username"])
 
     kb_rows = []
     if admin_url:
