@@ -2,6 +2,7 @@ const App = {
 
     tg: null,
     initData: "",
+    shopId: 1,
     currentCategory: null,
     categories: [],
     selectedVariant: null,
@@ -14,6 +15,9 @@ const App = {
         this.tg.expand();
 
         this.initData = this.tg.initData || "";
+
+        const params = new URLSearchParams(window.location.search);
+        this.shopId = parseInt(params.get("shop")) || 1;
 
         const theme = this.tg.themeParams;
         if (theme.bg_color) {
@@ -34,6 +38,7 @@ const App = {
             method,
             headers: {
                 "Authorization": "tma " + this.initData,
+                "X-Shop-Id": String(this.shopId),
             },
         };
 

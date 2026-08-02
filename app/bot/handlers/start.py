@@ -19,11 +19,12 @@ def setup_router() -> Router:
         await state.clear()
 
         if settings.webapp_enabled:
+            webapp_url = f"{settings.webapp_url}?shop={get_shop_id()}"
             await message.bot.set_chat_menu_button(
                 chat_id=message.chat.id,
                 menu_button=MenuButtonWebApp(
                     text="🏪 Витрина",
-                    web_app=WebAppInfo(url=settings.webapp_url),
+                    web_app=WebAppInfo(url=webapp_url),
                 ),
             )
 
