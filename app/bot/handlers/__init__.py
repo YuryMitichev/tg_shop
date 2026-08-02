@@ -1,33 +1,25 @@
 from aiogram import Router
 
-from .start import router as start_router
-from .menu import router as menu_router
-from .order import router as order_router
-from .info import router as info_router
-from .admin import router as admin_router
-
 
 def create_main_router() -> Router:
-    """Создаёт новый Router с подключёнными обработчиками.
-
-    Используется фабрика, потому что aiogram 3 не позволяет
-    подключать один и тот же Router к нескольким Dispatcher.
-    """
-    from .catalog import router as catalog_router
-    from .product import router as product_router
-    from .orders import router as orders_router
-    from .cart import router as cart_router
+    from .start import setup_router as setup_start
+    from .menu import setup_router as setup_menu
+    from .order import setup_router as setup_order
+    from .info import setup_router as setup_info
+    from .admin import setup_router as setup_admin
+    from .catalog import setup_router as setup_catalog
+    from .product import setup_router as setup_product
+    from .orders import setup_router as setup_orders
+    from .cart import setup_router as setup_cart
 
     router = Router()
-
-    router.include_router(start_router)
-    router.include_router(menu_router)
-    router.include_router(order_router)
-    router.include_router(info_router)
-    router.include_router(admin_router)
-    router.include_router(catalog_router)
-    router.include_router(product_router)
-    router.include_router(orders_router)
-    router.include_router(cart_router)
-
+    router.include_router(setup_start())
+    router.include_router(setup_menu())
+    router.include_router(setup_order())
+    router.include_router(setup_info())
+    router.include_router(setup_admin())
+    router.include_router(setup_catalog())
+    router.include_router(setup_product())
+    router.include_router(setup_orders())
+    router.include_router(setup_cart())
     return router

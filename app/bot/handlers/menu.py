@@ -6,24 +6,28 @@ from aiogram.fsm.context import FSMContext
 from app.bot.utils.messages import replace_with_text
 from app.services.message_service import MessageService
 
-router = Router()
 
-_EMPTY_KB = InlineKeyboardMarkup(inline_keyboard=[])
+def setup_router() -> Router:
+    router = Router()
 
-@router.callback_query(F.data == "menu")
-async def menu_callback(callback: CallbackQuery, state: FSMContext):
+    _EMPTY_KB = InlineKeyboardMarkup(inline_keyboard=[])
 
-    await state.clear()
+    @router.callback_query(F.data == "menu")
+    async def menu_callback(callback: CallbackQuery, state: FSMContext):
 
-    text = await MessageService.get(1, "menu")
+        await state.clear()
 
-    await replace_with_text(
-        callback.message,
-        callback.bot,
-        callback.message.chat.id,
-        state,
-        text,
-        reply_markup=_EMPTY_KB,
-    )
+        text = await MessageService.get(1, "menu")
 
-    await callback.answer()
+        await replace_with_text(
+            callback.message,
+            callback.bot,
+            callback.message.chat.id,
+            state,
+            text,
+            reply_markup=_EMPTY_KB,
+        )
+
+        await callback.answer()
+
+    return router

@@ -7,62 +7,66 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.bot.utils.messages import show_screen, replace_with_text
 from app.services.message_service import MessageService
 
-router = Router()
 
-_EMPTY_KB = InlineKeyboardMarkup(inline_keyboard=[])
+def setup_router() -> Router:
+    router = Router()
 
-def _back_keyboard():
-    builder = InlineKeyboardBuilder()
+    _EMPTY_KB = InlineKeyboardMarkup(inline_keyboard=[])
 
-    builder.button(
-        text="⬅ Главное меню",
-        callback_data="menu"
-    )
+    def _back_keyboard():
+        builder = InlineKeyboardBuilder()
 
-    return builder.as_markup()
+        builder.button(
+            text="⬅ Главное меню",
+            callback_data="menu"
+        )
 
-@router.message(F.text == "🚚 Доставка")
-async def show_delivery_msg(message: Message, state: FSMContext):
-    await state.clear()
+        return builder.as_markup()
 
-    await show_screen(
-        message,
-        state,
-        await MessageService.get(get_shop_id(), "delivery"),
-        reply_markup=_EMPTY_KB,
-    )
+    @router.message(F.text == "🚚 Доставка")
+    async def show_delivery_msg(message: Message, state: FSMContext):
+        await state.clear()
 
-@router.message(F.text == "💳 Оплата")
-async def show_payment_msg(message: Message, state: FSMContext):
-    await state.clear()
+        await show_screen(
+            message,
+            state,
+            await MessageService.get(get_shop_id(), "delivery"),
+            reply_markup=_EMPTY_KB,
+        )
 
-    await show_screen(
-        message,
-        state,
-        await MessageService.get(get_shop_id(), "payment"),
-        reply_markup=_EMPTY_KB,
-    )
+    @router.message(F.text == "💳 Оплата")
+    async def show_payment_msg(message: Message, state: FSMContext):
+        await state.clear()
 
-@router.callback_query(F.data == "delivery")
-async def show_delivery_cb(callback: CallbackQuery, state: FSMContext):
-    await replace_with_text(
-        callback.message,
-        callback.bot,
-        callback.message.chat.id,
-        state,
-        await MessageService.get(get_shop_id(), "delivery"),
-        reply_markup=_back_keyboard(),
-    )
-    await callback.answer()
+        await show_screen(
+            message,
+            state,
+            await MessageService.get(get_shop_id(), "payment"),
+            reply_markup=_EMPTY_KB,
+        )
 
-@router.callback_query(F.data == "payment")
-async def show_payment_cb(callback: CallbackQuery, state: FSMContext):
-    await replace_with_text(
-        callback.message,
-        callback.bot,
-        callback.message.chat.id,
-        state,
-        await MessageService.get(get_shop_id(), "payment"),
-        reply_markup=_back_keyboard(),
-    )
-    await callback.answer()
+    @router.callback_query(F.data == "delivery")
+    async def show_delivery_cb(callback: CallbackQuery, state: FSMContext):
+        await replace_with_text(
+            callback.message,
+            callback.bot,
+            callback.message.chat.id,
+            state,
+            await MessageService.get(get_shop_id(), "delivery"),
+            reply_markup=_back_keyboard(),
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data == "payment")
+    async def show_payment_cb(callback: CallbackQuery, state: FSMContext):
+        await replace_with_text(
+            callback.message,
+            callback.bot,
+            callback.message.chat.id,
+            state,
+            await MessageService.get(get_shop_id(), "payment"),
+            reply_markup=_back_keyboard(),
+        )
+        await callback.answer()
+
+    return router
