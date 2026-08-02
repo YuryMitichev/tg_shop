@@ -84,10 +84,10 @@ def _rebuild_unique_tables(conn) -> None:
     """
     from sqlalchemy import text, inspect
 
-    inspector = inspect(conn)
+    insp = inspect(conn)
+    existing_tables = insp.get_table_names()
 
-    for table_name, recreate_sql, insert_sql in [
-        (
+    for table_name, recreate_sql, insert_sql in [        (
             "user_profiles",
             """CREATE TABLE user_profiles_new (
                 id INTEGER PRIMARY KEY,
@@ -120,11 +120,10 @@ def _rebuild_unique_tables(conn) -> None:
                SELECT id, shop_id, telegram_user_id, display_name, created_at FROM admin_users""",
         ),
     ]:
-        existing = [t["name"] for t in inspector.get_tables()]
-        if table_name not in existing:
+        if table_name not in existing_tables:
             continue
 
-        cols = {c["name"] for c in inspector.get_columns(table_name)}
+        cols = {c["name"] for c in insp.get_columns(table_name)}
         if "shop_id" not in cols:
             continue
 
