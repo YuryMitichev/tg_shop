@@ -76,6 +76,74 @@ def _ensure_default_shop(conn) -> None:
         )
 
 
+def _rebuild_unique_tables(conn) -> None:
+    """Пересоздаёт таблицы с уникальными constraint'ами для мультитенантности.
+
+    В SQLite нельзя ALTER COLUMN — нужно пересоздать таблицу.
+    Проверяем по наличию старого UNIQUE на telegram_user_id.
+    """
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(conn)
+
+    for table_name, recreate_sql, insert_sql in [
+        (
+            "user_profiles",
+            """CREATE TABLE user_profiles_new (
+                id INTEGER PRIMARY KEY,
+                shop_id INTEGER REFERENCES shops(id),
+                telegram_user_id INTEGER,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                phone TEXT,
+                notes TEXT,
+                tags TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_seen DATETIME,
+                UNIQUE(shop_id, telegram_user_id)
+            )""",
+            """INSERT INTO user_profiles_new (id, shop_id, telegram_user_id, username, first_name, last_name, phone, notes, tags, created_at, last_seen)
+               SELECT id, shop_id, telegram_user_id, username, first_name, last_name, phone, notes, tags, created_at, last_seen FROM user_profiles""",
+        ),
+        (
+            "admin_users",
+            """CREATE TABLE admin_users_new (
+                id INTEGER PRIMARY KEY,
+                shop_id INTEGER REFERENCES shops(id),
+                telegram_user_id INTEGER,
+                display_name TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(shop_id, telegram_user_id)
+            )""",
+            """INSERT INTO admin_users_new (id, shop_id, telegram_user_id, display_name, created_at)
+               SELECT id, shop_id, telegram_user_id, display_name, created_at FROM admin_users""",
+        ),
+    ]:
+        existing = [t["name"] for t in inspector.get_tables()]
+        if table_name not in existing:
+            continue
+
+        cols = {c["name"] for c in inspector.get_columns(table_name)}
+        if "shop_id" not in cols:
+            continue
+
+        result = conn.execute(text(f"PRAGMA index_list({table_name})")).fetchall()
+        has_old_unique = any(
+            "telegram_user_id" in str(conn.execute(text(f"PRAGMA index_info({r[1]})")).fetchall())
+            for r in result
+            if r[2] == 1
+        )
+
+        if not has_old_unique:
+            continue
+
+        conn.execute(text(recreate_sql))
+        conn.execute(text(insert_sql))
+        conn.execute(text(f"DROP TABLE {table_name}"))
+        conn.execute(text(f"ALTER TABLE {table_name}_new RENAME TO {table_name}"))
+
+
 async def init_db() -> None:
     """
     Создаёт таблицы в БД, если их ещё нет, и применяет миграции
@@ -90,6 +158,8 @@ async def init_db() -> None:
 
         for table, column, definition in _MIGRATIONS:
             await conn.run_sync(_add_column_if_missing, table, column, definition)
+
+        await conn.run_sync(_rebuild_unique_tables)
 
     from app.services.subscription_service import SubscriptionService
     await SubscriptionService.ensure_default_plans()
