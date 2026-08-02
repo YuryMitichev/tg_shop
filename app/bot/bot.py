@@ -7,7 +7,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from app.core.config import settings
-from app.bot.handlers import router
+from app.bot.handlers import create_main_router
 from app.bot.middlewares.throttling import ThrottlingMiddleware
 from app.bot.middlewares.crm import CrmMiddleware
 from app.bot.middlewares.shop import ShopMiddleware
@@ -69,7 +69,7 @@ def _create_dispatcher() -> Dispatcher:
     dp.message.middleware(CrmMiddleware())
     dp.callback_query.middleware(CrmMiddleware())
 
-    dp.include_router(router)
+    dp.include_router(create_main_router())
 
     return dp
 
