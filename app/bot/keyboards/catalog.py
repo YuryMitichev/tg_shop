@@ -1,5 +1,6 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app.bot.shop_context import get_shop_id
 from app.services.catalog_service import CatalogService
 
 
@@ -7,7 +8,7 @@ async def get_catalog_keyboard():
 
     builder = InlineKeyboardBuilder()
 
-    for category in await CatalogService.get_categories(1):
+    for category in await CatalogService.get_categories(get_shop_id()):
         emoji = category.get("emoji")
         label = f"{emoji} {category['name']}" if emoji else category["name"]
 

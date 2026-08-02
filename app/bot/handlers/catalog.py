@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from app.bot.shop_context import get_shop_id
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
@@ -10,12 +11,9 @@ from app.services.message_service import MessageService
 
 router = Router()
 
-SHOP_ID = 1
-
-
 async def _render_catalog(callback: CallbackQuery, state: FSMContext) -> None:
     keyboard = await get_catalog_keyboard()
-    text = await MessageService.get(SHOP_ID, "catalog")
+    text = await MessageService.get(get_shop_id(), "catalog")
 
     await replace_with_text(
         callback.message,
@@ -28,13 +26,12 @@ async def _render_catalog(callback: CallbackQuery, state: FSMContext) -> None:
 
     await callback.answer()
 
-
 @router.message(F.text == "🛍 Каталог")
 async def open_catalog_msg(message: Message, state: FSMContext):
     await state.clear()
 
     keyboard = await get_catalog_keyboard()
-    text = await MessageService.get(SHOP_ID, "catalog")
+    text = await MessageService.get(get_shop_id(), "catalog")
 
     await show_screen(
         message,
@@ -43,11 +40,9 @@ async def open_catalog_msg(message: Message, state: FSMContext):
         reply_markup=keyboard,
     )
 
-
 @router.callback_query(F.data == "catalog")
 async def open_catalog_cb(callback: CallbackQuery, state: FSMContext):
     await _render_catalog(callback, state)
-
 
 @router.callback_query(F.data.startswith("category_"))
 async def open_category(
@@ -56,7 +51,7 @@ async def open_category(
 ):
     category_id = int(callback.data.split("_")[1])
 
-    product = await CatalogService.get_first_product(SHOP_ID, category_id)
+    product = await CatalogService.get_first_product(get_shop_id(), category_id)
 
     if product is None:
         await callback.answer(
@@ -75,7 +70,6 @@ async def open_category(
         product
     )
 
-
 @router.callback_query(F.data == "next_product")
 async def next_product(
     callback: CallbackQuery,
@@ -84,7 +78,7 @@ async def next_product(
     data = await state.get_data()
 
     product = await CatalogService.get_next_product(
-        SHOP_ID,
+        get_shop_id(),
         data["category_id"],
         data["product_id"]
     )
@@ -94,7 +88,6 @@ async def next_product(
         state,
         product
     )
-
 
 @router.callback_query(F.data == "prev_product")
 async def prev_product(
@@ -104,7 +97,7 @@ async def prev_product(
     data = await state.get_data()
 
     product = await CatalogService.get_previous_product(
-        SHOP_ID,
+        get_shop_id(),
         data["category_id"],
         data["product_id"]
     )
@@ -114,7 +107,6 @@ async def prev_product(
         state,
         product
     )
-
 
 @router.callback_query(F.data == "ignore")
 async def ignore_callback(callback: CallbackQuery):

@@ -3,7 +3,7 @@ import logging
 
 import uvicorn
 
-from app.bot.bot import start_bot
+from app.bot.bot import start_all_bots
 from app.api.main import app
 from app.core.config import settings
 
@@ -27,7 +27,7 @@ async def main():
     server = uvicorn.Server(config)
 
     await asyncio.gather(
-        start_bot(),
+        start_all_bots(),
         server.serve(),
     )
 

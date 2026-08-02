@@ -110,16 +110,17 @@ class PaymentService:
         return True
 
     @staticmethod
-    async def get_order_with_user(shop_id: int, order_id: int) -> dict | None:
-        """Возвращает заказ с telegram_user_id для уведомлений."""
+    async def get_order_with_user(order_id: int) -> dict | None:
+        """Возвращает заказ с telegram_user_id для уведомлений (вебхук)."""
         async with async_session() as session:
             order = await session.get(Order, order_id)
 
-            if not order or order.shop_id != shop_id:
+            if not order:
                 return None
 
             return {
                 "id": order.id,
+                "shop_id": order.shop_id,
                 "telegram_user_id": order.telegram_user_id,
                 "status": order.status,
                 "total_amount": order.total_amount,

@@ -10,50 +10,60 @@ from app.core.config import settings
 from app.bot.handlers import router
 from app.bot.middlewares.throttling import ThrottlingMiddleware
 from app.bot.middlewares.crm import CrmMiddleware
+from app.bot.middlewares.shop import ShopMiddleware
 from app.database.db import init_db
 from app.database.seed import seed_if_empty
 from app.services.crm_service import CrmService
 from app.services.broadcast_service import BroadcastService
 from app.services.order_service import OrderService
+from app.services.shop_service import ShopService
 
 logger = logging.getLogger(__name__)
 
-_bot_instance: Bot | None = None
+_bot_registry: dict[int, "ShopBot"] = {}
 
 
-def get_bot() -> Bot | None:
-    """Возвращает экземпляр бота (для webhook-уведомлений)."""
-    return _bot_instance
+class ShopBot(Bot):
+    """Bot с привязкой к конкретному магазину."""
+
+    shop_id: int = 1
+
+    def __init__(self, *args, shop_id: int = 1, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.shop_id = shop_id
 
 
-def create_bot() -> Bot:
+def get_bot(shop_id: int | None = None) -> Bot | None:
+    """Возвращает экземпляр бота по shop_id.
+
+    Если shop_id не указан — возвращает первый доступный бот.
     """
-    Создание экземпляра Telegram Bot.
-    Если указан BOT_PROXY — использует его для обхода блокировки.
-    """
+    if shop_id is not None:
+        return _bot_registry.get(shop_id)
+    if _bot_registry:
+        return next(iter(_bot_registry.values()))
+    return None
 
+
+def _create_bot(shop_id: int, token: str) -> ShopBot:
     session = None
-
     if settings.bot_proxy:
         session = AiohttpSession(proxy=settings.bot_proxy)
-        logger.info("Используется прокси: %s", settings.bot_proxy)
+        logger.info("Магазин %d: используется прокси %s", shop_id, settings.bot_proxy)
 
-    return Bot(
-        token=settings.bot_token,
-        default=DefaultBotProperties(
-            parse_mode=ParseMode.HTML
-        ),
+    return ShopBot(
+        token=token,
+        shop_id=shop_id,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
         session=session,
     )
 
 
-def create_dispatcher() -> Dispatcher:
-    """
-    Создание Dispatcher.
-    """
-
+def _create_dispatcher() -> Dispatcher:
     dp = Dispatcher()
 
+    dp.message.middleware(ShopMiddleware())
+    dp.callback_query.middleware(ShopMiddleware())
     dp.message.middleware(ThrottlingMiddleware())
     dp.callback_query.middleware(ThrottlingMiddleware())
     dp.message.middleware(CrmMiddleware())
@@ -62,6 +72,51 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(router)
 
     return dp
+
+
+async def _run_shop_bot(shop_id: int, token: str) -> None:
+    """Создаёт и запускает polling для одного бота."""
+    bot = _create_bot(shop_id, token)
+    dp = _create_dispatcher()
+    _bot_registry[shop_id] = bot
+
+    logger.info("Магазин %d: бот запущен", shop_id)
+
+    try:
+        await dp.start_polling(bot)
+    except Exception:
+        logger.exception("Магазин %d: ошибка polling", shop_id)
+    finally:
+        await bot.session.close()
+        _bot_registry.pop(shop_id, None)
+        logger.info("Магазин %d: бот остановлен", shop_id)
+
+
+async def start_shop_bot(shop_id: int) -> bool:
+    """Динамически запускает бот для магазина."""
+    if shop_id in _bot_registry:
+        return False
+
+    shop = await ShopService.get(shop_id)
+    if shop is None or not shop["is_active"]:
+        return False
+
+    asyncio.create_task(_run_shop_bot(shop_id, shop["bot_token"]))
+    return True
+
+
+async def stop_shop_bot(shop_id: int) -> None:
+    """Останавливает бот для магазина."""
+    bot = _bot_registry.get(shop_id)
+    if bot:
+        await bot.session.close()
+
+
+async def restart_shop_bot(shop_id: int) -> None:
+    """Перезапускает бот для магазина (после смены токена)."""
+    await stop_shop_bot(shop_id)
+    await asyncio.sleep(1)
+    await start_shop_bot(shop_id)
 
 
 async def _auto_cancel_loop() -> None:
@@ -76,28 +131,11 @@ async def _auto_cancel_loop() -> None:
             logger.exception("Авто-отмена: ошибка")
 
 
-async def start_bot() -> None:
-    """
-    Запуск Telegram-бота.
-    """
-
-    global _bot_instance
+async def start_all_bots() -> None:
+    """Запуск всех активных ботов из БД + фоновых задач."""
 
     await init_db()
     await seed_if_empty()
-    try:
-        backfilled = await CrmService.backfill_from_orders(1)
-        if backfilled:
-            logger.info("CRM: создано профилей из заказов: %d", backfilled)
-    except Exception:
-        logger.exception("CRM: ошибка при backfill профилей")
-
-    try:
-        tagged = await BroadcastService.auto_tag_all_users(1)
-        if tagged:
-            logger.info("Рассылки: авто-тегов обновлено: %d", tagged)
-    except Exception:
-        logger.exception("Рассылки: ошибка при автотегировании")
 
     try:
         cancelled = await OrderService.auto_cancel_stale_orders(days=14)
@@ -106,11 +144,33 @@ async def start_bot() -> None:
     except Exception:
         logger.exception("Авто-отмена: ошибка при запуске")
 
-    _bot_instance = create_bot()
-    dp = create_dispatcher()
+    shops = await ShopService.get_all(active_only=True)
 
-    logger.info("Telegram Bot успешно запущен")
+    for shop in shops:
+        sid = shop["id"]
+        try:
+            backfilled = await CrmService.backfill_from_orders(sid)
+            if backfilled:
+                logger.info("Магазин %d: CRM backfill профилей: %d", sid, backfilled)
+        except Exception:
+            logger.exception("Магазин %d: CRM ошибка при backfill", sid)
+
+        try:
+            tagged = await BroadcastService.auto_tag_all_users(sid)
+            if tagged:
+                logger.info("Магазин %d: авто-тегов обновлено: %d", sid, tagged)
+        except Exception:
+            logger.exception("Магазин %d: ошибка при автотегировании", sid)
 
     asyncio.create_task(_auto_cancel_loop())
 
-    await dp.start_polling(_bot_instance)
+    if not shops:
+        logger.warning("Нет активных магазинов для запуска ботов")
+        return
+
+    tasks = [
+        _run_shop_bot(shop["id"], shop["bot_token"])
+        for shop in shops
+    ]
+
+    await asyncio.gather(*tasks)

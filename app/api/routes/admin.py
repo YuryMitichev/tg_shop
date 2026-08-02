@@ -301,7 +301,7 @@ async def upload_photo(
 ):
     content = await file.read()
 
-    bot = get_bot()
+    bot = get_bot(admin["shop_id"])
     if bot is None:
         return {"ok": False, "error": "Бот недоступен"}
 
@@ -582,7 +582,7 @@ async def crm_send_message(
     body: SendMessageBody,
     admin: dict = Depends(require_admin),
 ):
-    bot = get_bot()
+    bot = get_bot(admin["shop_id"])
     if bot is None:
         return {"ok": False, "error": "Бот недоступен"}
 
@@ -666,7 +666,7 @@ async def send_broadcast(
     broadcast_id: int,
     admin: dict = Depends(require_admin),
 ):
-    bot = get_bot()
+    bot = get_bot(admin["shop_id"])
     if bot is None:
         return {"ok": False, "error": "Бот недоступен"}
 

@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from app.bot.shop_context import get_shop_id
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
@@ -45,9 +46,6 @@ router = Router()
 router.message.filter(IsAdmin())
 router.callback_query.filter(IsAdmin())
 
-SHOP_ID = 1
-
-
 # ==========================
 # Главное меню админки
 # ==========================
@@ -61,7 +59,6 @@ async def open_admin_menu(message: Message, state: FSMContext):
         reply_markup=get_admin_menu()
     )
 
-
 @router.callback_query(F.data == "admin_menu")
 async def admin_menu_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
@@ -73,14 +70,13 @@ async def admin_menu_callback(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 # ==========================
 # Статистика
 # ==========================
 
 @router.callback_query(F.data == "admin_stats")
 async def show_stats(callback: CallbackQuery):
-    stats = await AdminService.get_stats(SHOP_ID)
+    stats = await AdminService.get_stats(get_shop_id())
 
     lines = [
         "📊 <b>Статистика магазина</b>\n",
@@ -106,7 +102,6 @@ async def show_stats(callback: CallbackQuery):
 
     await callback.answer()
 
-
 # ==========================
 # Управление категориями
 # ==========================
@@ -115,7 +110,7 @@ async def show_stats(callback: CallbackQuery):
 async def manage_categories(callback: CallbackQuery, state: FSMContext):
     await state.clear()
 
-    categories = await AdminService.get_categories(SHOP_ID)
+    categories = await AdminService.get_categories(get_shop_id())
 
     await callback.message.edit_text(
         "🗂 <b>Управление категориями</b>\n\n"
@@ -125,14 +120,12 @@ async def manage_categories(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.callback_query(F.data == "admin_add_category")
 async def add_category_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AdminCategoryState.waiting_name)
 
     await callback.message.edit_text("➕ Введите название новой категории:")
     await callback.answer()
-
 
 @router.message(AdminCategoryState.waiting_name)
 async def add_category_process(message: Message, state: FSMContext):
@@ -146,7 +139,6 @@ async def add_category_process(message: Message, state: FSMContext):
         'Отправьте «-», чтобы пропустить.'
     )
 
-
 @router.message(AdminCategoryState.waiting_emoji)
 async def process_category_emoji(message: Message, state: FSMContext):
     data = await state.get_data()
@@ -155,10 +147,10 @@ async def process_category_emoji(message: Message, state: FSMContext):
 
     if "category_id" in data:
         category_id = data["category_id"]
-        await AdminService.update_category_emoji(SHOP_ID, category_id, emoji)
+        await AdminService.update_category_emoji(get_shop_id(), category_id, emoji)
         await state.clear()
 
-        categories = await AdminService.get_categories(SHOP_ID)
+        categories = await AdminService.get_categories(get_shop_id())
         category = next((c for c in categories if c["id"] == category_id), None)
 
         emoji_display = f"{category['emoji']} " if category and category["emoji"] else ""
@@ -170,10 +162,10 @@ async def process_category_emoji(message: Message, state: FSMContext):
         )
     else:
         name = data["name"]
-        category_id = await AdminService.create_category(SHOP_ID, name, emoji)
+        category_id = await AdminService.create_category(get_shop_id(), name, emoji)
         await state.clear()
 
-        categories = await AdminService.get_categories(SHOP_ID)
+        categories = await AdminService.get_categories(get_shop_id())
 
         await message.answer(
             f"✅ Категория «{name}» добавлена (ID {category_id}).\n\n"
@@ -181,7 +173,6 @@ async def process_category_emoji(message: Message, state: FSMContext):
             "Нажмите на категорию, чтобы переименовать или удалить.",
             reply_markup=get_admin_manage_categories_keyboard(categories)
         )
-
 
 @router.callback_query(F.data.startswith("admin_emoji_cat:"))
 async def emoji_category_start(callback: CallbackQuery, state: FSMContext):
@@ -196,7 +187,6 @@ async def emoji_category_start(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-
 @router.callback_query(F.data.startswith("admin_rename_cat:"))
 async def rename_category_start(callback: CallbackQuery, state: FSMContext):
     category_id = int(callback.data.split(":")[1])
@@ -204,14 +194,14 @@ async def rename_category_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AdminCategoryState.waiting_rename)
     await state.update_data(category_id=category_id)
 
-    categories = await AdminService.get_categories(SHOP_ID)
+    categories = await AdminService.get_categories(get_shop_id())
     category = next((c for c in categories if c["id"] == category_id), None)
 
     if category is None:
         await callback.answer("Категория не найдена.", show_alert=True)
         return
 
-    count = await AdminService.count_products_in_category(SHOP_ID, category_id)
+    count = await AdminService.count_products_in_category(get_shop_id(), category_id)
 
     emoji_display = f"{category['emoji']} " if category["emoji"] else ""
     emoji_line = f"Эмодзи: {category['emoji']}" if category["emoji"] else "Эмодзи: нет"
@@ -226,17 +216,16 @@ async def rename_category_start(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.message(AdminCategoryState.waiting_rename)
 async def rename_category_process(message: Message, state: FSMContext):
     data = await state.get_data()
     category_id = data["category_id"]
     name = message.text.strip()
 
-    await AdminService.rename_category(SHOP_ID, category_id, name)
+    await AdminService.rename_category(get_shop_id(), category_id, name)
     await state.clear()
 
-    categories = await AdminService.get_categories(SHOP_ID)
+    categories = await AdminService.get_categories(get_shop_id())
 
     await message.answer(
         f"✅ Категория переименована в «{name}».\n\n"
@@ -245,12 +234,11 @@ async def rename_category_process(message: Message, state: FSMContext):
         reply_markup=get_admin_manage_categories_keyboard(categories)
     )
 
-
 @router.callback_query(F.data.startswith("admin_delete_cat:"))
 async def delete_category_confirm(callback: CallbackQuery):
     category_id = int(callback.data.split(":")[1])
 
-    count = await AdminService.count_products_in_category(SHOP_ID, category_id)
+    count = await AdminService.count_products_in_category(get_shop_id(), category_id)
 
     if count > 0:
         await callback.answer(
@@ -266,14 +254,13 @@ async def delete_category_confirm(callback: CallbackQuery):
 
     await callback.answer()
 
-
 @router.callback_query(F.data.startswith("admin_delete_cat_confirm:"))
 async def delete_category_execute(callback: CallbackQuery):
     category_id = int(callback.data.split(":")[1])
 
-    await AdminService.delete_category(SHOP_ID, category_id)
+    await AdminService.delete_category(get_shop_id(), category_id)
 
-    categories = await AdminService.get_categories(SHOP_ID)
+    categories = await AdminService.get_categories(get_shop_id())
 
     await callback.message.edit_text(
         "✅ Категория удалена.\n\n"
@@ -284,14 +271,13 @@ async def delete_category_execute(callback: CallbackQuery):
 
     await callback.answer("Категория удалена")
 
-
 # ==========================
 # Товары
 # ==========================
 
 @router.callback_query(F.data == "admin_products")
 async def show_categories(callback: CallbackQuery):
-    categories = await AdminService.get_categories(SHOP_ID)
+    categories = await AdminService.get_categories(get_shop_id())
 
     await callback.message.edit_text(
         "🗂 <b>Категории</b>\n\nВыберите категорию для управления товарами.",
@@ -300,21 +286,18 @@ async def show_categories(callback: CallbackQuery):
 
     await callback.answer()
 
-
 def _render_products_text(products: list[dict]) -> str:
     text = "📦 <b>Товары категории</b>\n\n"
     text += "👁 — виден покупателям, 🙈 — скрыт" if products else "Товаров пока нет."
     return text
 
-
 async def _render_products(callback: CallbackQuery, category_id: int) -> None:
-    products = await AdminService.get_products(SHOP_ID, category_id)
+    products = await AdminService.get_products(get_shop_id(), category_id)
 
     await callback.message.edit_text(
         _render_products_text(products),
         reply_markup=get_admin_products_keyboard(category_id, products)
     )
-
 
 @router.callback_query(F.data.startswith("admin_cat:"))
 async def show_products(callback: CallbackQuery):
@@ -322,7 +305,6 @@ async def show_products(callback: CallbackQuery):
 
     await _render_products(callback, category_id)
     await callback.answer()
-
 
 def _render_product_text(product: dict) -> str:
     lines = [f"🕯 <b>{product['name']}</b>\n", product["description"], ""]
@@ -345,9 +327,8 @@ def _render_product_text(product: dict) -> str:
 
     return "\n".join(lines)
 
-
 async def _render_product(callback: CallbackQuery, product_id: int) -> dict | None:
-    product = await AdminService.get_product(SHOP_ID, product_id)
+    product = await AdminService.get_product(get_shop_id(), product_id)
 
     if product is None:
         await callback.answer("Товар не найден.", show_alert=True)
@@ -360,7 +341,6 @@ async def _render_product(callback: CallbackQuery, product_id: int) -> dict | No
 
     return product
 
-
 @router.callback_query(F.data.startswith("admin_product:"))
 async def show_product(callback: CallbackQuery):
     product_id = int(callback.data.split(":")[1])
@@ -368,12 +348,11 @@ async def show_product(callback: CallbackQuery):
     await _render_product(callback, product_id)
     await callback.answer()
 
-
 @router.callback_query(F.data.startswith("admin_toggle_product:"))
 async def toggle_product(callback: CallbackQuery):
     product_id = int(callback.data.split(":")[1])
 
-    is_active = await AdminService.toggle_active(SHOP_ID, product_id)
+    is_active = await AdminService.toggle_active(get_shop_id(), product_id)
 
     if is_active is None:
         await callback.answer("Товар не найден.", show_alert=True)
@@ -381,7 +360,6 @@ async def toggle_product(callback: CallbackQuery):
 
     await _render_product(callback, product_id)
     await callback.answer("Показан покупателям" if is_active else "Скрыт от покупателей")
-
 
 @router.callback_query(F.data.startswith("admin_delete_product:"))
 async def confirm_delete_product(callback: CallbackQuery):
@@ -394,15 +372,14 @@ async def confirm_delete_product(callback: CallbackQuery):
 
     await callback.answer()
 
-
 @router.callback_query(F.data.startswith("admin_delete_confirm:"))
 async def delete_product(callback: CallbackQuery):
     product_id = int(callback.data.split(":")[1])
 
-    product = await AdminService.get_product(SHOP_ID, product_id)
+    product = await AdminService.get_product(get_shop_id(), product_id)
     category_id = product["category_id"] if product else None
 
-    await AdminService.delete_product(SHOP_ID, product_id)
+    await AdminService.delete_product(get_shop_id(), product_id)
     await callback.answer("Товар удалён")
 
     if category_id is not None:
@@ -412,7 +389,6 @@ async def delete_product(callback: CallbackQuery):
             "⚙️ <b>Панель администратора</b>",
             reply_markup=get_admin_menu()
         )
-
 
 # ==========================
 # Мастер добавления товара
@@ -431,14 +407,12 @@ async def start_add_product(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.message(AdminProductState.waiting_name)
 async def process_name(message: Message, state: FSMContext):
     await state.update_data(name=message.text)
     await state.set_state(AdminProductState.waiting_description)
 
     await message.answer("Введите описание товара.")
-
 
 @router.message(AdminProductState.waiting_description)
 async def process_description(message: Message, state: FSMContext):
@@ -453,7 +427,6 @@ async def process_description(message: Message, state: FSMContext):
         reply_markup=get_photos_done_keyboard()
     )
     await state.update_data(photo_prompt_id=prompt.message_id)
-
 
 @router.message(AdminProductState.waiting_photos, F.photo)
 async def collect_photo(message: Message, state: FSMContext):
@@ -485,7 +458,6 @@ async def collect_photo(message: Message, state: FSMContext):
         except Exception:
             pass
 
-
 @router.callback_query(
     AdminProductState.waiting_photos,
     F.data == "admin_photos_done"
@@ -504,14 +476,12 @@ async def finish_photos(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.message(AdminProductState.waiting_variant_volume)
 async def process_variant_volume(message: Message, state: FSMContext):
     await state.update_data(current_volume=message.text)
     await state.set_state(AdminProductState.waiting_variant_price)
 
     await message.answer("Укажите цену в рублях (только число, например: <i>990</i>).")
-
 
 @router.message(AdminProductState.waiting_variant_price)
 async def process_variant_price(message: Message, state: FSMContext):
@@ -528,7 +498,6 @@ async def process_variant_price(message: Message, state: FSMContext):
         "Время горения (для свечей), например <i>45 часов</i>.\n"
         "Если неприменимо — отправьте «-»."
     )
-
 
 @router.message(AdminProductState.waiting_variant_burn)
 async def process_variant_burn(message: Message, state: FSMContext):
@@ -555,7 +524,6 @@ async def process_variant_burn(message: Message, state: FSMContext):
         )
     )
 
-
 @router.callback_query(
     AdminProductState.confirm_more_variants,
     F.data == "admin_variant_more:yes"
@@ -566,7 +534,6 @@ async def add_another_variant(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text("Укажите объём/размер следующего варианта.")
     await callback.answer()
 
-
 @router.callback_query(
     AdminProductState.confirm_more_variants,
     F.data == "admin_variant_more:no"
@@ -574,7 +541,7 @@ async def add_another_variant(callback: CallbackQuery, state: FSMContext):
 async def finish_add_product(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
 
-    product_id = await AdminService.create_product(SHOP_ID, 
+    product_id = await AdminService.create_product(get_shop_id(), 
         category_id=data["category_id"],
         name=data["name"],
         description=data["description"],
@@ -585,7 +552,7 @@ async def finish_add_product(callback: CallbackQuery, state: FSMContext):
     await state.clear()
 
     category_id = data["category_id"]
-    products = await AdminService.get_products(SHOP_ID, category_id)
+    products = await AdminService.get_products(get_shop_id(), category_id)
 
     await callback.message.edit_text(
         f"✅ Товар «{data['name']}» добавлен (ID {product_id}).\n\n"
@@ -594,7 +561,6 @@ async def finish_add_product(callback: CallbackQuery, state: FSMContext):
     )
 
     await callback.answer()
-
 
 # ==========================
 # Редактирование товара
@@ -606,7 +572,7 @@ async def show_edit_menu(callback: CallbackQuery, state: FSMContext):
 
     await state.clear()
 
-    product = await AdminService.get_product(SHOP_ID, product_id)
+    product = await AdminService.get_product(get_shop_id(), product_id)
 
     if product is None:
         await callback.answer("Товар не найден.", show_alert=True)
@@ -620,7 +586,6 @@ async def show_edit_menu(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.callback_query(F.data.startswith("admin_edit_name:"))
 async def edit_name(callback: CallbackQuery, state: FSMContext):
     product_id = int(callback.data.split(":")[1])
@@ -631,23 +596,21 @@ async def edit_name(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text("✏️ Введите новое название товара:")
     await callback.answer()
 
-
 @router.message(AdminEditProductState.waiting_new_name)
 async def process_new_name(message: Message, state: FSMContext):
     data = await state.get_data()
     product_id = data["product_id"]
 
-    await AdminService.update_product(SHOP_ID, product_id, name=message.text)
+    await AdminService.update_product(get_shop_id(), product_id, name=message.text)
     await state.clear()
 
-    product = await AdminService.get_product(SHOP_ID, product_id)
+    product = await AdminService.get_product(get_shop_id(), product_id)
 
     await message.answer(
         f"✅ Название изменено на «{message.text}».\n\n"
         + _render_product_text(product),
         reply_markup=get_admin_product_keyboard(product)
     )
-
 
 @router.callback_query(F.data.startswith("admin_edit_desc:"))
 async def edit_description(callback: CallbackQuery, state: FSMContext):
@@ -659,22 +622,20 @@ async def edit_description(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text("✏️ Введите новое описание товара:")
     await callback.answer()
 
-
 @router.message(AdminEditProductState.waiting_new_description)
 async def process_new_description(message: Message, state: FSMContext):
     data = await state.get_data()
     product_id = data["product_id"]
 
-    await AdminService.update_product(SHOP_ID, product_id, description=message.text)
+    await AdminService.update_product(get_shop_id(), product_id, description=message.text)
     await state.clear()
 
-    product = await AdminService.get_product(SHOP_ID, product_id)
+    product = await AdminService.get_product(get_shop_id(), product_id)
 
     await message.answer(
         "✅ Описание обновлено.\n\n" + _render_product_text(product),
         reply_markup=get_admin_product_keyboard(product)
     )
-
 
 @router.callback_query(F.data.startswith("admin_edit_photos:"))
 async def edit_photos(callback: CallbackQuery, state: FSMContext):
@@ -682,7 +643,7 @@ async def edit_photos(callback: CallbackQuery, state: FSMContext):
 
     await state.clear()
 
-    product = await AdminService.get_product(SHOP_ID, product_id)
+    product = await AdminService.get_product(get_shop_id(), product_id)
 
     if product is None:
         await callback.answer("Товар не найден.", show_alert=True)
@@ -699,14 +660,13 @@ async def edit_photos(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.callback_query(F.data.startswith("admin_del_photo:"))
 async def delete_photo(callback: CallbackQuery):
     _, product_id, photo_id = callback.data.split(":")
 
-    await AdminService.delete_photo(SHOP_ID, int(photo_id))
+    await AdminService.delete_photo(get_shop_id(), int(photo_id))
 
-    product = await AdminService.get_product(SHOP_ID, int(product_id))
+    product = await AdminService.get_product(get_shop_id(), int(product_id))
 
     photo_count = len(product.get("photos", [])) if product else 0
 
@@ -722,7 +682,6 @@ async def delete_photo(callback: CallbackQuery):
 
     await callback.answer("Фото удалено")
 
-
 @router.callback_query(F.data.startswith("admin_add_photo:"))
 async def add_photo_start(callback: CallbackQuery, state: FSMContext):
     product_id = int(callback.data.split(":")[1])
@@ -736,7 +695,6 @@ async def add_photo_start(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.message(AdminEditProductState.waiting_add_photo, F.photo)
 async def add_photo_process(message: Message, state: FSMContext):
     data = await state.get_data()
@@ -744,10 +702,10 @@ async def add_photo_process(message: Message, state: FSMContext):
 
     file_id = message.photo[-1].file_id
 
-    await AdminService.add_photo(SHOP_ID, product_id, file_id)
+    await AdminService.add_photo(get_shop_id(), product_id, file_id)
     await state.clear()
 
-    product = await AdminService.get_product(SHOP_ID, product_id)
+    product = await AdminService.get_product(get_shop_id(), product_id)
 
     photo_count = len(product.get("photos", []))
 
@@ -766,14 +724,13 @@ async def add_photo_process(message: Message, state: FSMContext):
         reply_markup=get_admin_photos_keyboard(product_id, product["photos"])
     )
 
-
 # ==========================
 # Заказы
 # ==========================
 
 @router.callback_query(F.data == "admin_orders")
 async def show_orders(callback: CallbackQuery):
-    orders = await AdminService.get_orders(SHOP_ID, limit=15)
+    orders = await AdminService.get_orders(get_shop_id(), limit=15)
 
     await callback.message.edit_text(
         "📦 <b>Последние заказы</b>" if orders else "Заказов пока нет.",
@@ -781,7 +738,6 @@ async def show_orders(callback: CallbackQuery):
     )
 
     await callback.answer()
-
 
 def _render_order_text(order: dict) -> str:
     lines = [
@@ -802,9 +758,8 @@ def _render_order_text(order: dict) -> str:
 
     return "\n".join(lines)
 
-
 async def _render_order(callback: CallbackQuery, order_id: int) -> None:
-    order = await AdminService.get_order(SHOP_ID, order_id)
+    order = await AdminService.get_order(get_shop_id(), order_id)
 
     if order is None:
         await callback.answer("Заказ не найден.", show_alert=True)
@@ -815,14 +770,12 @@ async def _render_order(callback: CallbackQuery, order_id: int) -> None:
         reply_markup=get_admin_order_keyboard(order["id"], order["status"])
     )
 
-
 @router.callback_query(F.data.startswith("admin_order:"))
 async def show_order(callback: CallbackQuery):
     order_id = int(callback.data.split(":")[1])
 
     await _render_order(callback, order_id)
     await callback.answer()
-
 
 @router.callback_query(F.data.startswith("admin_order_status:"))
 async def change_order_status(callback: CallbackQuery):
@@ -832,12 +785,12 @@ async def change_order_status(callback: CallbackQuery):
         await callback.answer("Неизвестный статус.", show_alert=True)
         return
 
-    await AdminService.set_order_status(SHOP_ID, int(order_id), new_status)
+    await AdminService.set_order_status(get_shop_id(), int(order_id), new_status)
     await callback.answer(f"Статус изменён: {STATUS_LABELS[new_status]}")
 
     notification = STATUS_NOTIFICATIONS.get(new_status)
     if notification:
-        user_id = await OrderService.get_order_owner(SHOP_ID, int(order_id))
+        user_id = await OrderService.get_order_owner(get_shop_id(), int(order_id))
         if user_id:
             try:
                 await callback.bot.send_message(
@@ -849,7 +802,6 @@ async def change_order_status(callback: CallbackQuery):
 
     await _render_order(callback, int(order_id))
 
-
 # ==========================
 # Системные сообщения
 # ==========================
@@ -858,7 +810,7 @@ async def change_order_status(callback: CallbackQuery):
 async def list_messages(callback: CallbackQuery, state: FSMContext):
     await state.clear()
 
-    messages = await MessageService.get_all(SHOP_ID)
+    messages = await MessageService.get_all(get_shop_id())
 
     await callback.message.edit_text(
         "💬 <b>Системные сообщения</b>\n\n"
@@ -870,12 +822,11 @@ async def list_messages(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.callback_query(F.data.startswith("admin_msg:"))
 async def edit_message_start(callback: CallbackQuery, state: FSMContext):
     key = callback.data.split(":", 1)[1]
 
-    msg = await MessageService.get_one(SHOP_ID, key)
+    msg = await MessageService.get_one(get_shop_id(), key)
 
     if msg is None:
         await callback.answer("Сообщение не найдено.", show_alert=True)
@@ -897,16 +848,15 @@ async def edit_message_start(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.message(AdminMessageState.waiting_new_content)
 async def edit_message_save(message: Message, state: FSMContext):
     data = await state.get_data()
     key = data["msg_key"]
 
-    await MessageService.update(SHOP_ID, key, message.text)
+    await MessageService.update(get_shop_id(), key, message.text)
     await state.clear()
 
-    messages = await MessageService.get_all(SHOP_ID)
+    messages = await MessageService.get_all(get_shop_id())
 
     await message.answer(
         "✅ Текст сообщения обновлён.\n\n"
@@ -917,21 +867,20 @@ async def edit_message_save(message: Message, state: FSMContext):
         reply_markup=get_admin_messages_keyboard(messages),
     )
 
-
 @router.callback_query(F.data.startswith("admin_msg_reset:"))
 async def reset_message(callback: CallbackQuery, state: FSMContext):
     key = callback.data.split(":", 1)[1]
 
-    await MessageService.reset(SHOP_ID, key)
+    await MessageService.reset(get_shop_id(), key)
     await state.clear()
 
-    msg = await MessageService.get_one(SHOP_ID, key)
+    msg = await MessageService.get_one(get_shop_id(), key)
 
     if msg is None:
         await callback.answer("Сообщение не найдено.", show_alert=True)
         return
 
-    messages = await MessageService.get_all(SHOP_ID)
+    messages = await MessageService.get_all(get_shop_id())
 
     await callback.message.edit_text(
         f"✅ Сброшено к стандарту: <b>{msg['label']}</b>\n\n"
@@ -944,7 +893,6 @@ async def reset_message(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer("Сброшено к стандарту")
 
-
 # ==========================
 # Промокоды
 # ==========================
@@ -953,7 +901,7 @@ async def reset_message(callback: CallbackQuery, state: FSMContext):
 async def list_promos(callback: CallbackQuery, state: FSMContext):
     await state.clear()
 
-    promos = await PromoCodeService.get_all(SHOP_ID)
+    promos = await PromoCodeService.get_all(get_shop_id())
 
     await callback.message.edit_text(
         "🎟 <b>Промокоды</b>\n\n"
@@ -963,12 +911,11 @@ async def list_promos(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.callback_query(F.data.startswith("admin_promo:"))
 async def show_promo_detail(callback: CallbackQuery):
     promo_id = int(callback.data.split(":")[1])
 
-    promos = await PromoCodeService.get_all(SHOP_ID)
+    promos = await PromoCodeService.get_all(get_shop_id())
     promo = next((p for p in promos if p["id"] == promo_id), None)
 
     if promo is None:
@@ -993,7 +940,6 @@ async def show_promo_detail(callback: CallbackQuery):
 
     await callback.answer()
 
-
 @router.callback_query(F.data == "admin_promo_new")
 async def create_promo_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AdminPromoState.waiting_code)
@@ -1004,7 +950,6 @@ async def create_promo_start(callback: CallbackQuery, state: FSMContext):
     )
 
     await callback.answer()
-
 
 @router.message(AdminPromoState.waiting_code)
 async def create_promo_code(message: Message, state: FSMContext):
@@ -1027,7 +972,6 @@ async def create_promo_code(message: Message, state: FSMContext):
         reply_markup=builder.as_markup(),
     )
 
-
 @router.callback_query(F.data.startswith("promo_type:"), AdminPromoState.waiting_type)
 async def create_promo_type(callback: CallbackQuery, state: FSMContext):
     discount_type = callback.data.split(":")[1]
@@ -1042,7 +986,6 @@ async def create_promo_type(callback: CallbackQuery, state: FSMContext):
     )
 
     await callback.answer()
-
 
 @router.message(AdminPromoState.waiting_value)
 async def create_promo_value(message: Message, state: FSMContext):
@@ -1076,11 +1019,9 @@ async def create_promo_value(message: Message, state: FSMContext):
         reply_markup=builder.as_markup(),
     )
 
-
 @router.callback_query(F.data == "promo_uses:unlimited", AdminPromoState.waiting_max_uses)
 async def create_promo_unlimited(callback: CallbackQuery, state: FSMContext):
     await _finish_promo_creation(callback, state, max_uses=None)
-
 
 @router.message(AdminPromoState.waiting_max_uses)
 async def create_promo_max_uses(message: Message, state: FSMContext):
@@ -1092,12 +1033,11 @@ async def create_promo_max_uses(message: Message, state: FSMContext):
 
     await _finish_promo_creation(message, state, max_uses=int(text))
 
-
 async def _finish_promo_creation(event, state: FSMContext, max_uses: int | None):
     data = await state.get_data()
     await state.clear()
 
-    promo_id = await PromoCodeService.create(SHOP_ID, 
+    promo_id = await PromoCodeService.create(get_shop_id(), 
         code=data["code"],
         discount_type=data["discount_type"],
         discount_value=data["discount_value"],
@@ -1107,7 +1047,7 @@ async def _finish_promo_creation(event, state: FSMContext, max_uses: int | None)
     unit = "%" if data["discount_type"] == "percent" else " ₽"
     uses_str = str(max_uses) if max_uses else "∞"
 
-    promos = await PromoCodeService.get_all(SHOP_ID)
+    promos = await PromoCodeService.get_all(get_shop_id())
 
     msg = event.message if isinstance(event, CallbackQuery) else event
 
@@ -1118,14 +1058,13 @@ async def _finish_promo_creation(event, state: FSMContext, max_uses: int | None)
         reply_markup=get_admin_promos_keyboard(promos),
     )
 
-
 @router.callback_query(F.data.startswith("admin_promo_toggle:"))
 async def toggle_promo(callback: CallbackQuery):
     promo_id = int(callback.data.split(":")[1])
 
-    await PromoCodeService.toggle_active(SHOP_ID, promo_id)
+    await PromoCodeService.toggle_active(get_shop_id(), promo_id)
 
-    promos = await PromoCodeService.get_all(SHOP_ID)
+    promos = await PromoCodeService.get_all(get_shop_id())
 
     await callback.message.edit_text(
         "🎟 <b>Промокоды</b>\n\n"
@@ -1135,14 +1074,13 @@ async def toggle_promo(callback: CallbackQuery):
 
     await callback.answer("Статус изменён")
 
-
 @router.callback_query(F.data.startswith("admin_promo_delete:"))
 async def delete_promo(callback: CallbackQuery):
     promo_id = int(callback.data.split(":")[1])
 
-    await PromoCodeService.delete(SHOP_ID, promo_id)
+    await PromoCodeService.delete(get_shop_id(), promo_id)
 
-    promos = await PromoCodeService.get_all(SHOP_ID)
+    promos = await PromoCodeService.get_all(get_shop_id())
 
     await callback.message.edit_text(
         "✅ Промокод удалён.\n\n"

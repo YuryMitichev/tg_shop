@@ -22,6 +22,29 @@ class ShopService:
     Только супер-админ имеет доступ к этим операциям.
     """
 
+    _token_cache: dict[int, str] = {}
+
+    @classmethod
+    async def get_bot_token(cls, shop_id: int) -> str | None:
+        """Возвращает bot_token магазина (с кешированием)."""
+        if shop_id in cls._token_cache:
+            return cls._token_cache[shop_id]
+
+        shop = await cls.get(shop_id)
+        if shop is None:
+            return None
+
+        cls._token_cache[shop_id] = shop["bot_token"]
+        return shop["bot_token"]
+
+    @classmethod
+    def invalidate_token_cache(cls, shop_id: int | None = None) -> None:
+        """Сбрасывает кеш токенов (всех или конкретного магазина)."""
+        if shop_id is not None:
+            cls._token_cache.pop(shop_id, None)
+        else:
+            cls._token_cache.clear()
+
     @staticmethod
     async def create(
         name: str,
@@ -81,6 +104,10 @@ class ShopService:
 
             await session.commit()
             await session.refresh(shop)
+
+            if bot_token is not None:
+                cls.invalidate_token_cache(shop_id)
+
             return _shop_to_dict(shop)
 
     @staticmethod

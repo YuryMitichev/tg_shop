@@ -5,10 +5,10 @@ from urllib.parse import parse_qsl
 
 from fastapi import Header, HTTPException
 
-from app.core.config import settings
+from app.services.shop_service import ShopService
 
 
-def validate_init_data(init_data: str, bot_token: str) -> dict | None:
+async def validate_init_data(init_data: str, bot_token: str) -> dict | None:
     """
     Проверяет подпись Telegram WebApp initData.
     Возвращает словарь пользователя (id, first_name, ...) или None.
@@ -46,28 +46,58 @@ def validate_init_data(init_data: str, bot_token: str) -> dict | None:
         return None
 
 
-async def get_current_user(authorization: str = Header(...)) -> dict:
+async def _resolve_bot_token(shop_id: int | None) -> str | None:
+    """Возвращает bot_token для магазина."""
+    if shop_id is None:
+        from app.core.config import settings
+        return settings.bot_token
+
+    return await ShopService.get_bot_token(shop_id)
+
+
+async def get_current_user(
+    authorization: str = Header(...),
+    x_shop_id: int | None = Header(None, alias="X-Shop-Id"),
+) -> dict:
     """
     FastAPI dependency: извлекает пользователя из заголовка
     Authorization: tma <init_data>
+
+    X-Shop-Id определяет, какой bot_token использовать для проверки.
     """
     init_data = authorization.replace("tma ", "", 1)
 
-    user = validate_init_data(init_data, settings.bot_token)
+    bot_token = await _resolve_bot_token(x_shop_id)
+    if bot_token is None:
+        raise HTTPException(status_code=404, detail="Shop not found")
+
+    user = await validate_init_data(init_data, bot_token)
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid auth")
 
+    user["shop_id"] = x_shop_id or 1
     return user
 
 
-async def get_optional_user(authorization: str | None = Header(None)) -> dict | None:
+async def get_optional_user(
+    authorization: str | None = Header(None),
+    x_shop_id: int | None = Header(None, alias="X-Shop-Id"),
+) -> dict | None:
     """Опциональная авторизация — возвращает пользователя или None."""
     if not authorization:
         return None
 
     init_data = authorization.replace("tma ", "", 1)
-    return validate_init_data(init_data, settings.bot_token)
+
+    bot_token = await _resolve_bot_token(x_shop_id)
+    if bot_token is None:
+        return None
+
+    user = await validate_init_data(init_data, bot_token)
+    if user:
+        user["shop_id"] = x_shop_id or 1
+    return user
 
 
 async def get_current_user_id(user: dict = None) -> int:

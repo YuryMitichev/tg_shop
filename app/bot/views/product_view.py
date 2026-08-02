@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 
 from app.bot.keyboards.product import get_product_keyboard
 
+from app.bot.shop_context import get_shop_id
 from app.services.catalog_service import CatalogService
 from app.utils.product_card import ProductCard
 from app.bot.utils.messages import track_message
@@ -38,7 +39,7 @@ async def show_product(
     )
 
     position, total = await CatalogService.get_product_position(
-        1,
+        get_shop_id(),
         category_id,
         product["id"]
     )

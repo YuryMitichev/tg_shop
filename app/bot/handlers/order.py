@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from app.bot.shop_context import get_shop_id
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup
 from aiogram.fsm.context import FSMContext
 
@@ -11,10 +12,7 @@ from app.utils.escape import esc
 
 router = Router()
 
-SHOP_ID = 1
-
 _EMPTY_KB = InlineKeyboardMarkup(inline_keyboard=[])
-
 
 @router.message(F.text == "🧾 Чек об оплате")
 async def start_receipt(message: Message, state: FSMContext):
@@ -29,7 +27,6 @@ async def start_receipt(message: Message, state: FSMContext):
         "Например: <code>42</code>",
         reply_markup=get_cancel_reply_keyboard(),
     )
-
 
 @router.message(OrderState.waiting_receipt_order_id, F.text)
 async def process_receipt_order_id(message: Message, state: FSMContext):
@@ -56,7 +53,7 @@ async def process_receipt_order_id(message: Message, state: FSMContext):
 
     order_id = int(text)
 
-    order = await OrderService.get_user_order(SHOP_ID, message.from_user.id, order_id)
+    order = await OrderService.get_user_order(get_shop_id(), message.from_user.id, order_id)
 
     if order is None:
         await show_screen(
@@ -76,7 +73,6 @@ async def process_receipt_order_id(message: Message, state: FSMContext):
         "🧾 Отправьте фото чека об оплате одним сообщением.",
     )
 
-
 @router.message(OrderState.waiting_receipt, F.photo)
 async def process_receipt(message: Message, state: FSMContext):
     """Приём фото чека и пересылка менеджеру."""
@@ -93,7 +89,7 @@ async def process_receipt(message: Message, state: FSMContext):
 
     if settings.manager_chat_id:
         try:
-            order = await OrderService.get_user_order(SHOP_ID, message.from_user.id, order_id)
+            order = await OrderService.get_user_order(get_shop_id(), message.from_user.id, order_id)
 
             if order:
                 items_text = "\n".join(

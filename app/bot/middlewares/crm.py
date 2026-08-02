@@ -1,6 +1,7 @@
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
+from app.bot.shop_context import get_shop_id
 from app.services.crm_service import CrmService
 
 
@@ -19,16 +20,17 @@ class CrmMiddleware(BaseMiddleware):
             text = event.text or event.caption
             msg_type = "text" if event.text else ("photo" if event.photo else "other")
             if user:
+                shop_id = get_shop_id()
                 await CrmService.get_or_create_profile(
-                    1,
+                    shop_id,
                     telegram_user_id=user.id,
                     username=user.username,
                     first_name=user.first_name,
                     last_name=user.last_name,
                 )
-                await CrmService.update_last_seen(1, user.id)
+                await CrmService.update_last_seen(shop_id, user.id)
                 await CrmService.log_message(
-                    1,
+                    shop_id,
                     telegram_user_id=user.id,
                     direction="in",
                     message_type=msg_type,
@@ -37,9 +39,10 @@ class CrmMiddleware(BaseMiddleware):
         elif isinstance(event, CallbackQuery):
             user = event.from_user
             if user:
-                await CrmService.update_last_seen(1, user.id)
+                shop_id = get_shop_id()
+                await CrmService.update_last_seen(shop_id, user.id)
                 await CrmService.log_message(
-                    1,
+                    shop_id,
                     telegram_user_id=user.id,
                     direction="in",
                     message_type="callback",

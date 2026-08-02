@@ -34,10 +34,6 @@ async def _notify_user_paid(data: dict) -> None:
     """Уведомление пользователя и админа об оплате."""
     from app.bot.bot import get_bot
 
-    bot = get_bot()
-    if bot is None:
-        return
-
     order_id_str = data.get("OrderId")
     if not order_id_str:
         return
@@ -49,6 +45,10 @@ async def _notify_user_paid(data: dict) -> None:
 
     order = await PaymentService.get_order_with_user(order_id)
     if not order:
+        return
+
+    bot = get_bot(order["shop_id"])
+    if bot is None:
         return
 
     try:

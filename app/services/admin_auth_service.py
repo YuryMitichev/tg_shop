@@ -61,7 +61,7 @@ class AdminAuthService:
         code = f"{secrets.randbelow(1000000):06d}"
         AdminAuthService._codes[telegram_user_id] = (code, time.time() + AdminAuthService.CODE_TTL, shop_id, is_super)
 
-        bot = get_bot()
+        bot = get_bot(shop_id)
         if bot is None:
             return False
 

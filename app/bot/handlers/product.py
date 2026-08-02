@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from app.bot.shop_context import get_shop_id
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -12,9 +13,6 @@ from app.services.review_service import ReviewService
 
 router = Router()
 
-SHOP_ID = 1
-
-
 def _rating_keyboard() -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
 
@@ -25,7 +23,6 @@ def _rating_keyboard() -> InlineKeyboardBuilder:
     builder.adjust(5, 1)
 
     return builder
-
 
 @router.callback_query(F.data.startswith("variant:"))
 async def select_variant(
@@ -44,7 +41,7 @@ async def select_variant(
         await callback.answer("Товар не найден, откройте каталог заново.", show_alert=True)
         return
 
-    product = await CatalogService.get_product(SHOP_ID, product_id)
+    product = await CatalogService.get_product(get_shop_id(), product_id)
 
     if product is None:
         await callback.answer("Товар больше не найден.", show_alert=True)
@@ -56,7 +53,6 @@ async def select_variant(
         product,
         variant_id=variant_id,
     )
-
 
 @router.callback_query(F.data == "add_to_cart")
 async def add_to_cart(
@@ -75,7 +71,7 @@ async def add_to_cart(
         return
 
     await CartService.add_item(
-        SHOP_ID,
+        get_shop_id(),
         telegram_user_id=callback.from_user.id,
         product_id=product_id,
         variant_id=variant_id,
@@ -83,7 +79,6 @@ async def add_to_cart(
     )
 
     await callback.answer("Добавлено в корзину ✅")
-
 
 @router.callback_query(F.data == "review")
 async def start_review(callback: CallbackQuery, state: FSMContext):
@@ -95,7 +90,7 @@ async def start_review(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Товар не найден, откройте каталог заново.", show_alert=True)
         return
 
-    has_bought = await OrderService.has_purchased(SHOP_ID, callback.from_user.id, product_id)
+    has_bought = await OrderService.has_purchased(get_shop_id(), callback.from_user.id, product_id)
 
     if not has_bought:
         await callback.answer(
@@ -111,7 +106,6 @@ async def start_review(callback: CallbackQuery, state: FSMContext):
         reply_markup=_rating_keyboard().as_markup(),
     )
     await callback.answer()
-
 
 @router.callback_query(F.data.startswith("rate:"), ReviewState.waiting_rating)
 async def process_rating(callback: CallbackQuery, state: FSMContext):
@@ -137,12 +131,10 @@ async def process_rating(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-
 @router.callback_query(F.data == "review_no_text", ReviewState.waiting_text)
 async def save_review_no_text(callback: CallbackQuery, state: FSMContext):
     """Сохранение отзыва без текста."""
     await _save_review(callback, state, text=None)
-
 
 @router.message(ReviewState.waiting_text, F.text)
 async def save_review_text(message: Message, state: FSMContext):
@@ -154,7 +146,6 @@ async def save_review_text(message: Message, state: FSMContext):
         return
 
     await _save_review(message, state, text=text)
-
 
 async def _save_review(event: CallbackQuery | Message, state: FSMContext, text: str | None):
     """Общее сохранение отзыва и возврат к карточке товара."""
@@ -168,7 +159,7 @@ async def _save_review(event: CallbackQuery | Message, state: FSMContext, text: 
         return
 
     await ReviewService.create_or_update(
-        SHOP_ID,
+        get_shop_id(),
         product_id=product_id,
         telegram_user_id=event.from_user.id,
         rating=rating,
@@ -184,7 +175,6 @@ async def _save_review(event: CallbackQuery | Message, state: FSMContext, text: 
         await event.answer("✅ Отзыв сохранён!")
         await _back_to_product(event, state)
 
-
 async def _back_to_product(event: CallbackQuery | Message, state: FSMContext):
     """Возврат к карточке товара после отзыва."""
     data = await state.get_data()
@@ -193,7 +183,7 @@ async def _back_to_product(event: CallbackQuery | Message, state: FSMContext):
     if not product_id:
         return
 
-    product = await CatalogService.get_product(SHOP_ID, product_id)
+    product = await CatalogService.get_product(get_shop_id(), product_id)
     if product is None:
         return
 
@@ -211,7 +201,6 @@ async def _back_to_product(event: CallbackQuery | Message, state: FSMContext):
 
     await show_product(_FakeCallback(event), state, product, variant_id=variant_id)
 
-
 @router.callback_query(F.data == "review_cancel")
 async def cancel_review(callback: CallbackQuery, state: FSMContext):
     """Отмена отзыва, возврат к карточке."""
@@ -224,7 +213,7 @@ async def cancel_review(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    product = await CatalogService.get_product(SHOP_ID, product_id)
+    product = await CatalogService.get_product(get_shop_id(), product_id)
     if product is None:
         await callback.answer()
         return

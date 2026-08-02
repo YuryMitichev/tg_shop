@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from app.bot.shop_context import get_shop_id
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
@@ -13,16 +14,12 @@ from app.utils.escape import esc
 
 router = Router()
 
-SHOP_ID = 1
-
 _EMPTY_KB = None
-
 
 def _format_date(dt) -> str:
     if dt is None:
         return ""
     return dt.strftime("%d.%m.%Y %H:%M")
-
 
 def _render_orders_list(orders: list[dict]) -> str:
     if not orders:
@@ -41,7 +38,6 @@ def _render_orders_list(orders: list[dict]) -> str:
     lines.append("\nНажмите на заказ, чтобы увидеть детали.")
 
     return "\n".join(lines)
-
 
 def _render_order_detail(order: dict) -> str:
     label = STATUS_LABELS.get(order["status"], order["status"])
@@ -74,12 +70,11 @@ def _render_order_detail(order: dict) -> str:
 
     return "\n".join(lines)
 
-
 @router.message(F.text == "📦 Мои заказы")
 async def my_orders_message(message: Message, state: FSMContext):
     await state.clear()
 
-    orders = await OrderService.get_user_orders(SHOP_ID, message.from_user.id)
+    orders = await OrderService.get_user_orders(get_shop_id(), message.from_user.id)
 
     await show_screen(
         message,
@@ -88,10 +83,9 @@ async def my_orders_message(message: Message, state: FSMContext):
         reply_markup=get_user_orders_keyboard(orders),
     )
 
-
 @router.callback_query(F.data == "my_orders")
 async def my_orders_callback(callback: CallbackQuery, state: FSMContext):
-    orders = await OrderService.get_user_orders(SHOP_ID, callback.from_user.id)
+    orders = await OrderService.get_user_orders(get_shop_id(), callback.from_user.id)
 
     await replace_with_text(
         callback.message,
@@ -104,13 +98,12 @@ async def my_orders_callback(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-
 @router.callback_query(F.data.startswith("user_order:"))
 async def show_user_order(callback: CallbackQuery, state: FSMContext):
     order_id = int(callback.data.split(":")[1])
 
     order = await OrderService.get_user_order(
-        SHOP_ID,
+        get_shop_id(),
         callback.from_user.id,
         order_id,
     )

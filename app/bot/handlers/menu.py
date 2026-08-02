@@ -1,4 +1,5 @@
 from aiogram import F, Router
+from app.bot.shop_context import get_shop_id
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 from aiogram.fsm.context import FSMContext
 
@@ -8,7 +9,6 @@ from app.services.message_service import MessageService
 router = Router()
 
 _EMPTY_KB = InlineKeyboardMarkup(inline_keyboard=[])
-
 
 @router.callback_query(F.data == "menu")
 async def menu_callback(callback: CallbackQuery, state: FSMContext):
