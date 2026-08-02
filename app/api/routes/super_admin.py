@@ -1,10 +1,14 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.admin_auth import require_super_admin
+from app.bot.bot import start_shop_bot, stop_shop_bot, restart_shop_bot
 from app.services.shop_service import ShopService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ==========================
@@ -51,6 +55,12 @@ async def create_shop(
         bot_token=body.bot_token,
         owner_telegram_id=body.owner_telegram_id,
     )
+
+    try:
+        await start_shop_bot(shop["id"])
+    except Exception:
+        logger.exception("Не удалось запустить бота для магазина %d", shop["id"])
+
     return shop
 
 
@@ -85,6 +95,15 @@ async def update_shop(
     )
     if shop is None:
         raise HTTPException(status_code=404, detail="Магазин не найден")
+
+    token_changed = body.bot_token is not None
+    deactivated = body.is_active is False
+
+    if deactivated and not token_changed:
+        await stop_shop_bot(shop_id)
+    elif token_changed:
+        await restart_shop_bot(shop_id)
+
     return shop
 
 
@@ -95,6 +114,8 @@ async def delete_shop(
 ):
     if shop_id == 1:
         raise HTTPException(status_code=400, detail="Нельзя удалить магазин по умолчанию")
+
+    await stop_shop_bot(shop_id)
 
     ok = await ShopService.delete(shop_id)
     if not ok:
