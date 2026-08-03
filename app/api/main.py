@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -9,6 +9,16 @@ from app.api.routes.shop import router as shop_router
 from app.api.routes.admin import router as admin_router
 from app.api.routes.super_admin import router as super_admin_router
 from app.api.routes.subscriptions import router as subscriptions_router
+
+
+class NoCacheStaticFiles(StaticFiles):
+    """StaticFiles с заголовком Cache-Control: no-cache,
+    чтобы Telegram WebApp не кешировал старые версии."""
+
+    async def get_response(self, path: str, scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return response
 
 
 def create_app() -> FastAPI:
@@ -33,7 +43,7 @@ def create_app() -> FastAPI:
     if static_dir.exists():
         app.mount(
             "/app",
-            StaticFiles(directory=str(static_dir), html=True),
+            NoCacheStaticFiles(directory=str(static_dir), html=True),
             name="webapp",
         )
 
