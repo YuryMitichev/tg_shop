@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
@@ -20,29 +20,52 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import type { Category } from "@/lib/types";
+import type { Category, ProductAttrsSettings } from "@/lib/types";
+
+const ATTR_FIELDS: { key: string; label: string; placeholder: string }[] = [
+  { key: "volume", label: "Объём", placeholder: "200 мл" },
+  { key: "size", label: "Размер", placeholder: "L" },
+  { key: "color", label: "Цвет", placeholder: "Красный" },
+  { key: "scent", label: "Аромат", placeholder: "Лаванда" },
+  { key: "dimensions", label: "Д/Ш/В", placeholder: "10×5×3 см" },
+];
 
 interface VariantRow {
   volume: string;
   price: string;
   burn: string;
   stock: string;
+  size: string;
+  color: string;
+  scent: string;
+  dimensions: string;
+}
+
+function emptyVariant(): VariantRow {
+  return { volume: "", price: "", burn: "", stock: "", size: "", color: "", scent: "", dimensions: "" };
 }
 
 export default function NewProductPage() {
   const router = useRouter();
   const { data: categories } = useSWR<Category[]>("/categories", fetcher);
+  const { data: attrsData } = useSWR<ProductAttrsSettings>("/settings/product-attrs", fetcher);
+
+  const [enabledAttrs, setEnabledAttrs] = useState<string[]>(["volume"]);
+
+  useEffect(() => {
+    if (attrsData) {
+      setEnabledAttrs(attrsData.product_attrs);
+    }
+  }, [attrsData]);
 
   const [categoryId, setCategoryId] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [variants, setVariants] = useState<VariantRow[]>([
-    { volume: "", price: "", burn: "", stock: "" },
-  ]);
+  const [variants, setVariants] = useState<VariantRow[]>([emptyVariant()]);
   const [loading, setLoading] = useState(false);
 
   function addVariant() {
-    setVariants([...variants, { volume: "", price: "", burn: "", stock: "" }]);
+    setVariants([...variants, emptyVariant()]);
   }
 
   function removeVariant(index: number) {
@@ -54,6 +77,8 @@ export default function NewProductPage() {
       variants.map((v, i) => (i === index ? { ...v, [field]: value } : v)),
     );
   }
+
+  const visibleAttrFields = ATTR_FIELDS.filter((f) => enabledAttrs.includes(f.key));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,10 +93,10 @@ export default function NewProductPage() {
       return;
     }
 
-    const validVariants = variants.filter((v) => v.volume && v.price);
+    const validVariants = variants.filter((v) => v.price);
 
     if (validVariants.length === 0) {
-      toast.error("Добавьте хотя бы один вариант");
+      toast.error("Добавьте хотя бы один вариант с ценой");
       return;
     }
 
@@ -83,10 +108,14 @@ export default function NewProductPage() {
         name,
         description,
         variants: validVariants.map((v) => ({
-          volume: v.volume,
+          volume: v.volume || "—",
           price: Number(v.price),
           burn: v.burn || null,
           stock: v.stock ? Number(v.stock) : 0,
+          size: v.size || null,
+          color: v.color || null,
+          scent: v.scent || null,
+          dimensions: v.dimensions || null,
         })),
       });
 
@@ -159,51 +188,47 @@ export default function NewProductPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {variants.map((variant, i) => (
-              <div key={i} className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">Объём</Label>
-                  <Input
-                    placeholder="200 мл"
-                    value={variant.volume}
-                    onChange={(e) => updateVariant(i, "volume", e.target.value)}
-                  />
+              <div key={i} className="rounded-lg border p-3 space-y-2">
+                <div className="flex items-end gap-2 flex-wrap">
+                  {visibleAttrFields.map((field) => (
+                    <div key={field.key} className="flex-1 min-w-[100px] space-y-1">
+                      <Label className="text-xs">{field.label}</Label>
+                      <Input
+                        placeholder={field.placeholder}
+                        value={variant[field.key as keyof VariantRow]}
+                        onChange={(e) => updateVariant(i, field.key as keyof VariantRow, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                  <div className="w-28 space-y-1">
+                    <Label className="text-xs">Цена (₽)</Label>
+                    <Input
+                      type="number"
+                      placeholder="1500"
+                      value={variant.price}
+                      onChange={(e) => updateVariant(i, "price", e.target.value)}
+                    />
+                  </div>
+                  <div className="w-24 space-y-1">
+                    <Label className="text-xs">Остаток</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={variant.stock}
+                      onChange={(e) => updateVariant(i, "stock", e.target.value)}
+                    />
+                  </div>
+                  {variants.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => removeVariant(i)}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  )}
                 </div>
-                <div className="w-28 space-y-1">
-                  <Label className="text-xs">Цена (₽)</Label>
-                  <Input
-                    type="number"
-                    placeholder="1500"
-                    value={variant.price}
-                    onChange={(e) => updateVariant(i, "price", e.target.value)}
-                  />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">Время горения</Label>
-                  <Input
-                    placeholder="~40 ч"
-                    value={variant.burn}
-                    onChange={(e) => updateVariant(i, "burn", e.target.value)}
-                  />
-                </div>
-                <div className="w-24 space-y-1">
-                  <Label className="text-xs">Остаток</Label>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={variant.stock}
-                    onChange={(e) => updateVariant(i, "stock", e.target.value)}
-                  />
-                </div>
-                {variants.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => removeVariant(i)}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
-                )}
               </div>
             ))}
 

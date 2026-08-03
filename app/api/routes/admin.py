@@ -18,7 +18,7 @@ from app.services.review_service import ReviewService
 from app.services.crm_service import CrmService
 from app.services.broadcast_service import BroadcastService
 from app.services.shop_service import ShopService
-from app.models.shop import AVAILABLE_COURIERS
+from app.models.shop import AVAILABLE_COURIERS, AVAILABLE_PRODUCT_ATTRS
 from app.utils.order_status import STATUS_LABELS
 
 router = APIRouter()
@@ -52,6 +52,10 @@ class VariantCreate(BaseModel):
     price: int
     burn: str | None = None
     stock: int = 0
+    size: str | None = None
+    color: str | None = None
+    scent: str | None = None
+    dimensions: str | None = None
 
 
 class CreateProductBody(BaseModel):
@@ -90,6 +94,10 @@ class UpdateMessageBody(BaseModel):
 class UpdateDeliveryBody(BaseModel):
     delivery_enabled: bool
     courier_services: list[str]
+
+
+class UpdateProductAttrsBody(BaseModel):
+    product_attrs: list[str]
 
 
 class CreateAdminBody(BaseModel):
@@ -499,6 +507,25 @@ async def update_delivery_settings(body: UpdateDeliveryBody, admin: dict = Depen
         body.delivery_enabled,
         body.courier_services,
     )
+    return {"ok": True}
+
+
+# ==========================
+# Настройки (характеристики товара)
+# ==========================
+
+@router.get("/settings/product-attrs")
+async def get_product_attrs(admin: dict = Depends(require_admin)):
+    shop = await ShopService.get(admin["shop_id"])
+    return {
+        "product_attrs": shop["product_attrs"] if shop else ["volume"],
+        "available": AVAILABLE_PRODUCT_ATTRS,
+    }
+
+
+@router.put("/settings/product-attrs")
+async def update_product_attrs(body: UpdateProductAttrsBody, admin: dict = Depends(require_admin)):
+    await ShopService.update_product_attrs(admin["shop_id"], body.product_attrs)
     return {"ok": True}
 
 

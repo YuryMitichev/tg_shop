@@ -15,6 +15,7 @@ def _shop_to_dict(shop: Shop) -> dict:
         "is_active": shop.is_active,
         "delivery_enabled": shop.delivery_enabled,
         "courier_services": json.loads(shop.courier_services) if shop.courier_services else [],
+        "product_attrs": json.loads(shop.product_attrs) if shop.product_attrs else ["volume"],
         "created_at": shop.created_at.isoformat() if shop.created_at else None,
     }
 
@@ -152,6 +153,23 @@ class ShopService:
 
             shop.delivery_enabled = delivery_enabled
             shop.courier_services = json.dumps(courier_services, ensure_ascii=False)
+
+            await session.commit()
+            await session.refresh(shop)
+
+            return _shop_to_dict(shop)
+
+    @staticmethod
+    async def update_product_attrs(
+        shop_id: int,
+        product_attrs: list[str],
+    ) -> dict | None:
+        async with async_session() as session:
+            shop = await session.get(Shop, shop_id)
+            if shop is None:
+                return None
+
+            shop.product_attrs = json.dumps(product_attrs, ensure_ascii=False)
 
             await session.commit()
             await session.refresh(shop)

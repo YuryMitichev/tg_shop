@@ -10,6 +10,10 @@ export interface Variant {
   price: number;
   burn?: string | null;
   stock?: number;
+  size?: string | null;
+  color?: string | null;
+  scent?: string | null;
+  dimensions?: string | null;
 }
 
 export interface Photo {
@@ -150,6 +154,16 @@ export interface DeliverySettings {
   delivery_enabled: boolean;
   courier_services: string[];
   available_couriers: string[];
+}
+
+export interface ProductAttrOption {
+  key: string;
+  label: string;
+}
+
+export interface ProductAttrsSettings {
+  product_attrs: string[];
+  available: ProductAttrOption[];
 }
 
 export interface Stats {

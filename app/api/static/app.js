@@ -10,6 +10,8 @@ const App = {
     appliedPromo: null,
     paymentMethods: [],
     selectedPaymentMethod: "manual",
+    productAttrs: ["volume"],
+    attrLabels: { volume: "Объём" },
 
     init() {
         this.tg = window.Telegram.WebApp;
@@ -26,6 +28,7 @@ const App = {
             document.body.style.background = theme.bg_color;
         }
 
+        this.loadShopConfig();
         this.loadCategories();
         this.updateCartBadge();
         this.loadOffers();
@@ -104,6 +107,14 @@ const App = {
     // ==========================
     // Catalog
     // ==========================
+
+    async loadShopConfig() {
+        try {
+            const cfg = await this.api("GET", "/shop-config");
+            if (cfg.product_attrs) this.productAttrs = cfg.product_attrs;
+            if (cfg.attr_labels) this.attrLabels = cfg.attr_labels;
+        } catch (e) { }
+    },
 
     async loadCategories() {
         try {
@@ -208,7 +219,11 @@ const App = {
         html += `<div class="pd-rating">${rating}</div>`;
         html += `<div class="pd-desc">${this.esc(p.description)}</div>`;
 
-        html += `<div class="pd-label">Объём</div>`;
+        const hasAttrs = this.productAttrs.length > 0;
+        if (hasAttrs) {
+            const labels = this.productAttrs.map(k => this.attrLabels[k] || k).join(" / ");
+            html += `<div class="pd-label">${this.esc(labels)}</div>`;
+        }
         html += `<div class="variants">`;
 
         p.variants.forEach((v, i) => {
@@ -229,12 +244,16 @@ const App = {
                 priceHtml = `<span class="v-price">${v.price} ₽</span>`;
             }
 
+            const attrParts = this.productAttrs
+                .map(k => v[k])
+                .filter(val => val);
+            const attrLabel = attrParts.length > 0 ? attrParts.join(" · ") : "—";
+
             html += `
                 <button class="variant-btn ${active} ${outOfStock ? 'variant-oos' : ''}" data-vid="${v.id}"
                         onclick="App.selectVariant(${v.id})">
-                    ${this.esc(v.volume)}
+                    ${this.esc(attrLabel)}
                     ${priceHtml}
-                    ${v.burn ? `<span class="v-burn">🔥 ${this.esc(v.burn)}</span>` : ""}
                     ${stockBadge}
                 </button>
             `;

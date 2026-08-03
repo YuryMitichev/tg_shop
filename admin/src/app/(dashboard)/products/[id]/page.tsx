@@ -21,7 +21,15 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Loader2, Trash2, Upload, Star, Package } from "lucide-react";
 import Link from "next/link";
-import type { Product, Category } from "@/lib/types";
+import type { Product, Category, ProductAttrsSettings } from "@/lib/types";
+
+const ATTR_LABELS: Record<string, string> = {
+  volume: "Объём",
+  size: "Размер",
+  color: "Цвет",
+  scent: "Аромат",
+  dimensions: "Д/Ш/В",
+};
 
 export default function EditProductPage() {
   const params = useParams();
@@ -30,6 +38,9 @@ export default function EditProductPage() {
 
   const { data: product, mutate } = useSWR<Product>(`/products/${id}`, fetcher);
   const { data: categories } = useSWR<Category[]>("/categories", fetcher);
+  const { data: attrsData } = useSWR<ProductAttrsSettings>("/settings/product-attrs", fetcher);
+
+  const [enabledAttrs, setEnabledAttrs] = useState<string[]>(["volume"]);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -44,6 +55,12 @@ export default function EditProductPage() {
       setCategoryId(String(product.category_id));
     }
   }, [product]);
+
+  useEffect(() => {
+    if (attrsData) {
+      setEnabledAttrs(attrsData.product_attrs);
+    }
+  }, [attrsData]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -127,7 +144,7 @@ export default function EditProductPage() {
                   />
                   <button
                     onClick={() => deletePhoto(photo.id)}
-                    className="absolute right-1 top-1 rounded-full bg-red-500 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    className="absolute right-1 top-1 rounded-full bg-red-500 p-1.5 text-white shadow-md"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -162,12 +179,17 @@ export default function EditProductPage() {
           <CardContent className="space-y-2">
             {product.variants.map((v) => (
               <div key={v.id} className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-sm font-medium">{v.volume}</p>
-                  {v.burn && (
-                    <p className="text-xs text-muted-foreground">{v.burn}</p>
-                  )}
-                  <p className="text-sm font-semibold mt-1">{v.price}₽</p>
+                <div className="space-y-0.5">
+                  {enabledAttrs.map((attrKey) => {
+                    const val = (v as unknown as Record<string, string | null | undefined>)[attrKey];
+                    if (!val) return null;
+                    return (
+                      <p key={attrKey} className="text-sm text-muted-foreground">
+                        <span className="font-medium">{ATTR_LABELS[attrKey] || attrKey}:</span> {val}
+                      </p>
+                    );
+                  })}
+                  <p className="text-sm font-semibold pt-1">{v.price}₽</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Package className="h-4 w-4 text-muted-foreground" />

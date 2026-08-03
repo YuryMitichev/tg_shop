@@ -29,6 +29,10 @@ def _product_to_dict(product: Product) -> dict:
                 "burn": variant.burn,
                 "photo": variant.photo,
                 "stock": variant.stock,
+                "size": variant.size,
+                "color": variant.color,
+                "scent": variant.scent,
+                "dimensions": variant.dimensions,
             }
             for variant in product.variants
         ],

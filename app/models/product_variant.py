@@ -17,4 +17,9 @@ class ProductVariant(Base):
     photo: Mapped[str | None] = mapped_column(nullable=True)
     stock: Mapped[int] = mapped_column(default=0, nullable=False)
 
+    size: Mapped[str | None] = mapped_column(nullable=True)
+    color: Mapped[str | None] = mapped_column(nullable=True)
+    scent: Mapped[str | None] = mapped_column(nullable=True)
+    dimensions: Mapped[str | None] = mapped_column(nullable=True)
+
     product: Mapped["Product"] = relationship(back_populates="variants")

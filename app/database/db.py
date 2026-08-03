@@ -57,6 +57,11 @@ _MIGRATIONS = [
     ("orders", "payment_method", "TEXT NOT NULL DEFAULT 'manual'"),
     ("shops", "delivery_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
     ("shops", "courier_services", "TEXT NOT NULL DEFAULT '[]'"),
+    ("shops", "product_attrs", "TEXT NOT NULL DEFAULT '[\"volume\"]'"),
+    ("product_variants", "size", "TEXT"),
+    ("product_variants", "color", "TEXT"),
+    ("product_variants", "scent", "TEXT"),
+    ("product_variants", "dimensions", "TEXT"),
 ]
 
 

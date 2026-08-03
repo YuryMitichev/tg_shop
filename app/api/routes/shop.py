@@ -18,6 +18,8 @@ from app.services.order_payment_service import OrderPaymentService
 from app.services.order_service import OrderService
 from app.services.promo_service import PromoCodeService
 from app.services.review_service import ReviewService
+from app.services.shop_service import ShopService
+from app.models.shop import AVAILABLE_PRODUCT_ATTRS
 
 router = APIRouter()
 
@@ -25,6 +27,18 @@ router = APIRouter()
 async def get_shop_id(x_shop_id: int | None = Header(None, alias="X-Shop-Id")) -> int:
     """Определяет shop_id из заголовка X-Shop-Id (по умолчанию 1)."""
     return x_shop_id or 1
+
+
+@router.get("/shop-config")
+async def get_shop_config(shop_id: int = Depends(get_shop_id)):
+    """Конфиг магазина для мини-аппа: включённые характеристики товара и т.д."""
+    shop = await ShopService.get(shop_id)
+    attrs = shop["product_attrs"] if shop else ["volume"]
+    labels = {a["key"]: a["label"] for a in AVAILABLE_PRODUCT_ATTRS}
+    return {
+        "product_attrs": attrs,
+        "attr_labels": {k: labels.get(k, k) for k in attrs},
+    }
 
 
 # ==========================

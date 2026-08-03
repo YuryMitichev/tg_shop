@@ -18,7 +18,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { RotateCcw, Save } from "lucide-react";
-import type { SystemMessage, DeliverySettings } from "@/lib/types";
+import type { SystemMessage, DeliverySettings, ProductAttrsSettings } from "@/lib/types";
 
 export default function SettingsPage() {
   const { data: messages, isLoading, mutate } = useSWR<SystemMessage[]>("/settings/messages", fetcher);
@@ -76,6 +76,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="messages">Сообщения</TabsTrigger>
           <TabsTrigger value="delivery">Доставка</TabsTrigger>
+          <TabsTrigger value="attrs">Характеристики</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
         </TabsList>
 
@@ -142,6 +143,10 @@ export default function SettingsPage() {
 
         <TabsContent value="delivery">
           <DeliverySettings />
+        </TabsContent>
+
+        <TabsContent value="attrs">
+          <ProductAttrsSettingsTab />
         </TabsContent>
 
         <TabsContent value="payment">
@@ -272,6 +277,78 @@ function DeliverySettings() {
             </div>
           </div>
         )}
+
+        <div className="flex justify-end">
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />
+            Сохранить
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProductAttrsSettingsTab() {
+  const { data, isLoading, mutate } = useSWR<ProductAttrsSettings>("/settings/product-attrs", fetcher);
+
+  const [attrs, setAttrs] = useState<string[]>(["volume"]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setAttrs(data.product_attrs);
+    }
+  }, [data]);
+
+  function toggleAttr(key: string) {
+    setAttrs((prev) =>
+      prev.includes(key) ? prev.filter((a) => a !== key) : [...prev, key]
+    );
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.put("/settings/product-attrs", { product_attrs: attrs });
+      mutate();
+      toast.success("Сохранено");
+    } catch {
+      toast.error("Ошибка");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Характеристики товаров</CardTitle>
+        <CardDescription>
+          Выберите характеристики, которые будут отображаться в карточке товара.
+          Наименование, описание и цена показываются всегда.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {data?.available?.map((attr) => {
+              const selected = attrs.includes(attr.key);
+              return (
+                <Button
+                  key={attr.key}
+                  variant={selected ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => toggleAttr(attr.key)}
+                >
+                  {attr.label}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={saving}>
