@@ -792,3 +792,48 @@ body {
 .privacy-content li {
     margin-bottom: 6px;
 }
+
+/* Out of stock */
+.oos-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 16px 0;
+}
+
+.oos-item {
+    background: var(--section-bg);
+    border: 1px solid var(--section-sep);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.oos-name {
+    font-weight: 600;
+}
+
+.oos-volume {
+    font-size: 13px;
+    color: var(--hint);
+}
+
+.oos-avail {
+    font-size: 13px;
+    color: #f57c00;
+}
+
+.btn-secondary {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--section-bg);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+}

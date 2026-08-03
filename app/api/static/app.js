@@ -13,6 +13,7 @@ const App = {
     productAttrs: ["volume"],
     attrLabels: { volume: "Объём" },
     company: null,
+    botUsername: null,
 
     init() {
         this.tg = window.Telegram.WebApp;
@@ -57,7 +58,11 @@ const App = {
 
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
-            throw new Error(err.detail || "Ошибка запроса");
+            const error = new Error(err.detail?.error || err.detail || "Ошибка запроса");
+            if (typeof err.detail === "object" && err.detail !== null) {
+                error.detail = err.detail;
+            }
+            throw error;
         }
 
         if (resp.status === 204) return null;
@@ -97,7 +102,7 @@ const App = {
 
         document.getElementById("view-" + viewId).classList.add("active");
 
-        const showNav = !["product", "checkout", "success", "privacy"].includes(viewId);
+        const showNav = !["product", "checkout", "success", "privacy", "out-of-stock"].includes(viewId);
         document.getElementById("bottom-nav").style.display = showNav ? "flex" : "none";
 
         window.scrollTo(0, 0);
@@ -115,6 +120,7 @@ const App = {
             if (cfg.product_attrs) this.productAttrs = cfg.product_attrs;
             if (cfg.attr_labels) this.attrLabels = cfg.attr_labels;
             if (cfg.company) this.company = cfg.company;
+            if (cfg.bot_username) this.botUsername = cfg.bot_username;
         } catch (e) { }
     },
 
@@ -549,7 +555,11 @@ const App = {
             this.showSuccess(result);
             this.tg.HapticFeedback?.notificationOccurred("success");
         } catch (e) {
-            this.toast(e.message);
+            if (e.detail && e.detail.error === "out_of_stock") {
+                this.showOutOfStock(e.detail.items);
+            } else {
+                this.toast(e.message);
+            }
         }
     },
 
@@ -653,6 +663,34 @@ const App = {
             <div class="info">Сумма: <b>${result.total} ₽</b></div>
             ${paymentInfo}
             <button class="btn-primary" onclick="App.showCatalog()">Продолжить покупки</button>
+        `;
+    },
+
+    showOutOfStock(items) {
+        this.showView("out-of-stock");
+        this.tg.HapticFeedback?.notificationOccurred("error");
+
+        const content = document.getElementById("out-of-stock-content");
+
+        const itemsList = items.map(i =>
+            `<div class="oos-item">
+                <span class="oos-name">${this.esc(i.product_name)}</span>
+                ${i.volume ? `<span class="oos-volume">${this.esc(i.volume)}</span>` : ""}
+                <span class="oos-avail">В наличии: ${i.available} шт.</span>
+            </div>`
+        ).join("");
+
+        const contactBtn = this.botUsername
+            ? `<button class="btn-primary" onclick="App.tg.openTelegramLink('https://t.me/${this.botUsername}')">💬 Связаться с менеджером</button>`
+            : `<button class="btn-primary" onclick="App.tg.close()">💬 Написать менеджеру</button>`;
+
+        content.innerHTML = `
+            <div class="emoji">😔</div>
+            <h2>К сожалению, товар закончился</h2>
+            <div class="info">Пока вы оформляли заказ, кто-то успел купить товар раньше. Оформить заказ сейчас невозможно.</div>
+            <div class="oos-list">${itemsList}</div>
+            ${contactBtn}
+            <button class="btn-secondary" onclick="App.showCatalog()">В каталог</button>
         `;
     },
 

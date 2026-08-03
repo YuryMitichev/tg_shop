@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 _bot_registry: dict[int, "ShopBot"] = {}
 
+_stopped_shops: set[int] = set()
+
 
 class ShopBot(Bot):
     """Bot с привязкой к конкретному магазину."""
@@ -75,21 +77,45 @@ def _create_dispatcher() -> Dispatcher:
 
 
 async def _run_shop_bot(shop_id: int, token: str) -> None:
-    """Создаёт и запускает polling для одного бота."""
-    bot = _create_bot(shop_id, token)
-    dp = _create_dispatcher()
-    _bot_registry[shop_id] = bot
+    """Создаёт и запускает polling для одного бота.
 
-    logger.info("Магазин %d: бот запущен", shop_id)
+    При падении автоматически перезапускается с экспоненциальной задержкой
+    (10с → 15с → 22с → ... → макс 300с).
+    """
+    retry_delay = 10
+    max_delay = 300
 
-    try:
-        await dp.start_polling(bot)
-    except Exception:
-        logger.exception("Магазин %d: ошибка polling", shop_id)
-    finally:
-        await bot.session.close()
-        _bot_registry.pop(shop_id, None)
-        logger.info("Магазин %d: бот остановлен", shop_id)
+    while True:
+        if shop_id in _stopped_shops:
+            _stopped_shops.discard(shop_id)
+            logger.info("Магазин %d: бот остановлен вручную", shop_id)
+            return
+
+        bot = _create_bot(shop_id, token)
+        dp = _create_dispatcher()
+        _bot_registry[shop_id] = bot
+
+        logger.info("Магазин %d: бот запущен", shop_id)
+
+        try:
+            await dp.start_polling(bot)
+            return
+        except Exception:
+            logger.exception(
+                "Магазин %d: ошибка polling, рестарт через %ds",
+                shop_id,
+                retry_delay,
+            )
+            await bot.session.close()
+            _bot_registry.pop(shop_id, None)
+
+            if shop_id in _stopped_shops:
+                _stopped_shops.discard(shop_id)
+                logger.info("Магазин %d: бот остановлен вручную", shop_id)
+                return
+
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(int(retry_delay * 1.5), max_delay)
 
 
 async def start_shop_bot(shop_id: int) -> bool:
@@ -107,6 +133,7 @@ async def start_shop_bot(shop_id: int) -> bool:
 
 async def stop_shop_bot(shop_id: int) -> None:
     """Останавливает бот для магазина."""
+    _stopped_shops.add(shop_id)
     bot = _bot_registry.get(shop_id)
     if bot:
         await bot.session.close()

@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-pytest")
+
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -7,7 +11,10 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 import app.database.db as db_module
-import app.services.admin_service as admin_service
+import app.services.catalog_admin_service as catalog_admin_service
+import app.services.order_admin_service as order_admin_service
+import app.services.review_admin_service as review_admin_service
+import app.services.stats_service as stats_service
 import app.services.admin_user_service as admin_user_service
 import app.services.cart_service as cart_service
 import app.services.catalog_service as catalog_service
@@ -49,7 +56,10 @@ _PATCH_TARGETS = [
     catalog_service,
     cart_service,
     order_service,
-    admin_service,
+    catalog_admin_service,
+    order_admin_service,
+    review_admin_service,
+    stats_service,
     admin_user_service,
     crm_service,
     review_service,

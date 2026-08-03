@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update, or_
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.db import async_session
 from app.models.promo_code import PromoCode
@@ -59,17 +60,34 @@ class PromoCodeService:
         code = code.strip().upper()
 
         async with async_session() as session:
-            result = await session.execute(
-                select(PromoCode).where(
-                    PromoCode.shop_id == shop_id,
-                    PromoCode.code == code,
-                )
-            )
-            promo = result.scalar_one_or_none()
+            await PromoCodeService.try_increment_usage(session, shop_id, code)
+            await session.commit()
 
-            if promo:
-                promo.used_count += 1
-                await session.commit()
+    @staticmethod
+    async def try_increment_usage(
+        session: AsyncSession, shop_id: int, code: str
+    ) -> bool:
+        """Атомарно инкрементирует счётчик использований.
+
+        True — успешно, False — лимит исчерпан (кто-то успел раньше).
+        Работает внутри переданной сессии (для транзакционной целостности).
+        """
+        code = code.strip().upper()
+
+        result = await session.execute(
+            update(PromoCode)
+            .where(
+                PromoCode.shop_id == shop_id,
+                PromoCode.code == code,
+                PromoCode.is_active == True,  # noqa: E712
+                or_(
+                    PromoCode.max_uses.is_(None),
+                    PromoCode.used_count < PromoCode.max_uses,
+                ),
+            )
+            .values(used_count=PromoCode.used_count + 1)
+        )
+        return result.rowcount > 0
 
     @staticmethod
     async def create(

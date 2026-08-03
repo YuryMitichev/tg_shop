@@ -33,7 +33,9 @@ from app.bot.keyboards.admin import (
     get_admin_promos_keyboard,
     get_admin_promo_detail_keyboard,
 )
-from app.services.admin_service import AdminService
+from app.services.catalog_admin_service import CatalogAdminService
+from app.services.order_admin_service import OrderAdminService
+from app.services.stats_service import StatsService
 from app.services.message_service import MessageService
 from app.services.order_service import OrderService
 from app.services.promo_service import PromoCodeService
@@ -78,7 +80,7 @@ def setup_router() -> Router:
 
     @router.callback_query(F.data == "admin_stats")
     async def show_stats(callback: CallbackQuery):
-        stats = await AdminService.get_stats(get_shop_id())
+        stats = await StatsService.get_stats(get_shop_id())
 
         lines = [
             "📊 <b>Статистика магазина</b>\n",
@@ -112,7 +114,7 @@ def setup_router() -> Router:
     async def manage_categories(callback: CallbackQuery, state: FSMContext):
         await state.clear()
 
-        categories = await AdminService.get_categories(get_shop_id())
+        categories = await CatalogAdminService.get_categories(get_shop_id())
 
         await callback.message.edit_text(
             "🗂 <b>Управление категориями</b>\n\n"
@@ -149,10 +151,10 @@ def setup_router() -> Router:
 
         if "category_id" in data:
             category_id = data["category_id"]
-            await AdminService.update_category_emoji(get_shop_id(), category_id, emoji)
+            await CatalogAdminService.update_category_emoji(get_shop_id(), category_id, emoji)
             await state.clear()
 
-            categories = await AdminService.get_categories(get_shop_id())
+            categories = await CatalogAdminService.get_categories(get_shop_id())
             category = next((c for c in categories if c["id"] == category_id), None)
 
             emoji_display = f"{category['emoji']} " if category and category["emoji"] else ""
@@ -164,10 +166,10 @@ def setup_router() -> Router:
             )
         else:
             name = data["name"]
-            category_id = await AdminService.create_category(get_shop_id(), name, emoji)
+            category_id = await CatalogAdminService.create_category(get_shop_id(), name, emoji)
             await state.clear()
 
-            categories = await AdminService.get_categories(get_shop_id())
+            categories = await CatalogAdminService.get_categories(get_shop_id())
 
             await message.answer(
                 f"✅ Категория «{name}» добавлена (ID {category_id}).\n\n"
@@ -196,14 +198,14 @@ def setup_router() -> Router:
         await state.set_state(AdminCategoryState.waiting_rename)
         await state.update_data(category_id=category_id)
 
-        categories = await AdminService.get_categories(get_shop_id())
+        categories = await CatalogAdminService.get_categories(get_shop_id())
         category = next((c for c in categories if c["id"] == category_id), None)
 
         if category is None:
             await callback.answer("Категория не найдена.", show_alert=True)
             return
 
-        count = await AdminService.count_products_in_category(get_shop_id(), category_id)
+        count = await CatalogAdminService.count_products_in_category(get_shop_id(), category_id)
 
         emoji_display = f"{category['emoji']} " if category["emoji"] else ""
         emoji_line = f"Эмодзи: {category['emoji']}" if category["emoji"] else "Эмодзи: нет"
@@ -224,10 +226,10 @@ def setup_router() -> Router:
         category_id = data["category_id"]
         name = message.text.strip()
 
-        await AdminService.rename_category(get_shop_id(), category_id, name)
+        await CatalogAdminService.rename_category(get_shop_id(), category_id, name)
         await state.clear()
 
-        categories = await AdminService.get_categories(get_shop_id())
+        categories = await CatalogAdminService.get_categories(get_shop_id())
 
         await message.answer(
             f"✅ Категория переименована в «{name}».\n\n"
@@ -240,7 +242,7 @@ def setup_router() -> Router:
     async def delete_category_confirm(callback: CallbackQuery):
         category_id = int(callback.data.split(":")[1])
 
-        count = await AdminService.count_products_in_category(get_shop_id(), category_id)
+        count = await CatalogAdminService.count_products_in_category(get_shop_id(), category_id)
 
         if count > 0:
             await callback.answer(
@@ -260,9 +262,9 @@ def setup_router() -> Router:
     async def delete_category_execute(callback: CallbackQuery):
         category_id = int(callback.data.split(":")[1])
 
-        await AdminService.delete_category(get_shop_id(), category_id)
+        await CatalogAdminService.delete_category(get_shop_id(), category_id)
 
-        categories = await AdminService.get_categories(get_shop_id())
+        categories = await CatalogAdminService.get_categories(get_shop_id())
 
         await callback.message.edit_text(
             "✅ Категория удалена.\n\n"
@@ -279,7 +281,7 @@ def setup_router() -> Router:
 
     @router.callback_query(F.data == "admin_products")
     async def show_categories(callback: CallbackQuery):
-        categories = await AdminService.get_categories(get_shop_id())
+        categories = await CatalogAdminService.get_categories(get_shop_id())
 
         await callback.message.edit_text(
             "🗂 <b>Категории</b>\n\nВыберите категорию для управления товарами.",
@@ -294,7 +296,7 @@ def setup_router() -> Router:
         return text
 
     async def _render_products(callback: CallbackQuery, category_id: int) -> None:
-        products = await AdminService.get_products(get_shop_id(), category_id)
+        products = await CatalogAdminService.get_products(get_shop_id(), category_id)
 
         await callback.message.edit_text(
             _render_products_text(products),
@@ -330,7 +332,7 @@ def setup_router() -> Router:
         return "\n".join(lines)
 
     async def _render_product(callback: CallbackQuery, product_id: int) -> dict | None:
-        product = await AdminService.get_product(get_shop_id(), product_id)
+        product = await CatalogAdminService.get_product(get_shop_id(), product_id)
 
         if product is None:
             await callback.answer("Товар не найден.", show_alert=True)
@@ -354,7 +356,7 @@ def setup_router() -> Router:
     async def toggle_product(callback: CallbackQuery):
         product_id = int(callback.data.split(":")[1])
 
-        is_active = await AdminService.toggle_active(get_shop_id(), product_id)
+        is_active = await CatalogAdminService.toggle_active(get_shop_id(), product_id)
 
         if is_active is None:
             await callback.answer("Товар не найден.", show_alert=True)
@@ -378,10 +380,10 @@ def setup_router() -> Router:
     async def delete_product(callback: CallbackQuery):
         product_id = int(callback.data.split(":")[1])
 
-        product = await AdminService.get_product(get_shop_id(), product_id)
+        product = await CatalogAdminService.get_product(get_shop_id(), product_id)
         category_id = product["category_id"] if product else None
 
-        await AdminService.delete_product(get_shop_id(), product_id)
+        await CatalogAdminService.delete_product(get_shop_id(), product_id)
         await callback.answer("Товар удалён")
 
         if category_id is not None:
@@ -543,7 +545,7 @@ def setup_router() -> Router:
     async def finish_add_product(callback: CallbackQuery, state: FSMContext):
         data = await state.get_data()
 
-        product_id = await AdminService.create_product(get_shop_id(), 
+        product_id = await CatalogAdminService.create_product(get_shop_id(), 
             category_id=data["category_id"],
             name=data["name"],
             description=data["description"],
@@ -554,7 +556,7 @@ def setup_router() -> Router:
         await state.clear()
 
         category_id = data["category_id"]
-        products = await AdminService.get_products(get_shop_id(), category_id)
+        products = await CatalogAdminService.get_products(get_shop_id(), category_id)
 
         await callback.message.edit_text(
             f"✅ Товар «{data['name']}» добавлен (ID {product_id}).\n\n"
@@ -574,7 +576,7 @@ def setup_router() -> Router:
 
         await state.clear()
 
-        product = await AdminService.get_product(get_shop_id(), product_id)
+        product = await CatalogAdminService.get_product(get_shop_id(), product_id)
 
         if product is None:
             await callback.answer("Товар не найден.", show_alert=True)
@@ -603,10 +605,10 @@ def setup_router() -> Router:
         data = await state.get_data()
         product_id = data["product_id"]
 
-        await AdminService.update_product(get_shop_id(), product_id, name=message.text)
+        await CatalogAdminService.update_product(get_shop_id(), product_id, name=message.text)
         await state.clear()
 
-        product = await AdminService.get_product(get_shop_id(), product_id)
+        product = await CatalogAdminService.get_product(get_shop_id(), product_id)
 
         await message.answer(
             f"✅ Название изменено на «{message.text}».\n\n"
@@ -629,10 +631,10 @@ def setup_router() -> Router:
         data = await state.get_data()
         product_id = data["product_id"]
 
-        await AdminService.update_product(get_shop_id(), product_id, description=message.text)
+        await CatalogAdminService.update_product(get_shop_id(), product_id, description=message.text)
         await state.clear()
 
-        product = await AdminService.get_product(get_shop_id(), product_id)
+        product = await CatalogAdminService.get_product(get_shop_id(), product_id)
 
         await message.answer(
             "✅ Описание обновлено.\n\n" + _render_product_text(product),
@@ -645,7 +647,7 @@ def setup_router() -> Router:
 
         await state.clear()
 
-        product = await AdminService.get_product(get_shop_id(), product_id)
+        product = await CatalogAdminService.get_product(get_shop_id(), product_id)
 
         if product is None:
             await callback.answer("Товар не найден.", show_alert=True)
@@ -666,9 +668,9 @@ def setup_router() -> Router:
     async def delete_photo(callback: CallbackQuery):
         _, product_id, photo_id = callback.data.split(":")
 
-        await AdminService.delete_photo(get_shop_id(), int(photo_id))
+        await CatalogAdminService.delete_photo(get_shop_id(), int(photo_id))
 
-        product = await AdminService.get_product(get_shop_id(), int(product_id))
+        product = await CatalogAdminService.get_product(get_shop_id(), int(product_id))
 
         photo_count = len(product.get("photos", [])) if product else 0
 
@@ -704,10 +706,10 @@ def setup_router() -> Router:
 
         file_id = message.photo[-1].file_id
 
-        await AdminService.add_photo(get_shop_id(), product_id, file_id)
+        await CatalogAdminService.add_photo(get_shop_id(), product_id, file_id)
         await state.clear()
 
-        product = await AdminService.get_product(get_shop_id(), product_id)
+        product = await CatalogAdminService.get_product(get_shop_id(), product_id)
 
         photo_count = len(product.get("photos", []))
 
@@ -732,7 +734,7 @@ def setup_router() -> Router:
 
     @router.callback_query(F.data == "admin_orders")
     async def show_orders(callback: CallbackQuery):
-        orders = await AdminService.get_orders(get_shop_id(), limit=15)
+        orders = await OrderAdminService.get_orders(get_shop_id(), limit=15)
 
         await callback.message.edit_text(
             "📦 <b>Последние заказы</b>" if orders else "Заказов пока нет.",
@@ -761,7 +763,7 @@ def setup_router() -> Router:
         return "\n".join(lines)
 
     async def _render_order(callback: CallbackQuery, order_id: int) -> None:
-        order = await AdminService.get_order(get_shop_id(), order_id)
+        order = await OrderAdminService.get_order(get_shop_id(), order_id)
 
         if order is None:
             await callback.answer("Заказ не найден.", show_alert=True)
@@ -787,7 +789,7 @@ def setup_router() -> Router:
             await callback.answer("Неизвестный статус.", show_alert=True)
             return
 
-        await AdminService.set_order_status(get_shop_id(), int(order_id), new_status)
+        await OrderAdminService.set_order_status(get_shop_id(), int(order_id), new_status)
         await callback.answer(f"Статус изменён: {STATUS_LABELS[new_status]}")
 
         notification = STATUS_NOTIFICATIONS.get(new_status)

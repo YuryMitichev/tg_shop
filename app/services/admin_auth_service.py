@@ -13,18 +13,21 @@ from app.models.admin_user import AdminUser
 
 class AdminAuthService:
     """
-    Авторизация админ-панели через одноразовый код из Telegram.
+    Авторизация админ-панели через magic link из Telegram.
 
     Flow:
-    1. POST /request-code → бот присылает 6-значный код (живёт 5 мин)
-    2. POST /verify → проверка кода, выдача JWT (живёт 24 часа)
+    1. POST /request-login → бот присылает ссылку с токеном (живёт 5 мин)
+    2. Пользователь кликает → фронт вызывает /verify-token → выдача JWT (живёт 24 часа)
+
+    Токен ссылки — 64 случайных символа (2^256 комбинаций),
+    брутфорс математически невозможен.
 
     JWT содержит shop_id — к какому магазину у админа доступ.
     """
 
-    _codes: dict[int, tuple[str, float, int, bool]] = {}
+    _tokens: dict[str, tuple[int, float, int, bool]] = {}
 
-    CODE_TTL = 300
+    LINK_TTL = 300
     JWT_ALGORITHM = "HS256"
     JWT_EXPIRES = timedelta(hours=24)
 
@@ -51,45 +54,50 @@ class AdminAuthService:
         return None
 
     @staticmethod
-    async def request_code(telegram_user_id: int) -> bool:
+    async def request_login(telegram_user_id: int) -> bool:
         resolved = await AdminAuthService._resolve_shop_id(telegram_user_id)
         if resolved is None:
             return False
 
         shop_id, is_super = resolved
 
-        code = f"{secrets.randbelow(1000000):06d}"
-        AdminAuthService._codes[telegram_user_id] = (code, time.time() + AdminAuthService.CODE_TTL, shop_id, is_super)
+        token = secrets.token_urlsafe(48)
+        AdminAuthService._tokens[token] = (
+            telegram_user_id,
+            time.time() + AdminAuthService.LINK_TTL,
+            shop_id,
+            is_super,
+        )
 
         bot = get_bot(shop_id)
         if bot is None:
             return False
 
+        base_url = settings.admin_panel_url or "https://t.me"
+        login_url = f"{base_url.rstrip('/')}/login?token={token}"
+
         await bot.send_message(
             telegram_user_id,
-            f"🔐 <b>Код входа в админ-панель</b>\n\n"
-            f"<code>{code}</code>\n\n"
-            f"Действует 5 минут.",
+            f"🔐 <b>Вход в админ-панель</b>\n\n"
+            f"Нажмите на ссылку для входа:\n\n{login_url}\n\n"
+            f"Ссылка действует 5 минут.",
         )
         return True
 
     @staticmethod
-    def verify_code(telegram_user_id: int, code: str) -> str | None:
-        stored = AdminAuthService._codes.get(telegram_user_id)
+    def verify_login_token(token: str) -> str | None:
+        stored = AdminAuthService._tokens.get(token)
 
         if stored is None:
             return None
 
-        stored_code, expires, shop_id, is_super = stored
+        telegram_user_id, expires, shop_id, is_super = stored
 
         if time.time() > expires:
-            AdminAuthService._codes.pop(telegram_user_id, None)
+            AdminAuthService._tokens.pop(token, None)
             return None
 
-        if stored_code != code.strip():
-            return None
-
-        AdminAuthService._codes.pop(telegram_user_id, None)
+        AdminAuthService._tokens.pop(token, None)
 
         return AdminAuthService._create_token(telegram_user_id, shop_id, is_super)
 

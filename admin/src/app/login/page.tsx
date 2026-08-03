@@ -1,23 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { api, setToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, Lock } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Loader2, Lock, CheckCircle2 } from "lucide-react";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const [step, setStep] = useState<"id" | "code">("id");
-  const [telegramId, setTelegramId] = useState("");
-  const [code, setCode] = useState("");
-  const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const tokenFromUrl = searchParams.get("token");
 
-  async function sendCode(e: React.FormEvent) {
+  const [step, setStep] = useState<"id" | "waiting" | "verifying">("id");
+  const [telegramId, setTelegramId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tokenFromUrl) {
+      setStep("verifying");
+      verifyToken(tokenFromUrl);
+    }
+  }, [tokenFromUrl]);
+
+  async function verifyToken(t: string) {
+    try {
+      const res = await api.post<{ ok: boolean; token?: string; error?: string }>(
+        "/auth/verify-token",
+        { token: t },
+      );
+
+      if (!res.ok || !res.token) {
+        setVerifyError(res.error || "Ссылка недействительна или истекла");
+        setStep("id");
+        return;
+      }
+
+      setToken(res.token);
+      router.push("/dashboard");
+    } catch {
+      setVerifyError("Ошибка запроса");
+      setStep("id");
+    }
+  }
+
+  async function sendLink(e: React.FormEvent) {
     e.preventDefault();
 
     if (!telegramId.trim()) {
@@ -28,53 +65,35 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await api.post<{ ok: boolean; error?: string }>("/auth/request-code", {
-        telegram_user_id: Number(telegramId),
-      });
+      const res = await api.post<{ ok: boolean; error?: string }>(
+        "/auth/request-login",
+        { telegram_user_id: Number(telegramId) },
+      );
 
       if (!res.ok) {
         toast.error(res.error || "Пользователь не является администратором");
         return;
       }
 
-      setStep("code");
-      toast.success("Код отправлен в Telegram");
+      setStep("waiting");
     } catch {
-      toast.error("Ошибка запроса");
+      toast.error("Слишком много попыток. Попробуйте позже.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function verifyCode(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!code.trim()) {
-      toast.error("Введите код");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const res = await api.post<{ ok: boolean; token?: string; error?: string }>("/auth/verify", {
-        telegram_user_id: Number(telegramId),
-        code,
-      });
-
-      if (!res.ok || !res.token) {
-        toast.error(res.error || "Неверный код");
-        return;
-      }
-
-      setToken(res.token);
-      toast.success("Вход выполнен");
-      router.push("/dashboard");
-    } catch {
-      toast.error("Ошибка запроса");
-    } finally {
-      setLoading(false);
-    }
+  if (step === "verifying") {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center gap-4 py-12">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="text-muted-foreground">Проверка ссылки...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -87,14 +106,20 @@ export default function LoginPage() {
           <CardTitle className="text-2xl">Админ-панель</CardTitle>
           <CardDescription>
             {step === "id"
-              ? "Введите ваш Telegram ID для получения кода"
-              : "Введите код из Telegram"}
+              ? "Введите ваш Telegram ID для получения ссылки"
+              : "Ссылка отправлена в Telegram"}
           </CardDescription>
         </CardHeader>
 
         <CardContent>
+          {verifyError && (
+            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-center text-sm text-destructive">
+              {verifyError}
+            </div>
+          )}
+
           {step === "id" ? (
-            <form onSubmit={sendCode} className="space-y-4">
+            <form onSubmit={sendLink} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="tg-id">Telegram ID</Label>
                 <Input
@@ -112,29 +137,22 @@ export default function LoginPage() {
 
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Получить код
+                Отправить ссылку для входа
               </Button>
             </form>
           ) : (
-            <form onSubmit={verifyCode} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="code">Код подтверждения</Label>
-                <Input
-                  id="code"
-                  type="text"
-                  placeholder="000000"
-                  maxLength={6}
-                  className="text-center text-2xl tracking-widest"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  disabled={loading}
-                />
+            <div className="space-y-4">
+              <div className="flex flex-col items-center gap-3 py-6 text-center">
+                <CheckCircle2 className="h-12 w-12 text-green-500" />
+                <p className="text-sm text-muted-foreground">
+                  Мы отправили ссылку для входа в Telegram.
+                  <br />
+                  Нажмите на неё, чтобы войти.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Ссылка действует 5 минут.
+                </p>
               </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Войти
-              </Button>
 
               <Button
                 type="button"
@@ -142,16 +160,23 @@ export default function LoginPage() {
                 className="w-full"
                 onClick={() => {
                   setStep("id");
-                  setCode("");
+                  setVerifyError(null);
                 }}
-                disabled={loading}
               >
                 Назад
               </Button>
-            </form>
+            </div>
           )}
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

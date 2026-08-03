@@ -35,9 +35,20 @@ async def get_shop_config(shop_id: int = Depends(get_shop_id)):
     shop = await ShopService.get(shop_id)
     attrs = shop["product_attrs"] if shop else ["volume"]
     labels = {a["key"]: a["label"] for a in AVAILABLE_PRODUCT_ATTRS}
+
+    bot_username = None
+    bot = get_bot(shop_id)
+    if bot:
+        try:
+            me = await bot.get_me()
+            bot_username = me.username
+        except Exception:
+            pass
+
     return {
         "product_attrs": attrs,
         "attr_labels": {k: labels.get(k, k) for k in attrs},
+        "bot_username": bot_username,
         "company": {
             "name": shop["company_name"] if shop else None,
             "inn": shop["company_inn"] if shop else None,
@@ -296,6 +307,12 @@ async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current
 
     if order is None:
         raise HTTPException(status_code=400, detail="Cart is empty")
+
+    if order.get("error") == "out_of_stock":
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "out_of_stock", "items": order["items"]},
+        )
 
     if req.payment_method == "yookassa" and settings.yookassa_enabled:
         payment = await OrderPaymentService.create_payment(

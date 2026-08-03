@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     # Application
     # ==========================
 
-    debug: bool = Field(default=True, alias="DEBUG")
+    debug: bool = Field(default=False, alias="DEBUG")
 
     # Прокси для доступа к Telegram API, если api.telegram.org
     # заблокирован. Форматы: http://host:port, socks5://host:port
@@ -97,9 +97,18 @@ class Settings(BaseSettings):
 
     jwt_secret: str = Field(default="", alias="JWT_SECRET")
 
+    cors_origins: str = Field(
+        default="http://localhost:3000",
+        alias="CORS_ORIGINS",
+    )
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
     @property
     def resolved_jwt_secret(self) -> str:
-        return self.jwt_secret or self.bot_token
+        return self.jwt_secret
 
     # ==========================
     # ЮKassa (оплата подписок)
@@ -128,6 +137,16 @@ class Settings(BaseSettings):
         if self.app_base_url:
             return f"{self.app_base_url.rstrip('/')}/app/"
         return None
+
+    @model_validator(mode="after")
+    def _validate_jwt_secret(self):
+        if not self.jwt_secret:
+            raise ValueError(
+                "JWT_SECRET обязателен. "
+                "Сгенерируйте случайную строку: "
+                'python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+        return self
 
 
 @lru_cache

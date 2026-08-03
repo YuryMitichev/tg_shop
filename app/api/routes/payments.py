@@ -3,9 +3,11 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from app.core.config import settings
 from app.services.order_payment_service import OrderPaymentService
 from app.services.payment_service import PaymentService
 from app.services.subscription_payment_service import SubscriptionPaymentService
+from app.services.yookassa_client import YooKassaClient
 
 router = APIRouter()
 
@@ -37,21 +39,59 @@ async def yookassa_webhook(request: Request):
     """
     Вебхук для уведомлений от ЮKassa.
 
+    Перед обработкой каждый платёж верифицируется через API ЮKassa
+    (GET /payments/{id}) — это исключает поддельные запросы.
+
     Маршрутизация по metadata.type:
     - "order" → оплата заказа (OrderPaymentService)
     - "subscription" / отсутствует → оплата подписки (SubscriptionPaymentService)
     """
+    if not settings.yookassa_enabled:
+        return JSONResponse(
+            status_code=403,
+            content={"error": "yookassa_not_configured"},
+        )
+
     data = await request.json()
 
-    logger.info("ЮKassa webhook: event=%s", data.get("event"))
+    payment_id = data.get("object", {}).get("id")
+    event = data.get("event")
 
-    metadata = data.get("object", {}).get("metadata", {})
+    logger.info("ЮKassa webhook: event=%s, payment_id=%s", event, payment_id)
+
+    if not payment_id:
+        logger.warning("ЮKassa webhook: нет payment_id в payload")
+        return JSONResponse(
+            status_code=400,
+            content={"error": "missing_payment_id"},
+        )
+
+    verified = await YooKassaClient.get_payment(payment_id)
+
+    if verified is None:
+        logger.error("ЮKassa webhook: не удалось верифицировать платёж %s", payment_id)
+        return JSONResponse(
+            status_code=400,
+            content={"error": "verification_failed"},
+        )
+
+    if verified.get("status") != "succeeded":
+        logger.info(
+            "ЮKassa webhook: платёж %s статус %s — пропускаю",
+            payment_id,
+            verified.get("status"),
+        )
+        return JSONResponse(content={"status": "ok"})
+
+    verified_data = {"event": event, "object": verified}
+
+    metadata = verified.get("metadata", {})
     ptype = metadata.get("type", "subscription")
 
     if ptype == "order":
-        await OrderPaymentService.process_webhook(data)
+        await OrderPaymentService.process_webhook(verified_data)
     else:
-        await SubscriptionPaymentService.process_webhook(data)
+        await SubscriptionPaymentService.process_webhook(verified_data)
 
     return JSONResponse(content={"status": "ok"})
 

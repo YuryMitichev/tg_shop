@@ -1,4 +1,4 @@
-from sqlalchemy import select, exists, or_
+from sqlalchemy import select, exists, or_, update
 from sqlalchemy.orm import selectinload
 
 from app.database.db import async_session
@@ -27,6 +27,7 @@ class OrderService:
         Создаёт заказ из текущей корзины пользователя и очищает корзину.
 
         Возвращает None, если корзина пуста.
+        Возвращает {"error": "out_of_stock", "items": [...]} если товар закончился.
         """
         items = await CartService.get_items(shop_id, telegram_user_id)
 
@@ -48,6 +49,43 @@ class OrderService:
         final_total = total - discount
 
         async with async_session() as session:
+            out_of_stock: list[dict] = []
+
+            for item in items:
+                variant_id = item.get("variant_id")
+                if variant_id:
+                    result = await session.execute(
+                        update(ProductVariant)
+                        .where(
+                            ProductVariant.id == variant_id,
+                            ProductVariant.shop_id == shop_id,
+                            ProductVariant.stock >= item["quantity"],
+                        )
+                        .values(stock=ProductVariant.stock - item["quantity"])
+                    )
+
+                    if result.rowcount == 0:
+                        variant = await session.get(ProductVariant, variant_id)
+                        out_of_stock.append({
+                            "product_name": item["product_name"],
+                            "volume": item["volume"],
+                            "requested": item["quantity"],
+                            "available": variant.stock if variant else 0,
+                        })
+
+            if out_of_stock:
+                await session.rollback()
+                return {"error": "out_of_stock", "items": out_of_stock}
+
+            if applied_promo:
+                promo_ok = await PromoCodeService.try_increment_usage(
+                    session, shop_id, applied_promo
+                )
+                if not promo_ok:
+                    discount = 0
+                    final_total = total
+                    applied_promo = None
+
             order = Order(
                 shop_id=shop_id,
                 telegram_user_id=telegram_user_id,
@@ -75,19 +113,6 @@ class OrderService:
                 for item in items
             ]
 
-            for item in items:
-                variant_id = item.get("variant_id")
-                if variant_id:
-                    result = await session.execute(
-                        select(ProductVariant).where(
-                            ProductVariant.shop_id == shop_id,
-                            ProductVariant.id == variant_id,
-                        )
-                    )
-                    variant = result.scalar_one_or_none()
-                    if variant:
-                        variant.stock = max(0, variant.stock - item["quantity"])
-
             session.add(order)
             await session.commit()
             await session.refresh(order)
@@ -101,9 +126,6 @@ class OrderService:
                 await OfferService.mark_used(
                     shop_id, telegram_user_id, item["product_id"], item["variant_id"]
                 )
-
-        if applied_promo:
-            await PromoCodeService.increment_usage(shop_id, applied_promo)
 
         return {
             "order_id": order_id,
@@ -246,12 +268,11 @@ class OrderService:
 
                 for item in order.items:
                     if item.variant_id:
-                        result_v = await session.execute(
-                            select(ProductVariant).where(ProductVariant.id == item.variant_id)
+                        await session.execute(
+                            update(ProductVariant)
+                            .where(ProductVariant.id == item.variant_id)
+                            .values(stock=ProductVariant.stock + item.quantity)
                         )
-                        variant = result_v.scalar_one_or_none()
-                        if variant:
-                            variant.stock += item.quantity
 
             if stale:
                 await session.commit()

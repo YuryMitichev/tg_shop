@@ -140,7 +140,7 @@ class TestOrderService:
             assert variant.stock == 7
 
     async def test_cancel_returns_stock(self, db_session, seed_data):
-        from app.services.admin_service import AdminService
+        from app.services.order_admin_service import OrderAdminService
 
         await CartService.add_item(1, 111, product_id=1, variant_id=1, quantity=3)
 
@@ -156,7 +156,7 @@ class TestOrderService:
             variant = await session.get(ProductVariant, 1)
             assert variant.stock == 7
 
-        await AdminService.set_order_status(1, created["order_id"], "cancelled")
+        await OrderAdminService.set_order_status(1, created["order_id"], "cancelled")
 
         async with db_session() as session:
             variant = await session.get(ProductVariant, 1)

@@ -1,15 +1,19 @@
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, Request, UploadFile, File
 from pydantic import BaseModel
 from aiogram.types import BufferedInputFile
 from datetime import datetime
 
 from app.api.admin_auth import require_admin
+from app.api.rate_limit import limiter
 from app.bot.bot import get_bot
 from app.core.config import settings as app_settings
 from app.database.db import async_session
 from app.models.product import Product
 from app.services.admin_auth_service import AdminAuthService
-from app.services.admin_service import AdminService
+from app.services.catalog_admin_service import CatalogAdminService
+from app.services.order_admin_service import OrderAdminService
+from app.services.review_admin_service import ReviewAdminService
+from app.services.stats_service import StatsService
 from app.services.admin_user_service import AdminUserService
 from app.services.catalog_service import CatalogService
 from app.services.message_service import MessageService, DEFAULT_MESSAGES, MESSAGE_LABELS
@@ -28,13 +32,12 @@ router = APIRouter()
 # Pydantic схемы
 # ==========================
 
-class RequestCodeBody(BaseModel):
+class RequestLoginBody(BaseModel):
     telegram_user_id: int
 
 
-class VerifyCodeBody(BaseModel):
-    telegram_user_id: int
-    code: str
+class VerifyTokenBody(BaseModel):
+    token: str
 
 
 class CreateCategoryBody(BaseModel):
@@ -144,9 +147,10 @@ class PreviewRecipientsBody(BaseModel):
 # Auth
 # ==========================
 
-@router.post("/auth/request-code")
-async def request_code(body: RequestCodeBody):
-    ok = await AdminAuthService.request_code(body.telegram_user_id)
+@router.post("/auth/request-login")
+@limiter.limit("5/5minutes")
+async def request_login(request: Request, body: RequestLoginBody):
+    ok = await AdminAuthService.request_login(body.telegram_user_id)
 
     if not ok:
         return {"ok": False, "error": "Пользователь не является администратором"}
@@ -154,12 +158,13 @@ async def request_code(body: RequestCodeBody):
     return {"ok": True}
 
 
-@router.post("/auth/verify")
-async def verify_code(body: VerifyCodeBody):
-    token = AdminAuthService.verify_code(body.telegram_user_id, body.code)
+@router.post("/auth/verify-token")
+@limiter.limit("20/minute")
+async def verify_login_token(request: Request, body: VerifyTokenBody):
+    token = AdminAuthService.verify_login_token(body.token)
 
     if token is None:
-        return {"ok": False, "error": "Неверный или истекший код"}
+        return {"ok": False, "error": "Неверная или истекшая ссылка"}
 
     return {"ok": True, "token": token}
 
@@ -175,42 +180,42 @@ async def get_me(admin: dict = Depends(require_admin)):
 
 @router.get("/stats")
 async def get_stats(admin: dict = Depends(require_admin)):
-    return await AdminService.get_stats(admin["shop_id"])
+    return await StatsService.get_stats(admin["shop_id"])
 
 
 @router.get("/analytics/revenue")
 async def get_revenue_chart(days: int = 30, admin: dict = Depends(require_admin)):
-    return await AdminService.get_revenue_chart(admin["shop_id"], days)
+    return await StatsService.get_revenue_chart(admin["shop_id"], days)
 
 
 @router.get("/analytics/overview")
 async def get_analytics_overview(days: int = 30, admin: dict = Depends(require_admin)):
-    return await AdminService.get_analytics_overview(admin["shop_id"], days)
+    return await StatsService.get_analytics_overview(admin["shop_id"], days)
 
 
 @router.get("/analytics/categories")
 async def get_category_breakdown(days: int = 30, admin: dict = Depends(require_admin)):
-    return await AdminService.get_category_breakdown(admin["shop_id"], days)
+    return await StatsService.get_category_breakdown(admin["shop_id"], days)
 
 
 @router.get("/analytics/products")
 async def get_product_stats(days: int = 30, admin: dict = Depends(require_admin)):
-    return await AdminService.get_product_stats(admin["shop_id"], days)
+    return await StatsService.get_product_stats(admin["shop_id"], days)
 
 
 @router.get("/analytics/customers")
 async def get_customer_stats(days: int = 30, admin: dict = Depends(require_admin)):
-    return await AdminService.get_customer_stats(admin["shop_id"], days)
+    return await StatsService.get_customer_stats(admin["shop_id"], days)
 
 
 @router.get("/analytics/promos")
 async def get_promo_stats(days: int = 30, admin: dict = Depends(require_admin)):
-    return await AdminService.get_promo_stats(admin["shop_id"], days)
+    return await StatsService.get_promo_stats(admin["shop_id"], days)
 
 
 @router.get("/analytics/reviews")
 async def get_review_stats(admin: dict = Depends(require_admin)):
-    return await AdminService.get_review_stats(admin["shop_id"])
+    return await StatsService.get_review_stats(admin["shop_id"])
 
 
 # ==========================
@@ -219,27 +224,27 @@ async def get_review_stats(admin: dict = Depends(require_admin)):
 
 @router.get("/categories")
 async def list_categories(admin: dict = Depends(require_admin)):
-    return await AdminService.get_categories(admin["shop_id"])
+    return await CatalogAdminService.get_categories(admin["shop_id"])
 
 
 @router.post("/categories")
 async def create_category(body: CreateCategoryBody, admin: dict = Depends(require_admin)):
-    category_id = await AdminService.create_category(admin["shop_id"], body.name, body.emoji)
+    category_id = await CatalogAdminService.create_category(admin["shop_id"], body.name, body.emoji)
     return {"id": category_id}
 
 
 @router.put("/categories/{category_id}")
 async def update_category(category_id: int, body: UpdateCategoryBody, admin: dict = Depends(require_admin)):
     if body.name is not None:
-        await AdminService.rename_category(admin["shop_id"], category_id, body.name)
+        await CatalogAdminService.rename_category(admin["shop_id"], category_id, body.name)
     if body.emoji is not None:
-        await AdminService.update_category_emoji(admin["shop_id"], category_id, body.emoji)
+        await CatalogAdminService.update_category_emoji(admin["shop_id"], category_id, body.emoji)
     return {"ok": True}
 
 
 @router.delete("/categories/{category_id}")
 async def delete_category(category_id: int, admin: dict = Depends(require_admin)):
-    ok = await AdminService.delete_category(admin["shop_id"], category_id)
+    ok = await CatalogAdminService.delete_category(admin["shop_id"], category_id)
 
     if not ok:
         return {"ok": False, "error": "В категории есть товары"}
@@ -254,13 +259,13 @@ async def delete_category(category_id: int, admin: dict = Depends(require_admin)
 @router.get("/products")
 async def list_products(category_id: int | None = None, admin: dict = Depends(require_admin)):
     if category_id is not None:
-        return await AdminService.get_products(admin["shop_id"], category_id)
-    return await AdminService.get_all_products(admin["shop_id"])
+        return await CatalogAdminService.get_products(admin["shop_id"], category_id)
+    return await CatalogAdminService.get_all_products(admin["shop_id"])
 
 
 @router.get("/products/{product_id}")
 async def get_product(product_id: int, admin: dict = Depends(require_admin)):
-    product = await AdminService.get_product(admin["shop_id"], product_id)
+    product = await CatalogAdminService.get_product(admin["shop_id"], product_id)
 
     if product is None:
         return {"ok": False, "error": "Не найден"}
@@ -270,7 +275,7 @@ async def get_product(product_id: int, admin: dict = Depends(require_admin)):
 
 @router.post("/products")
 async def create_product(body: CreateProductBody, admin: dict = Depends(require_admin)):
-    product_id = await AdminService.create_product(
+    product_id = await CatalogAdminService.create_product(
         admin["shop_id"],
         category_id=body.category_id,
         name=body.name,
@@ -282,7 +287,7 @@ async def create_product(body: CreateProductBody, admin: dict = Depends(require_
 
 @router.put("/products/{product_id}")
 async def update_product(product_id: int, body: UpdateProductBody, admin: dict = Depends(require_admin)):
-    await AdminService.update_product(
+    await CatalogAdminService.update_product(
         admin["shop_id"],
         product_id,
         name=body.name,
@@ -297,20 +302,20 @@ async def update_product(product_id: int, body: UpdateProductBody, admin: dict =
                 await session.commit()
 
     if body.is_active is not None:
-        await AdminService.toggle_active(admin["shop_id"], product_id)
+        await CatalogAdminService.toggle_active(admin["shop_id"], product_id)
 
     return {"ok": True}
 
 
 @router.delete("/products/{product_id}")
 async def delete_product(product_id: int, admin: dict = Depends(require_admin)):
-    await AdminService.delete_product(admin["shop_id"], product_id)
+    await CatalogAdminService.delete_product(admin["shop_id"], product_id)
     return {"ok": True}
 
 
 @router.patch("/products/{product_id}/toggle")
 async def toggle_product(product_id: int, admin: dict = Depends(require_admin)):
-    is_active = await AdminService.toggle_active(admin["shop_id"], product_id)
+    is_active = await CatalogAdminService.toggle_active(admin["shop_id"], product_id)
     return {"is_active": is_active}
 
 
@@ -333,14 +338,14 @@ async def upload_photo(
 
     await bot.delete_message(admin["admin_id"], msg.message_id)
 
-    photo_id = await AdminService.add_photo(admin["shop_id"], product_id, file_id)
+    photo_id = await CatalogAdminService.add_photo(admin["shop_id"], product_id, file_id)
 
     return {"id": photo_id, "file_id": file_id}
 
 
 @router.delete("/products/{product_id}/photos/{photo_id}")
 async def delete_photo(product_id: int, photo_id: int, admin: dict = Depends(require_admin)):
-    await AdminService.delete_photo(admin["shop_id"], photo_id)
+    await CatalogAdminService.delete_photo(admin["shop_id"], photo_id)
     return {"ok": True}
 
 
@@ -350,7 +355,7 @@ async def update_variant_stock(
     body: UpdateVariantStockBody,
     admin: dict = Depends(require_admin),
 ):
-    ok = await AdminService.update_variant_stock(admin["shop_id"], variant_id, body.stock)
+    ok = await CatalogAdminService.update_variant_stock(admin["shop_id"], variant_id, body.stock)
     if not ok:
         return {"ok": False, "error": "Вариант не найден"}
     return {"ok": True}
@@ -367,12 +372,12 @@ async def list_orders(
     per_page: int = 20,
     admin: dict = Depends(require_admin),
 ):
-    return await AdminService.get_orders_filtered(admin["shop_id"], status, page, per_page)
+    return await OrderAdminService.get_orders_filtered(admin["shop_id"], status, page, per_page)
 
 
 @router.get("/orders/{order_id}")
 async def get_order_detail(order_id: int, admin: dict = Depends(require_admin)):
-    order = await AdminService.get_order_detail(admin["shop_id"], order_id)
+    order = await OrderAdminService.get_order_detail(admin["shop_id"], order_id)
 
     if order is None:
         return {"ok": False, "error": "Не найден"}
@@ -386,7 +391,7 @@ async def update_order_status(
     body: UpdateOrderStatusBody,
     admin: dict = Depends(require_admin),
 ):
-    await AdminService.set_order_status(admin["shop_id"], order_id, body.status)
+    await OrderAdminService.set_order_status(admin["shop_id"], order_id, body.status)
     return {"ok": True}
 
 
@@ -401,7 +406,7 @@ async def get_statuses(admin: dict = Depends(require_admin)):
 
 @router.get("/users")
 async def list_users(admin: dict = Depends(require_admin)):
-    return await AdminService.get_users(admin["shop_id"])
+    return await OrderAdminService.get_users(admin["shop_id"])
 
 
 # ==========================
@@ -443,12 +448,12 @@ async def delete_promo(promo_id: int, admin: dict = Depends(require_admin)):
 
 @router.get("/reviews")
 async def list_reviews(admin: dict = Depends(require_admin)):
-    return await AdminService.get_all_reviews(admin["shop_id"])
+    return await ReviewAdminService.get_all_reviews(admin["shop_id"])
 
 
 @router.delete("/reviews/{review_id}")
 async def delete_review(review_id: int, admin: dict = Depends(require_admin)):
-    ok = await AdminService.delete_review(admin["shop_id"], review_id)
+    ok = await ReviewAdminService.delete_review(admin["shop_id"], review_id)
     return {"ok": ok}
 
 
