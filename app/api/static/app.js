@@ -96,7 +96,7 @@ const App = {
 
         document.getElementById("view-" + viewId).classList.add("active");
 
-        const showNav = !["product", "checkout", "success"].includes(viewId);
+        const showNav = !["product", "checkout", "success", "privacy"].includes(viewId);
         document.getElementById("bottom-nav").style.display = showNav ? "flex" : "none";
 
         window.scrollTo(0, 0);
@@ -529,6 +529,11 @@ const App = {
             return;
         }
 
+        if (!document.getElementById("co-consent").checked) {
+            this.toast("Подтвердите согласие на обработку данных");
+            return;
+        }
+
         try {
             const result = await this.api("POST", "/orders", {
                 full_name: name,
@@ -544,6 +549,47 @@ const App = {
         } catch (e) {
             this.toast(e.message);
         }
+    },
+
+    showPrivacy() {
+        this.showView("privacy");
+        document.getElementById("privacy-content").innerHTML = this.privacyPolicyText();
+        window.scrollTo(0, 0);
+    },
+
+    privacyPolicyText() {
+        return `
+            <h3>1. Общие положения</h3>
+            <p>Настоящая Политика конфиденциальности определяет порядок обработки и защиты персональных данных пользователей магазина в Telegram.</p>
+            <p>Используя магазин, вы автоматически соглашаетесь с настоящей Политикой.</p>
+
+            <h3>2. Какие данные мы собираем</h3>
+            <ul>
+                <li>Имя и фамилия (указываются при оформлении заказа)</li>
+                <li>Номер телефона (для связи по заказу)</li>
+                <li>Telegram ID и username (получаются автоматически от Telegram)</li>
+                <li>Состав и история заказов</li>
+            </ul>
+
+            <h3>3. Зачем мы используем данные</h3>
+            <ul>
+                <li>Обработка и доставка заказов</li>
+                <li>Связь с покупателем по вопросам заказа</li>
+                <li>Уведомления о статусе заказа</li>
+            </ul>
+
+            <h3>4. Хранение и защита</h3>
+            <p>Данные хранятся на защищённом сервере. Мы не передаём ваши персональные данные третьим лицам, за исключением случаев, предусмотренных законом, и служб доставки.</p>
+
+            <h3>5. Платёжные данные</h3>
+                <p>При оплате онлайн ваши платёжные данные обрабатываются платёжным провайдером (ЮKassa). Мы не храним данные вашей банковской карты.</p>
+
+            <h3>6. Удаление данных</h3>
+            <p>Вы можете запросить удаление ваших персональных данных, написав сообщение боту или связавшись с администратором магазина.</p>
+
+            <h3>7. Контакты</h3>
+            <p>По вопросам обработки персональных данных свяжитесь с администратором магазина через чат в Telegram.</p>
+        `;
     },
 
     showSuccess(result) {

@@ -737,3 +737,58 @@ body {
     color: var(--hint);
     margin-top: 2px;
 }
+
+.consent-row {
+    margin: 16px 0;
+}
+
+.consent-label {
+    display: flex !important;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px !important;
+    color: var(--text) !important;
+    margin: 0 !important;
+    cursor: pointer;
+    line-height: 1.45;
+}
+
+.consent-label input[type="checkbox"] {
+    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--link);
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.consent-label a {
+    color: var(--link);
+    text-decoration: none;
+}
+
+.privacy-content {
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text);
+}
+
+.privacy-content h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 20px 0 8px;
+}
+
+.privacy-content p {
+    margin-bottom: 10px;
+    color: var(--text);
+}
+
+.privacy-content ul {
+    margin: 8px 0 12px 20px;
+}
+
+.privacy-content li {
+    margin-bottom: 6px;
+}

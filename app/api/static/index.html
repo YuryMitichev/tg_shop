@@ -57,6 +57,14 @@
         <div id="payment-methods"></div>
 
         <div id="co-total" class="co-total"></div>
+
+        <div class="consent-row">
+            <label class="consent-label">
+                <input type="checkbox" id="co-consent" checked>
+                <span>Согласен с <a href="#" onclick="App.showPrivacy(); return false;">политикой конфиденциальности</a> и обработкой персональных данных</span>
+            </label>
+        </div>
+
         <button type="submit" class="btn-primary">Оформить заказ</button>
     </form>
 </div>
@@ -72,6 +80,15 @@
 <!-- Заказ оформлен -->
 <div id="view-success" class="view">
     <div id="success-content"></div>
+</div>
+
+<!-- Политика конфиденциальности -->
+<div id="view-privacy" class="view">
+    <div class="header">
+        <button class="back-btn" onclick="history.back()">←</button>
+        <h2>🔒 Политика конфиденциальности</h2>
+    </div>
+    <div id="privacy-content" class="privacy-content"></div>
 </div>
 
 <!-- Bottom nav -->
