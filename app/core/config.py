@@ -102,6 +102,17 @@ class Settings(BaseSettings):
         return self.jwt_secret or self.bot_token
 
     # ==========================
+    # ЮKassa (оплата подписок)
+    # ==========================
+
+    yookassa_shop_id: str | None = Field(default=None, alias="YOOKASSA_SHOP_ID")
+    yookassa_secret_key: str | None = Field(default=None, alias="YOOKASSA_SECRET_KEY")
+
+    @property
+    def yookassa_enabled(self) -> bool:
+        return bool(self.yookassa_shop_id and self.yookassa_secret_key)
+
+    # ==========================
     # Ручная оплата (без эквайринга)
     # ==========================
 

@@ -208,8 +208,11 @@ async def _run_platform_bot() -> None:
 
 
 async def _subscription_check_loop() -> None:
-    """Фоновая задача: отключает боты с истекшей подпиской."""
+    """Фоновая задача: отключает боты с истекшей подпиской + уведомления."""
     from app.services.subscription_service import SubscriptionService
+    from app.services.shop_service import ShopService
+
+    notified: set[int] = set()
 
     while True:
         await asyncio.sleep(3600)
@@ -218,5 +221,51 @@ async def _subscription_check_loop() -> None:
             for shop_id in expired:
                 logger.info("Подписка магазина %d истекла — останавливаю бота", shop_id)
                 await stop_shop_bot(shop_id)
+                await SubscriptionService.mark_expired(shop_id)
+                notified.discard(shop_id)
+
+            expiring = await SubscriptionService.get_expiring_shops(hours=24)
+            for item in expiring:
+                sid = item["shop_id"]
+                if sid not in notified:
+                    notified.add(sid)
+                    shop = await ShopService.get(sid)
+                    if shop and shop["owner_telegram_id"]:
+                        await _send_trial_ending_notice(
+                            shop["owner_telegram_id"],
+                            shop["name"],
+                            item["expires_at"][:10],
+                        )
+
         except Exception:
             logger.exception("Проверка подписок: ошибка")
+
+
+async def _send_trial_ending_notice(
+    owner_telegram_id: int, shop_name: str, expires_at: str
+) -> None:
+    """Отправляет уведомление об окончании триала через платформенного бота."""
+    from aiogram import Bot
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+
+    if not settings.platform_bot_token:
+        return
+
+    bot = Bot(
+        token=settings.platform_bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+
+    try:
+        await bot.send_message(
+            owner_telegram_id,
+            f"⏰ <b>Триал заканчивается!</b>\n\n"
+            f"Магазин «{shop_name}» — бесплатный период истекает <b>{expires_at}</b>.\n\n"
+            f"Чтобы бот продолжил работать, оплатите подписку.\n"
+            f"Откройте платформенного бота → «💳 Подписка».",
+        )
+    except Exception:
+        logger.exception("Не удалось отправить уведомление об окончании триала")
+    finally:
+        await bot.session.close()

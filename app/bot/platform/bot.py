@@ -22,6 +22,7 @@ from aiogram.types import (
 from app.core.config import settings
 from app.services.shop_service import ShopService
 from app.services.subscription_service import SubscriptionService
+from app.services.subscription_payment_service import SubscriptionPaymentService
 from app.services.admin_user_service import AdminUserService
 from app.bot.bot import start_shop_bot
 
@@ -58,7 +59,7 @@ def _main_menu(is_new: bool = True) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=btn_text)],
-            [KeyboardButton(text="📋 Мои магазины")],
+            [KeyboardButton(text="📋 Мои магазины"), KeyboardButton(text="💳 Подписка")],
         ],
         resize_keyboard=True,
     )
@@ -240,6 +241,138 @@ async def on_my_shops(message: Message) -> None:
     await message.answer("Выберите действие:", reply_markup=_main_menu(is_new=False))
 
 
+async def on_subscription(message: Message) -> None:
+    """Показывает статус подписки и доступные тарифы для оплаты."""
+    tg_id = message.from_user.id
+    shops = await ShopService.get_all()
+    user_shops = [s for s in shops if s["owner_telegram_id"] == tg_id]
+
+    if not user_shops:
+        await message.answer(
+            "У вас пока нет магазинов для оплаты подписки.",
+            reply_markup=_main_menu(),
+        )
+        return
+
+    if len(user_shops) == 1:
+        await _show_subscription_for_shop(message, user_shops[0])
+    else:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=f"🏪 {s['name']}",
+                        callback_data=f"sub_shop:{s['id']}",
+                    )
+                ]
+                for s in user_shops
+            ]
+        )
+        await message.answer(
+            "Выберите магазин для управления подпиской:",
+            reply_markup=kb,
+        )
+
+
+async def _show_subscription_for_shop(message: Message | CallbackQuery, shop: dict) -> None:
+    shop_id = shop["id"]
+    sub = await SubscriptionService.get_active_subscription(shop_id)
+
+    if sub and sub["is_active"]:
+        status_line = f"✅ <b>Активна</b>\nДействует до: <b>{sub['expires_at'][:10]}</b>"
+    else:
+        status_line = "❌ <b>Истекла</b> — бот остановлен"
+
+    text = (
+        f"🏪 <b>{shop['name']}</b> (ID: {shop_id})\n\n"
+        f"Статус подписки: {status_line}\n\n"
+        f"{'---' * 10}\n"
+        f"📦 <b>Доступные тарифы:</b>\n\n"
+    )
+
+    plans = await SubscriptionService.get_plans()
+
+    if not plans:
+        text += "Тарифы не настроены. Обратитесь к администратору."
+        await (message.answer if isinstance(message, Message) else message.message.answer)(
+            text, reply_markup=_main_menu(is_new=False)
+        )
+        return
+
+    kb_rows = []
+    for plan in plans:
+        text += f"🔸 <b>{plan['name']}</b> — {int(plan['price'])} ₽ / {plan['duration_days']} дней\n"
+        if plan["description"]:
+            text += f"<i>{plan['description']}</i>\n"
+        for feature in plan.get("features", []):
+            text += f"  ✅ {feature}\n"
+        text += "\n"
+
+        if settings.yookassa_enabled:
+            kb_rows.append([
+                InlineKeyboardButton(
+                    text=f"💳 Оплатить «{plan['name']}» — {int(plan['price'])} ₽",
+                    callback_data=f"pay:{shop_id}:{plan['id']}",
+                )
+            ])
+
+    if not settings.yookassa_enabled:
+        text += "\n⚠️ Оплата временно недоступна. Обратитесь к администратору."
+
+    kb = InlineKeyboardMarkup(inline_keyboard=kb_rows) if kb_rows else None
+
+    send = message.answer if isinstance(message, Message) else message.message.answer
+    await send(text, reply_markup=kb, disable_web_page_preview=True)
+
+
+async def on_pay(callback: CallbackQuery) -> None:
+    """Создаёт платёж через ЮKassa и отправляет ссылку на оплату."""
+    _, shop_id_str, plan_id_str = callback.data.split(":")
+    shop_id = int(shop_id_str)
+    plan_id = int(plan_id_str)
+
+    if not settings.yookassa_enabled:
+        await callback.answer("Оплата не настроена", show_alert=True)
+        return
+
+    await callback.answer("Создаю платёж...")
+
+    result = await SubscriptionPaymentService.create_payment(
+        shop_id=shop_id,
+        plan_id=plan_id,
+    )
+
+    if result is None:
+        await callback.message.answer(
+            "❌ Не удалось создать платёж. Попробуйте позже или обратитесь к администратору."
+        )
+        return
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Оплатить", url=result["confirmation_url"])],
+        ]
+    )
+
+    await callback.message.answer(
+        "👇 Нажмите кнопку ниже для перехода к оплате.\n\n"
+        "После оплаты подписка активируется автоматически.",
+        reply_markup=kb,
+    )
+
+
+async def on_subscription_shop(callback: CallbackQuery) -> None:
+    """Показывает подписку для конкретного магазина (выбор из списка)."""
+    shop_id = int(callback.data.split(":")[1])
+    shop = await ShopService.get(shop_id)
+
+    if shop is None:
+        await callback.answer("Магазин не найден", show_alert=True)
+        return
+
+    await _show_subscription_for_shop(callback, shop)
+
+
 def get_platform_router() -> Dispatcher:
     """Создаёт и настраивает Dispatcher для платформенного бота."""
     dp = Dispatcher()
@@ -250,7 +383,12 @@ def get_platform_router() -> Dispatcher:
         F.text.in_(["🚀 Создать магазин", "🚀 Создать ещё магазин"]),
     )
     dp.message.register(on_my_shops, F.text == "📋 Мои магазины")
+    dp.message.register(on_subscription, F.text == "💳 Подписка")
     dp.callback_query.register(on_enter_token, F.data == "enter_token")
+    dp.callback_query.register(
+        on_subscription_shop, F.data.startswith("sub_shop:")
+    )
+    dp.callback_query.register(on_pay, F.data.startswith("pay:"))
     dp.message.register(on_token_received, StateFilter(OnboardingStates.waiting_for_token))
 
     return dp

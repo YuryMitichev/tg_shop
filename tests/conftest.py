@@ -18,6 +18,7 @@ import app.services.promo_service as promo_service
 import app.services.broadcast_service as broadcast_service
 import app.services.offer_service as offer_service
 import app.services.shop_service as shop_service
+import app.services.subscription_service as subscription_service
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
     CartItem,
@@ -36,7 +37,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     UserOffer,
 )
 from app.models.shop import Shop
-# noqa регистрирует таблицы в metadata
+from app.models.subscription import Subscription, SubscriptionPlan  # noqa: F401
 
 
 
@@ -55,6 +56,7 @@ _PATCH_TARGETS = [
     broadcast_service,
     offer_service,
     shop_service,
+    subscription_service,
 ]
 
 

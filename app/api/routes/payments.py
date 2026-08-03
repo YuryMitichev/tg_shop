@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.services.payment_service import PaymentService
+from app.services.subscription_payment_service import SubscriptionPaymentService
 
 router = APIRouter()
 
@@ -26,6 +27,23 @@ async def tinkoff_webhook(request: Request):
 
     if result == "paid":
         await _notify_user_paid(data)
+
+    return JSONResponse(content={"status": "ok"})
+
+
+@router.post("/yookassa/webhook")
+async def yookassa_webhook(request: Request):
+    """
+    Вебхук для уведомлений от ЮKassa (оплата подписок).
+
+    ЮKassa присылает POST с JSON в формате:
+    {"event": "payment.succeeded", "object": {...}}
+    """
+    data = await request.json()
+
+    logger.info("ЮKassa webhook: event=%s", data.get("event"))
+
+    await SubscriptionPaymentService.process_webhook(data)
 
     return JSONResponse(content={"status": "ok"})
 
