@@ -100,6 +100,12 @@ class UpdateProductAttrsBody(BaseModel):
     product_attrs: list[str]
 
 
+class UpdateCompanyInfoBody(BaseModel):
+    company_name: str | None = None
+    company_inn: str | None = None
+    company_address: str | None = None
+
+
 class CreateAdminBody(BaseModel):
     telegram_user_id: int
     display_name: str | None = None
@@ -526,6 +532,31 @@ async def get_product_attrs(admin: dict = Depends(require_admin)):
 @router.put("/settings/product-attrs")
 async def update_product_attrs(body: UpdateProductAttrsBody, admin: dict = Depends(require_admin)):
     await ShopService.update_product_attrs(admin["shop_id"], body.product_attrs)
+    return {"ok": True}
+
+
+# ==========================
+# Настройки (реквизиты)
+# ==========================
+
+@router.get("/settings/company")
+async def get_company_info(admin: dict = Depends(require_admin)):
+    shop = await ShopService.get(admin["shop_id"])
+    return {
+        "company_name": shop["company_name"] if shop else None,
+        "company_inn": shop["company_inn"] if shop else None,
+        "company_address": shop["company_address"] if shop else None,
+    }
+
+
+@router.put("/settings/company")
+async def update_company_info(body: UpdateCompanyInfoBody, admin: dict = Depends(require_admin)):
+    await ShopService.update_company_info(
+        admin["shop_id"],
+        body.company_name,
+        body.company_inn,
+        body.company_address,
+    )
     return {"ok": True}
 
 

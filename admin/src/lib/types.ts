@@ -166,6 +166,12 @@ export interface ProductAttrsSettings {
   available: ProductAttrOption[];
 }
 
+export interface CompanyInfo {
+  company_name: string | null;
+  company_inn: string | null;
+  company_address: string | null;
+}
+
 export interface Stats {
   total_orders: number;
   new_orders: number;

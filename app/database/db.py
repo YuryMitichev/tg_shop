@@ -62,6 +62,9 @@ _MIGRATIONS = [
     ("product_variants", "color", "TEXT"),
     ("product_variants", "scent", "TEXT"),
     ("product_variants", "dimensions", "TEXT"),
+    ("shops", "company_name", "TEXT"),
+    ("shops", "company_inn", "TEXT"),
+    ("shops", "company_address", "TEXT"),
 ]
 
 

@@ -38,6 +38,11 @@ async def get_shop_config(shop_id: int = Depends(get_shop_id)):
     return {
         "product_attrs": attrs,
         "attr_labels": {k: labels.get(k, k) for k in attrs},
+        "company": {
+            "name": shop["company_name"] if shop else None,
+            "inn": shop["company_inn"] if shop else None,
+            "address": shop["company_address"] if shop else None,
+        } if shop else None,
     }
 
 

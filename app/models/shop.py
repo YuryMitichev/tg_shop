@@ -44,4 +44,10 @@ class Shop(Base):
 
     product_attrs: Mapped[str] = mapped_column(default='["volume"]')
 
+    company_name: Mapped[str | None] = mapped_column(nullable=True)
+
+    company_inn: Mapped[str | None] = mapped_column(nullable=True)
+
+    company_address: Mapped[str | None] = mapped_column(nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

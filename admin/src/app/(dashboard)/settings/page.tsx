@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -18,7 +20,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { RotateCcw, Save } from "lucide-react";
-import type { SystemMessage, DeliverySettings, ProductAttrsSettings } from "@/lib/types";
+import type { SystemMessage, DeliverySettings, ProductAttrsSettings, CompanyInfo } from "@/lib/types";
 
 export default function SettingsPage() {
   const { data: messages, isLoading, mutate } = useSWR<SystemMessage[]>("/settings/messages", fetcher);
@@ -77,6 +79,7 @@ export default function SettingsPage() {
           <TabsTrigger value="messages">Сообщения</TabsTrigger>
           <TabsTrigger value="delivery">Доставка</TabsTrigger>
           <TabsTrigger value="attrs">Характеристики</TabsTrigger>
+          <TabsTrigger value="company">Реквизиты</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
         </TabsList>
 
@@ -147,6 +150,10 @@ export default function SettingsPage() {
 
         <TabsContent value="attrs">
           <ProductAttrsSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="company">
+          <CompanyInfoSettings />
         </TabsContent>
 
         <TabsContent value="payment">
@@ -348,6 +355,87 @@ function ProductAttrsSettingsTab() {
               );
             })}
           </div>
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />
+            Сохранить
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CompanyInfoSettings() {
+  const { data, isLoading, mutate } = useSWR<CompanyInfo>("/settings/company", fetcher);
+
+  const [name, setName] = useState("");
+  const [inn, setInn] = useState("");
+  const [address, setAddress] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setName(data.company_name || "");
+      setInn(data.company_inn || "");
+      setAddress(data.company_address || "");
+    }
+  }, [data]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.put("/settings/company", {
+        company_name: name || null,
+        company_inn: inn || null,
+        company_address: address || null,
+      });
+      mutate();
+      toast.success("Сохранено");
+    } catch {
+      toast.error("Ошибка");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Реквизиты</CardTitle>
+        <CardDescription>
+          Используются в политике конфиденциальности и на странице оформления заказа
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>Название (ИП / ООО)</Label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="ИП Иванов Иван Иванович"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>ИНН</Label>
+          <Input
+            value={inn}
+            onChange={(e) => setInn(e.target.value)}
+            placeholder="324301224122"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Юридический адрес</Label>
+          <Textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            rows={3}
+            placeholder="Московская область, Ленинский район, ..."
+          />
         </div>
 
         <div className="flex justify-end">
