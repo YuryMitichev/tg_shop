@@ -55,6 +55,8 @@ _MIGRATIONS = [
     ("broadcasts", "shop_id", "INTEGER NOT NULL DEFAULT 1"),
     ("user_offers", "shop_id", "INTEGER NOT NULL DEFAULT 1"),
     ("orders", "payment_method", "TEXT NOT NULL DEFAULT 'manual'"),
+    ("shops", "delivery_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("shops", "courier_services", "TEXT NOT NULL DEFAULT '[]'"),
 ]
 
 

@@ -17,6 +17,8 @@ from app.services.promo_service import PromoCodeService
 from app.services.review_service import ReviewService
 from app.services.crm_service import CrmService
 from app.services.broadcast_service import BroadcastService
+from app.services.shop_service import ShopService
+from app.models.shop import AVAILABLE_COURIERS
 from app.utils.order_status import STATUS_LABELS
 
 router = APIRouter()
@@ -83,6 +85,11 @@ class CreatePromoBody(BaseModel):
 
 class UpdateMessageBody(BaseModel):
     content: str
+
+
+class UpdateDeliveryBody(BaseModel):
+    delivery_enabled: bool
+    courier_services: list[str]
 
 
 class CreateAdminBody(BaseModel):
@@ -469,6 +476,30 @@ async def get_payment_settings(admin: dict = Depends(require_admin)):
         "payment_recipient_name": app_settings.payment_recipient_name,
         "tinkoff_enabled": app_settings.tinkoff_enabled,
     }
+
+
+# ==========================
+# Настройки (доставка)
+# ==========================
+
+@router.get("/settings/delivery")
+async def get_delivery_settings(admin: dict = Depends(require_admin)):
+    shop = await ShopService.get(admin["shop_id"])
+    return {
+        "delivery_enabled": shop["delivery_enabled"] if shop else True,
+        "courier_services": shop["courier_services"] if shop else [],
+        "available_couriers": AVAILABLE_COURIERS,
+    }
+
+
+@router.put("/settings/delivery")
+async def update_delivery_settings(body: UpdateDeliveryBody, admin: dict = Depends(require_admin)):
+    await ShopService.update_delivery_settings(
+        admin["shop_id"],
+        body.delivery_enabled,
+        body.courier_services,
+    )
+    return {"ok": True}
 
 
 # ==========================

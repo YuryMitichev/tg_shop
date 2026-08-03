@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.core.config import settings
@@ -7,11 +7,15 @@ from app.core.config import settings
 REPLY_BUTTONS = ["🚚 Доставка"]
 
 
-def get_reply_keyboard() -> ReplyKeyboardMarkup:
+def get_reply_keyboard(delivery_enabled: bool = True) -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
     """
     Постоянная клавиатура внизу экрана.
     WebApp-кнопка устанавливается отдельно через MenuButtonWebApp.
+    Если delivery_enabled=False — возвращаем ReplyKeyboardRemove для очистки.
     """
+
+    if not delivery_enabled:
+        return ReplyKeyboardRemove()
 
     return ReplyKeyboardMarkup(
         keyboard=[

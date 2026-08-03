@@ -146,6 +146,12 @@ export interface SystemMessage {
   is_default: boolean;
 }
 
+export interface DeliverySettings {
+  delivery_enabled: boolean;
+  courier_services: string[];
+  available_couriers: string[];
+}
+
 export interface Stats {
   total_orders: number;
   new_orders: number;

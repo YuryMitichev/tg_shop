@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Tabs,
   TabsContent,
@@ -17,7 +18,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { RotateCcw, Save } from "lucide-react";
-import type { SystemMessage } from "@/lib/types";
+import type { SystemMessage, DeliverySettings } from "@/lib/types";
 
 export default function SettingsPage() {
   const { data: messages, isLoading, mutate } = useSWR<SystemMessage[]>("/settings/messages", fetcher);
@@ -74,6 +75,7 @@ export default function SettingsPage() {
       <Tabs defaultValue="messages">
         <TabsList>
           <TabsTrigger value="messages">Сообщения</TabsTrigger>
+          <TabsTrigger value="delivery">Доставка</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
         </TabsList>
 
@@ -138,6 +140,10 @@ export default function SettingsPage() {
           )}
         </TabsContent>
 
+        <TabsContent value="delivery">
+          <DeliverySettings />
+        </TabsContent>
+
         <TabsContent value="payment">
           <PaymentSettings />
         </TabsContent>
@@ -177,6 +183,101 @@ function PaymentSettings() {
           <Badge variant={data?.tinkoff_enabled ? "default" : "secondary"}>
             {data?.tinkoff_enabled ? "Подключён" : "Не подключён"}
           </Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DeliverySettings() {
+  const { data, isLoading, mutate } = useSWR<DeliverySettings>("/settings/delivery", fetcher);
+
+  const [enabled, setEnabled] = useState(true);
+  const [couriers, setCouriers] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setEnabled(data.delivery_enabled);
+      setCouriers(data.courier_services);
+    }
+  }, [data]);
+
+  function toggleCourier(name: string) {
+    setCouriers((prev) =>
+      prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]
+    );
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.put("/settings/delivery", {
+        delivery_enabled: enabled,
+        courier_services: couriers,
+      });
+      mutate();
+      toast.success("Сохранено");
+    } catch {
+      toast.error("Ошибка");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Доставка</CardTitle>
+        <CardDescription>
+          Настройте отображение кнопки «Доставка» и выберите курьерские службы
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Кнопка «Доставка» в боте</p>
+            <p className="text-xs text-muted-foreground">
+              Показывать кнопку доставки в меню бота
+            </p>
+          </div>
+          <Switch
+            checked={enabled}
+            onCheckedChange={setEnabled}
+          />
+        </div>
+
+        {enabled && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Курьерские службы</p>
+            <p className="text-xs text-muted-foreground">
+              Отметьте службы, с которыми вы работаете
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {data?.available_couriers?.map((courier) => {
+                const selected = couriers.includes(courier);
+                return (
+                  <Button
+                    key={courier}
+                    variant={selected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleCourier(courier)}
+                  >
+                    {courier}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />
+            Сохранить
+          </Button>
         </div>
       </CardContent>
     </Card>

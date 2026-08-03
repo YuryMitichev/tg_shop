@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy import select
 
 from app.database.db import async_session
@@ -11,6 +13,8 @@ def _shop_to_dict(shop: Shop) -> dict:
         "bot_token": shop.bot_token,
         "owner_telegram_id": shop.owner_telegram_id,
         "is_active": shop.is_active,
+        "delivery_enabled": shop.delivery_enabled,
+        "courier_services": json.loads(shop.courier_services) if shop.courier_services else [],
         "created_at": shop.created_at.isoformat() if shop.created_at else None,
     }
 
@@ -133,4 +137,23 @@ class ShopService:
             shop = result.scalar_one_or_none()
             if shop is None:
                 return None
+            return _shop_to_dict(shop)
+
+    @staticmethod
+    async def update_delivery_settings(
+        shop_id: int,
+        delivery_enabled: bool,
+        courier_services: list[str],
+    ) -> dict | None:
+        async with async_session() as session:
+            shop = await session.get(Shop, shop_id)
+            if shop is None:
+                return None
+
+            shop.delivery_enabled = delivery_enabled
+            shop.courier_services = json.dumps(courier_services, ensure_ascii=False)
+
+            await session.commit()
+            await session.refresh(shop)
+
             return _shop_to_dict(shop)

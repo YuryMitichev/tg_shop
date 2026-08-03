@@ -6,6 +6,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.utils.messages import show_screen, replace_with_text
 from app.services.message_service import MessageService
+from app.services.shop_service import ShopService
 
 
 def setup_router() -> Router:
@@ -27,10 +28,18 @@ def setup_router() -> Router:
     async def show_delivery_msg(message: Message, state: FSMContext):
         await state.clear()
 
+        shop_id = get_shop_id()
+        text = await MessageService.get(shop_id, "delivery")
+
+        shop = await ShopService.get(shop_id)
+        couriers = shop.get("courier_services", []) if shop else []
+        if couriers:
+            text += "\n\n🚚 <b>Курьерские службы:</b>\n" + "\n".join(f"• {c}" for c in couriers)
+
         await show_screen(
             message,
             state,
-            await MessageService.get(get_shop_id(), "delivery"),
+            text,
             reply_markup=_EMPTY_KB,
         )
 
