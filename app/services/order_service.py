@@ -21,6 +21,7 @@ class OrderService:
         address: str,
         comment: str | None = None,
         promo_code: str | None = None,
+        payment_method: str = "manual",
     ) -> dict | None:
         """
         Создаёт заказ из текущей корзины пользователя и очищает корзину.
@@ -58,6 +59,7 @@ class OrderService:
                 total_amount=final_total,
                 promo_code=applied_promo,
                 discount_amount=discount,
+                payment_method=payment_method,
             )
 
             order.items = [

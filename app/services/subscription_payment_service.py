@@ -41,6 +41,7 @@ class SubscriptionPaymentService:
             description=f"Подписка «{plan['name']}» — {plan['duration_days']} дней (магазин «{shop['name']}»)",
             return_url=return_url,
             metadata={
+                "type": "subscription",
                 "shop_id": str(shop_id),
                 "plan_id": str(plan_id),
             },

@@ -54,6 +54,7 @@ _MIGRATIONS = [
     ("communication_logs", "shop_id", "INTEGER NOT NULL DEFAULT 1"),
     ("broadcasts", "shop_id", "INTEGER NOT NULL DEFAULT 1"),
     ("user_offers", "shop_id", "INTEGER NOT NULL DEFAULT 1"),
+    ("orders", "payment_method", "TEXT NOT NULL DEFAULT 'manual'"),
 ]
 
 

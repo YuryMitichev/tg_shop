@@ -14,6 +14,7 @@ from app.models.product_photo import ProductPhoto
 from app.services.catalog_service import CatalogService
 from app.services.cart_service import CartService
 from app.services.offer_service import OfferService
+from app.services.order_payment_service import OrderPaymentService
 from app.services.order_service import OrderService
 from app.services.promo_service import PromoCodeService
 from app.services.review_service import ReviewService
@@ -45,6 +46,7 @@ class CreateOrderRequest(BaseModel):
     phone: str
     comment: str | None = None
     promo_code: str | None = None
+    payment_method: str = "manual"
 
 
 class ValidatePromoRequest(BaseModel):
@@ -236,6 +238,24 @@ async def validate_promo(req: ValidatePromoRequest, user: dict = Depends(get_cur
 # Заказы
 # ==========================
 
+@router.get("/payment-methods")
+async def get_payment_methods():
+    """Возвращает доступные способы оплаты."""
+    methods = []
+    if settings.yookassa_enabled:
+        methods.append({
+            "id": "yookassa",
+            "label": "💳 Картой / СБП",
+            "description": "Оплата онлайн через ЮKassa",
+        })
+    methods.append({
+        "id": "manual",
+        "label": "🏦 Переводом на карту",
+        "description": "Ручная оплата — перевод на карту продавца",
+    })
+    return methods
+
+
 @router.get("/orders")
 async def list_orders(user: dict = Depends(get_current_user)):
     orders = await OrderService.get_user_orders(user["shop_id"], user["id"], limit=20)
@@ -252,17 +272,34 @@ async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current
         address="",
         comment=req.comment,
         promo_code=req.promo_code,
+        payment_method=req.payment_method,
     )
 
     if order is None:
         raise HTTPException(status_code=400, detail="Cart is empty")
 
-    if settings.tinkoff_enabled:
+    if req.payment_method == "yookassa" and settings.yookassa_enabled:
+        payment = await OrderPaymentService.create_payment(
+            user["shop_id"], order["order_id"]
+        )
+
+        if payment is None:
+            return {
+                "order_id": order["order_id"],
+                "total": order["total"],
+                "discount": order["discount"],
+                "payment": "manual",
+                "payment_error": True,
+                "card_number": settings.payment_card_number,
+                "recipient": settings.payment_recipient_name,
+            }
+
         return {
             "order_id": order["order_id"],
             "total": order["total"],
             "discount": order["discount"],
-            "payment": "qr",
+            "payment": "yookassa",
+            "confirmation_url": payment["confirmation_url"],
         }
 
     return {

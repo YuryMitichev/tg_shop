@@ -8,6 +8,8 @@ const App = {
     selectedVariant: null,
     cartTotal: 0,
     appliedPromo: null,
+    paymentMethods: [],
+    selectedPaymentMethod: "manual",
 
     init() {
         this.tg = window.Telegram.WebApp;
@@ -414,6 +416,44 @@ const App = {
         document.getElementById("promo-result").textContent = "";
         document.getElementById("promo-result").className = "";
         this.renderCheckoutTotal();
+        this.loadPaymentMethods();
+    },
+
+    async loadPaymentMethods() {
+        const container = document.getElementById("payment-methods");
+        container.innerHTML = `<div class="loading">Загрузка...</div>`;
+
+        try {
+            this.paymentMethods = await this.api("GET", "/payment-methods");
+
+            if (this.paymentMethods.length === 0) {
+                container.innerHTML = "";
+                return;
+            }
+
+            this.selectedPaymentMethod = this.paymentMethods[0].id;
+
+            container.innerHTML = this.paymentMethods.map((m, i) => `
+                <label class="payment-option ${i === 0 ? 'active' : ''}" data-pm="${m.id}">
+                    <input type="radio" name="payment_method" value="${m.id}" ${i === 0 ? 'checked' : ''}
+                           onchange="App.selectPaymentMethod('${m.id}')">
+                    <div class="pm-info">
+                        <div class="pm-label">${this.esc(m.label)}</div>
+                        <div class="pm-desc">${this.esc(m.description)}</div>
+                    </div>
+                </label>
+            `).join("");
+        } catch (e) {
+            container.innerHTML = `<div class="error-msg">Ошибка загрузки способов оплаты</div>`;
+        }
+    },
+
+    selectPaymentMethod(methodId) {
+        this.selectedPaymentMethod = methodId;
+        document.querySelectorAll(".payment-option").forEach(el => {
+            el.classList.toggle("active", el.dataset.pm === methodId);
+        });
+        this.tg.HapticFeedback?.selectionChanged();
     },
 
     async applyPromo() {
@@ -476,6 +516,7 @@ const App = {
                 phone,
                 comment,
                 promo_code: this.appliedPromo?.code || null,
+                payment_method: this.selectedPaymentMethod,
             });
 
             this.updateCartBadge();
@@ -493,17 +534,33 @@ const App = {
 
         let paymentInfo = "";
 
-        if (result.payment === "manual") {
+        if (result.payment === "yookassa" && result.confirmation_url) {
             paymentInfo = `
-                <div class="card">
-                    <div style="font-weight:600;margin-bottom:8px">💳 Оплата переводом на карту:</div>
-                    <div style="font-size:18px;font-weight:700;letter-spacing:1px">${this.esc(result.card_number || "не указан")}</div>
-                    ${result.recipient ? `<div style="margin-top:4px;color:var(--hint)">Получатель: ${this.esc(result.recipient)}</div>` : ""}
-                </div>
-                <div class="info">После оплаты отправьте фото чека боту в чат.</div>
+                <button class="btn-primary" onclick="window.open('${result.confirmation_url}', '_blank')">
+                    💳 Оплатить ${result.total} ₽
+                </button>
+                <div class="info">После оплаты статус заказа обновится автоматически.</div>
             `;
-        } else if (result.payment === "qr") {
-            paymentInfo = `<div class="info">Ссылка на оплату через СБП придёт в чат с ботом.</div>`;
+        } else if (result.payment === "manual") {
+            if (result.payment_error) {
+                paymentInfo = `
+                    <div class="info">⚠️ Онлайн-оплата временно недоступна.</div>
+                    <div class="card">
+                        <div style="font-weight:600;margin-bottom:8px">💳 Оплата переводом на карту:</div>
+                        <div style="font-size:18px;font-weight:700;letter-spacing:1px">${this.esc(result.card_number || "не указан")}</div>
+                        ${result.recipient ? `<div style="margin-top:4px;color:var(--hint)">Получатель: ${this.esc(result.recipient)}</div>` : ""}
+                    </div>
+                `;
+            } else {
+                paymentInfo = `
+                    <div class="card">
+                        <div style="font-weight:600;margin-bottom:8px">💳 Оплата переводом на карту:</div>
+                        <div style="font-size:18px;font-weight:700;letter-spacing:1px">${this.esc(result.card_number || "не указан")}</div>
+                        ${result.recipient ? `<div style="margin-top:4px;color:var(--hint)">Получатель: ${this.esc(result.recipient)}</div>` : ""}
+                    </div>
+                    <div class="info">После оплаты отправьте фото чека боту в чат.</div>
+                `;
+            }
         }
 
         content.innerHTML = `
