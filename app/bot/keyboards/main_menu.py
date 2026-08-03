@@ -4,7 +4,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.core.config import settings
 
 
-REPLY_BUTTONS = ["🚚 Доставка", "💳 Оплата", "🧾 Чек об оплате"]
+REPLY_BUTTONS = ["🚚 Доставка"]
 
 
 def get_reply_keyboard() -> ReplyKeyboardMarkup:
@@ -17,8 +17,6 @@ def get_reply_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [
                 KeyboardButton(text="🚚 Доставка"),
-                KeyboardButton(text="💳 Оплата"),
-                KeyboardButton(text="🧾 Чек об оплате"),
             ],
         ],
         resize_keyboard=True,
