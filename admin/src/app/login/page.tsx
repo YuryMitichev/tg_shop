@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { api, setToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,13 +40,12 @@ function LoginForm() {
         { token: t },
       );
 
-      if (!res.ok || !res.token) {
+      if (!res.ok) {
         setVerifyError(res.error || "Ссылка недействительна или истекла");
         setStep("id");
         return;
       }
 
-      setToken(res.token);
       router.push("/dashboard");
     } catch {
       setVerifyError("Ошибка запроса");

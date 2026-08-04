@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Request, UploadFile, File
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from aiogram.types import BufferedInputFile
 from datetime import datetime
@@ -166,7 +167,24 @@ async def verify_login_token(request: Request, body: VerifyTokenBody):
     if token is None:
         return {"ok": False, "error": "Неверная или истекшая ссылка"}
 
-    return {"ok": True, "token": token}
+    response = JSONResponse(content={"ok": True})
+    response.set_cookie(
+        key="admin_token",
+        value=token,
+        httponly=True,
+        secure=not app_settings.debug,
+        samesite="lax",
+        path="/",
+        max_age=86400,
+    )
+    return response
+
+
+@router.post("/auth/logout")
+async def logout():
+    response = JSONResponse(content={"ok": True})
+    response.delete_cookie(key="admin_token", path="/")
+    return response
 
 
 @router.get("/auth/me")

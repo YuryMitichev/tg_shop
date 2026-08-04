@@ -1,16 +1,17 @@
-from fastapi import Header, HTTPException
+from fastapi import Cookie, HTTPException
 
 from app.services.admin_auth_service import AdminAuthService
 
 
-async def require_admin(authorization: str = Header(...)) -> dict:
+async def require_admin(admin_token: str | None = Cookie(default=None)) -> dict:
     """
-    FastAPI dependency: проверяет JWT-токен администратора.
+    FastAPI dependency: проверяет JWT-токен из httpOnly-cookie.
     Возвращает {'admin_id': int, 'shop_id': int, 'is_super_admin': bool}.
     """
-    token = authorization.replace("Bearer ", "", 1)
+    if not admin_token:
+        raise HTTPException(status_code=401, detail="Не авторизован")
 
-    result = await AdminAuthService.verify_token(token)
+    result = await AdminAuthService.verify_token(admin_token)
 
     if result is None:
         raise HTTPException(status_code=401, detail="Не авторизован")
@@ -18,14 +19,15 @@ async def require_admin(authorization: str = Header(...)) -> dict:
     return result
 
 
-async def require_super_admin(authorization: str = Header(...)) -> dict:
+async def require_super_admin(admin_token: str | None = Cookie(default=None)) -> dict:
     """
-    FastAPI dependency: проверяет JWT-токен супер-админа.
+    FastAPI dependency: проверяет JWT-токен супер-админа из httpOnly-cookie.
     Возвращает {'admin_id': int, 'shop_id': int, 'is_super_admin': bool}.
     """
-    token = authorization.replace("Bearer ", "", 1)
+    if not admin_token:
+        raise HTTPException(status_code=401, detail="Не авторизован")
 
-    result = await AdminAuthService.verify_token(token)
+    result = await AdminAuthService.verify_token(admin_token)
 
     if result is None:
         raise HTTPException(status_code=401, detail="Не авторизован")

@@ -6,36 +6,13 @@ export function photoUrl(photoId: number): string {
   return `${SHOP_API}/photo/${photoId}`;
 }
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("admin_token");
-}
-
-export function setToken(token: string) {
-  localStorage.setItem("admin_token", token);
-}
-
-export function clearToken() {
-  localStorage.removeItem("admin_token");
-}
-
-export function isAuthenticated(): boolean {
-  return !!getToken();
-}
-
 async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = getToken();
-
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
   };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
   if (!(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
@@ -44,10 +21,10 @@ async function request<T>(
   const res = await fetch(`${ADMIN_API}${path}`, {
     ...options,
     headers,
+    credentials: "include",
   });
 
   if (res.status === 401) {
-    clearToken();
     if (typeof window !== "undefined") {
       window.location.href = "/login";
     }

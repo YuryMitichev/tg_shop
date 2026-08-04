@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
-import { isAuthenticated, clearToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 
@@ -16,15 +16,18 @@ export default function DashboardLayout({
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated()) {
-      router.push("/login");
-      return;
-    }
-    setReady(true);
+    api
+      .get<{ telegram_user_id: number }>("/auth/me")
+      .then(() => setReady(true))
+      .catch(() => router.push("/login"));
   }, [router]);
 
-  function handleLogout() {
-    clearToken();
+  async function handleLogout() {
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // игнорируем — всё равно редиректим
+    }
     router.push("/login");
   }
 
