@@ -44,25 +44,21 @@ async def init_db() -> None:
 
     Безопасно вызывать при каждом старте — существующие записи не затираются.
     """
-    from sqlalchemy import text
+    from sqlalchemy import select
+    from app.models.shop import Shop
 
-    async with engine.begin() as conn:
-        result = await conn.execute(
-            text("SELECT 1 FROM shops WHERE id = 1")
-        )
-        if result.first() is None:
-            await conn.execute(
-                text(
-                    "INSERT INTO shops (id, name, bot_token, bot_token_hash, owner_telegram_id, is_active) "
-                    "VALUES (1, :name, :token, :token_hash, :owner, TRUE)"
-                ),
-                {
-                    "name": settings.shop_name,
-                    "token": encrypt(settings.bot_token),
-                    "token_hash": token_hash(settings.bot_token),
-                    "owner": settings.admin_id_list[0] if settings.admin_id_list else 0,
-                },
+    async with async_session() as session:
+        existing = await session.scalar(select(Shop).where(Shop.id == 1))
+        if existing is None:
+            shop = Shop(
+                id=1,
+                name=settings.shop_name,
+                bot_token=encrypt(settings.bot_token),
+                bot_token_hash=token_hash(settings.bot_token),
+                owner_telegram_id=settings.admin_id_list[0] if settings.admin_id_list else 0,
             )
+            session.add(shop)
+            await session.commit()
 
     from app.services.subscription_service import SubscriptionService
     await SubscriptionService.ensure_default_plans()
