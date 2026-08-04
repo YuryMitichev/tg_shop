@@ -30,6 +30,10 @@ async def tinkoff_webhook(request: Request):
 
     if result == "paid":
         await _notify_user_paid(data)
+    elif result == "invalid_token":
+        return JSONResponse(status_code=403, content={"error": "invalid_token"})
+    elif result == "not_found":
+        return JSONResponse(status_code=404, content={"error": "order_not_found"})
 
     return JSONResponse(content={"status": "ok"})
 

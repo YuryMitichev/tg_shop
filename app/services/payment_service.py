@@ -1,5 +1,6 @@
 import base64
 import logging
+from typing import Literal
 
 from sqlalchemy import select
 
@@ -7,6 +8,8 @@ from app.database.db import async_session
 from app.models.order import Order
 from app.services.tinkoff_client import TinkoffClient, verify_token
 from app.core.config import settings
+
+NotificationResult = Literal["paid", "ignored", "invalid_token", "not_found"]
 
 logger = logging.getLogger(__name__)
 
@@ -68,34 +71,38 @@ class PaymentService:
                 await session.commit()
 
     @staticmethod
-    async def process_notification(data: dict) -> bool:
+    async def process_notification(data: dict) -> NotificationResult:
         """
         Обрабатывает вебхук от Тинькофф.
         order_id — глобально уникальный, shop_id не нужен.
 
-        Возвращает True если заказ найден и статус обработан.
+        Возвращает:
+        - "paid"          — заказ найден, статус обновлён на "paid"
+        - "ignored"       — заказ найден, но статус не требует действий
+        - "invalid_token" — неверный токен вебхука
+        - "not_found"     — заказ не найден или неверный OrderId
         """
         if not verify_token(data, settings.tinkoff_password):
             logger.warning("Tinkoff webhook: неверный токен")
-            return False
+            return "invalid_token"
 
         order_id_str = data.get("OrderId")
         status = data.get("Status")
 
         if not order_id_str:
-            return False
+            return "not_found"
 
         try:
             order_id = int(order_id_str)
         except (TypeError, ValueError):
-            return False
+            return "not_found"
 
         async with async_session() as session:
             order = await session.get(Order, order_id)
 
             if not order:
                 logger.warning("Tinkoff webhook: заказ %s не найден", order_id)
-                return False
+                return "not_found"
 
             if status == "CONFIRMED":
                 if order.status not in ("paid", "done", "cancelled"):
@@ -107,7 +114,7 @@ class PaymentService:
             elif status in ("REJECTED", "CANCELED"):
                 logger.info("Платеж заказа %s отклонён: %s", order_id, status)
 
-        return True
+        return "ignored"
 
     @staticmethod
     async def get_order_with_user(order_id: int) -> dict | None:
