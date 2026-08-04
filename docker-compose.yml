@@ -1,4 +1,22 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tg_shop_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tg_shop
+      POSTGRES_USER: tg_shop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - shopnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tg_shop -d tg_shop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   bot:
     build: .
     container_name: tg_shop_bot
@@ -6,9 +24,10 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:////app/data/shop.db
-    volumes:
-      - bot_data:/app/data
+      - DATABASE_URL=postgresql+asyncpg://tg_shop:${POSTGRES_PASSWORD:-changeme}@postgres:5432/tg_shop
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - shopnet
 
@@ -43,7 +62,7 @@ services:
       - admin
 
 volumes:
-  bot_data:
+  pg_data:
   caddy_data:
   caddy_config:
 

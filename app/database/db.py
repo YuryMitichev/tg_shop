@@ -16,7 +16,16 @@ class Base(DeclarativeBase):
 
 DATABASE_URL = settings.database_url
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+_engine_kwargs = {"echo": False}
+
+if DATABASE_URL.startswith("postgresql"):
+    _engine_kwargs.update(
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+    )
+
+engine = create_async_engine(DATABASE_URL, **_engine_kwargs)
 
 async_session = async_sessionmaker(
     engine,
