@@ -99,7 +99,3 @@ async def get_optional_user(
         user["shop_id"] = x_shop_id or 1
     return user
 
-
-async def get_current_user_id(user: dict = None) -> int:
-    """Извлекает telegram_user_id из пользователя."""
-    return user["id"]
