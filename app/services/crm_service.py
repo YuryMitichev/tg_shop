@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import select, func, or_
 
+from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.user_profile import UserProfile
 from app.models.communication_log import CommunicationLog
@@ -28,7 +29,7 @@ class CrmService:
                 select(Order.telegram_user_id)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                 )
                 .distinct()
             )
@@ -228,7 +229,7 @@ class CrmService:
             .where(
                 Order.shop_id == shop_id,
                 Order.telegram_user_id == telegram_user_id,
-                Order.status != "cancelled",
+                Order.status != OrderStatus.CANCELLED,
             )
         )
         row = result.one()
@@ -274,7 +275,7 @@ class CrmService:
                 .where(
                     Order.shop_id == shop_id,
                     Order.telegram_user_id == telegram_user_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                 )
                 .group_by(OrderItem.product_name)
                 .order_by(func.sum(OrderItem.quantity).desc())

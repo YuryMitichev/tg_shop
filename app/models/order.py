@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.enums import OrderStatus
 from app.database.db import Base
 
 
@@ -16,7 +17,7 @@ class Order(Base):
     telegram_user_id: Mapped[int] = mapped_column(index=True)
 
     # new -> confirmed -> paid -> shipped -> done (или cancelled)
-    status: Mapped[str] = mapped_column(default="new")
+    status: Mapped[str] = mapped_column(default=OrderStatus.NEW)
 
     full_name: Mapped[str] = mapped_column(nullable=False)
     phone: Mapped[str] = mapped_column(nullable=False)

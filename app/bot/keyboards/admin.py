@@ -1,6 +1,7 @@
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app.core.enums import OrderStatus
 from app.utils.order_status import STATUS_LABELS, NEXT_STATUS
 
 
@@ -297,7 +298,7 @@ def get_admin_order_keyboard(order_id: int, status: str) -> InlineKeyboardMarkup
         )
         builder.adjust(1)
 
-    if status not in ("done", "cancelled"):
+    if status not in (OrderStatus.DONE, OrderStatus.CANCELLED):
         builder.button(text="❌ Отменить заказ", callback_data=f"admin_order_status:{order_id}:cancelled")
         builder.adjust(1)
 

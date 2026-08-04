@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.order import Order
 from app.services.yookassa_client import YooKassaClient
@@ -94,8 +95,8 @@ class OrderPaymentService:
                     logger.warning("ЮKassa webhook: заказ %d не найден", order_id)
                     return False
 
-                if order.status not in ("paid", "done", "cancelled"):
-                    order.status = "paid"
+                if order.status not in (OrderStatus.PAID, OrderStatus.DONE, OrderStatus.CANCELLED):
+                    order.status = OrderStatus.PAID
                     order.payment_id = payment_id
                     order.status_updated_at = datetime.now()
                     await session.commit()

@@ -3,6 +3,7 @@ from typing import Sequence
 
 from sqlalchemy import select, func, or_
 
+from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.broadcast import Broadcast
 from app.models.user_profile import UserProfile
@@ -49,7 +50,7 @@ class BroadcastService:
                     ).where(
                         Order.shop_id == shop_id,
                         Order.telegram_user_id == p.telegram_user_id,
-                        Order.status != "cancelled",
+                        Order.status != OrderStatus.CANCELLED,
                     )
                 )
                 row = stats.one()

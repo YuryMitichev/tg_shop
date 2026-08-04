@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import select, func, extract
 
+from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.category import Category
 from app.models.order import Order
@@ -32,14 +33,14 @@ class StatsService:
             status_counts = {row[0]: row[1] for row in result.all()}
 
             total_orders = sum(status_counts.values())
-            new_orders = status_counts.get("new", 0)
-            cancelled_orders = status_counts.get("cancelled", 0)
+            new_orders = status_counts.get(OrderStatus.NEW, 0)
+            cancelled_orders = status_counts.get(OrderStatus.CANCELLED, 0)
 
             revenue_result = await session.execute(
                 select(func.coalesce(func.sum(Order.total_amount), 0))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                 )
             )
             total_revenue = revenue_result.scalar() or 0
@@ -49,7 +50,7 @@ class StatsService:
                 select(func.coalesce(func.sum(Order.total_amount), 0))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                     extract("year", Order.created_at) == now.year,
                     extract("month", Order.created_at) == now.month,
                 )
@@ -65,7 +66,7 @@ class StatsService:
                 .join(Order, OrderItem.order_id == Order.id)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                 )
                 .group_by(OrderItem.product_name)
                 .order_by(func.sum(OrderItem.price * OrderItem.quantity).desc())
@@ -108,7 +109,7 @@ class StatsService:
                 )
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                     Order.created_at >= start,
                 )
                 .group_by(func.date(Order.created_at))
@@ -157,7 +158,7 @@ class StatsService:
                 .select_from(Order)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status == "done",
+                    Order.status == OrderStatus.DONE,
                     Order.created_at >= cur_start,
                 )
             )
@@ -187,7 +188,7 @@ class StatsService:
             select(func.coalesce(func.sum(Order.total_amount), 0))
             .where(
                 Order.shop_id == shop_id,
-                Order.status != "cancelled",
+                Order.status != OrderStatus.CANCELLED,
                 Order.created_at >= start,
                 Order.created_at < end,
             )
@@ -201,7 +202,7 @@ class StatsService:
             .select_from(Order)
             .where(
                 Order.shop_id == shop_id,
-                Order.status != "cancelled",
+                Order.status != OrderStatus.CANCELLED,
                 Order.created_at >= start,
                 Order.created_at < end,
             )
@@ -214,7 +215,7 @@ class StatsService:
             select(func.count(func.distinct(Order.telegram_user_id)))
             .where(
                 Order.shop_id == shop_id,
-                Order.status != "cancelled",
+                Order.status != OrderStatus.CANCELLED,
                 Order.created_at >= start,
                 Order.created_at < end,
             )
@@ -227,7 +228,7 @@ class StatsService:
             select(Order.telegram_user_id, func.count(Order.id).label("cnt"))
             .where(
                 Order.shop_id == shop_id,
-                Order.status != "cancelled",
+                Order.status != OrderStatus.CANCELLED,
                 Order.created_at >= start,
                 Order.created_at < end,
             )
@@ -242,7 +243,7 @@ class StatsService:
             .join(Order, OrderItem.order_id == Order.id)
             .where(
                 Order.shop_id == shop_id,
-                Order.status != "cancelled",
+                Order.status != OrderStatus.CANCELLED,
                 Order.created_at >= start,
                 Order.created_at < end,
             )
@@ -278,7 +279,7 @@ class StatsService:
                 .join(Order, OrderItem.order_id == Order.id, isouter=True)
                 .where(
                     Category.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                     Order.created_at >= start,
                 )
                 .group_by(Category.id, Category.name, Category.emoji)
@@ -311,7 +312,7 @@ class StatsService:
                 .join(Order, OrderItem.order_id == Order.id)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                     Order.created_at >= start,
                 )
                 .group_by(OrderItem.product_name)
@@ -338,7 +339,7 @@ class StatsService:
                 select(Order.telegram_user_id, func.min(Order.created_at).label("first"))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                 )
                 .group_by(Order.telegram_user_id)
             )
@@ -351,7 +352,7 @@ class StatsService:
                 select(func.coalesce(func.sum(Order.total_amount), 0))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                 )
             )
             total_revenue = total_rev_result.scalar() or 0
@@ -366,7 +367,7 @@ class StatsService:
                 )
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                 )
                 .group_by(Order.full_name)
                 .order_by(func.sum(Order.total_amount).desc())
@@ -396,7 +397,7 @@ class StatsService:
                 select(func.coalesce(func.sum(Order.discount_amount), 0))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                     Order.created_at >= start,
                     Order.discount_amount > 0,
                 )
@@ -408,7 +409,7 @@ class StatsService:
                 .select_from(Order)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                     Order.created_at >= start,
                     Order.promo_code.isnot(None),
                 )
@@ -420,7 +421,7 @@ class StatsService:
                 .select_from(Order)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                     Order.created_at >= start,
                     Order.promo_code.is_(None),
                 )
@@ -435,7 +436,7 @@ class StatsService:
                 )
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                     Order.created_at >= start,
                     Order.promo_code.isnot(None),
                 )

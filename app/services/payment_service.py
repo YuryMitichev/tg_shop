@@ -4,6 +4,7 @@ from typing import Literal
 
 from sqlalchemy import select
 
+from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.order import Order
 from app.services.tinkoff_client import TinkoffClient, verify_token
@@ -105,8 +106,8 @@ class PaymentService:
                 return "not_found"
 
             if status == "CONFIRMED":
-                if order.status not in ("paid", "done", "cancelled"):
-                    order.status = "paid"
+                if order.status not in (OrderStatus.PAID, OrderStatus.DONE, OrderStatus.CANCELLED):
+                    order.status = OrderStatus.PAID
                     await session.commit()
                     logger.info("Заказ %s оплачен", order_id)
                     return "paid"

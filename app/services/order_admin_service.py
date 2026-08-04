@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.order import Order
 from app.models.order_item import OrderItem
@@ -90,7 +91,7 @@ class OrderAdminService:
             order.status = status
             order.status_updated_at = datetime.now()
 
-            if old_status != "cancelled" and status == "cancelled":
+            if old_status != OrderStatus.CANCELLED and status == OrderStatus.CANCELLED:
                 for item in order.items:
                     if item.variant_id:
                         result_v = await session.execute(
@@ -212,7 +213,7 @@ class OrderAdminService:
                 )
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != "cancelled",
+                    Order.status != OrderStatus.CANCELLED,
                 )
                 .group_by(Order.telegram_user_id, Order.full_name, Order.phone)
                 .order_by(func.sum(Order.total_amount).desc())

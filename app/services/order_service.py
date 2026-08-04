@@ -1,6 +1,7 @@
 from sqlalchemy import select, exists, or_, update
 from sqlalchemy.orm import selectinload
 
+from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.order import Order
 from app.models.order_item import OrderItem
@@ -89,7 +90,7 @@ class OrderService:
             order = Order(
                 shop_id=shop_id,
                 telegram_user_id=telegram_user_id,
-                status="new",
+                status=OrderStatus.NEW,
                 full_name=full_name,
                 phone=phone,
                 address=address,
@@ -164,7 +165,7 @@ class OrderService:
                         OrderItem.order_id == Order.id,
                         Order.shop_id == shop_id,
                         Order.telegram_user_id == telegram_user_id,
-                        Order.status != "cancelled",
+                        Order.status != OrderStatus.CANCELLED,
                     )
                 )
             )
@@ -252,7 +253,7 @@ class OrderService:
                 select(Order)
                 .options(selectinload(Order.items))
                 .where(
-                    Order.status.in_(["new", "confirmed", "paid"]),
+                    Order.status.in_([OrderStatus.NEW, OrderStatus.CONFIRMED, OrderStatus.PAID]),
                     or_(
                         Order.status_updated_at.is_(None),
                         Order.status_updated_at < cutoff,
@@ -263,7 +264,7 @@ class OrderService:
             stale = result.scalars().all()
 
             for order in stale:
-                order.status = "cancelled"
+                order.status = OrderStatus.CANCELLED
                 order.status_updated_at = datetime.now()
 
                 for item in order.items:
