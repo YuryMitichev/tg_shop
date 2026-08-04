@@ -54,7 +54,7 @@ async def init_db() -> None:
             await conn.execute(
                 text(
                     "INSERT INTO shops (id, name, bot_token, bot_token_hash, owner_telegram_id, is_active) "
-                    "VALUES (1, :name, :token, :token_hash, :owner, 1)"
+                    "VALUES (1, :name, :token, :token_hash, :owner, TRUE)"
                 ),
                 {
                     "name": settings.shop_name,
