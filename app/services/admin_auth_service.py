@@ -11,6 +11,10 @@ from app.models.admin_user import AdminUser
 from app.models.login_token import LoginToken
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class AdminAuthService:
     """
     Авторизация админ-панели через magic link из Telegram.
@@ -60,11 +64,11 @@ class AdminAuthService:
         shop_id, is_super = resolved
 
         token = secrets.token_urlsafe(48)
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=AdminAuthService.LINK_TTL)
+        expires_at = _utcnow() + timedelta(seconds=AdminAuthService.LINK_TTL)
 
         async with async_session() as session:
             await session.execute(
-                delete(LoginToken).where(LoginToken.expires_at < datetime.now(timezone.utc))
+                delete(LoginToken).where(LoginToken.expires_at < _utcnow())
             )
             session.add(LoginToken(
                 token=token,
@@ -101,10 +105,7 @@ class AdminAuthService:
             if login_token is None:
                 return None
 
-            now = datetime.now(timezone.utc)
-            if login_token.expires_at.tzinfo is None:
-                login_token.expires_at = login_token.expires_at.replace(tzinfo=timezone.utc)
-
+            now = _utcnow()
             if now > login_token.expires_at:
                 await session.delete(login_token)
                 await session.commit()

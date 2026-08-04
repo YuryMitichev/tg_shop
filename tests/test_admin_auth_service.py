@@ -11,7 +11,7 @@ from app.services.admin_auth_service import AdminAuthService
 
 
 def _utcnow():
-    return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class TestMagicLinkAuth:
