@@ -294,6 +294,14 @@ async def list_orders(user: dict = Depends(get_current_user)):
 
 @router.post("/orders")
 async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current_user)):
+    unavailable = await CartService.check_availability(user["shop_id"], user["id"])
+
+    if unavailable:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "out_of_stock", "items": unavailable},
+        )
+
     order = await OrderService.create_order(
         user["shop_id"],
         telegram_user_id=user["id"],

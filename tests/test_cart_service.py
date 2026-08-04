@@ -131,3 +131,105 @@ class TestCartService:
         error = await CartService.add_item(1, 111, product_id=1, variant_id=1, quantity=5)
 
         assert error is None
+
+    async def test_check_availability_empty_cart(self, db_session, seed_data):
+        result = await CartService.check_availability(1, 111)
+
+        assert result is None
+
+    async def test_check_availability_all_ok(self, db_session, seed_data):
+        await CartService.add_item(1, 111, product_id=1, variant_id=1, quantity=5)
+        await CartService.add_item(1, 111, product_id=3, variant_id=4, quantity=2)
+
+        result = await CartService.check_availability(1, 111)
+
+        assert result is None
+
+    async def test_check_availability_exact_stock(self, db_session, seed_data):
+        await CartService.add_item(1, 111, product_id=1, variant_id=2, quantity=5)
+
+        result = await CartService.check_availability(1, 111)
+
+        assert result is None
+
+    async def test_check_availability_exceeds_stock(self, db_session, seed_data):
+        await CartService.add_item(1, 111, product_id=1, variant_id=1, quantity=5)
+
+        from app.database.db import async_session
+        from sqlalchemy import update
+        from app.models.product_variant import ProductVariant
+
+        async with async_session() as session:
+            await session.execute(
+                update(ProductVariant).where(ProductVariant.id == 1).values(stock=3)
+            )
+            await session.commit()
+
+        result = await CartService.check_availability(1, 111)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["product_name"] == "Кашемир"
+        assert result[0]["volume"] == "75 г"
+        assert result[0]["requested"] == 5
+        assert result[0]["available"] == 3
+
+    async def test_check_availability_zero_stock(self, db_session, seed_data):
+        await CartService.add_item(1, 111, product_id=1, variant_id=1, quantity=2)
+
+        from app.database.db import async_session
+        from sqlalchemy import update
+        from app.models.product_variant import ProductVariant
+
+        async with async_session() as session:
+            await session.execute(
+                update(ProductVariant).where(ProductVariant.id == 1).values(stock=0)
+            )
+            await session.commit()
+
+        result = await CartService.check_availability(1, 111)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["available"] == 0
+
+    async def test_check_availability_partial(self, db_session, seed_data):
+        await CartService.add_item(1, 111, product_id=1, variant_id=1, quantity=5)
+        await CartService.add_item(1, 111, product_id=3, variant_id=4, quantity=2)
+
+        from app.database.db import async_session
+        from sqlalchemy import update
+        from app.models.product_variant import ProductVariant
+
+        async with async_session() as session:
+            await session.execute(
+                update(ProductVariant).where(ProductVariant.id == 4).values(stock=1)
+            )
+            await session.commit()
+
+        result = await CartService.check_availability(1, 111)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["product_name"] == "Диффузор Кашемир"
+
+    async def test_check_availability_other_user(self, db_session, seed_data):
+        await CartService.add_item(1, 111, product_id=1, variant_id=1, quantity=5)
+        await CartService.add_item(1, 222, product_id=3, variant_id=4, quantity=2)
+
+        from app.database.db import async_session
+        from sqlalchemy import update
+        from app.models.product_variant import ProductVariant
+
+        async with async_session() as session:
+            await session.execute(
+                update(ProductVariant).where(ProductVariant.id == 4).values(stock=1)
+            )
+            await session.commit()
+
+        result_111 = await CartService.check_availability(1, 111)
+        result_222 = await CartService.check_availability(1, 222)
+
+        assert result_111 is None
+        assert result_222 is not None
+        assert len(result_222) == 1

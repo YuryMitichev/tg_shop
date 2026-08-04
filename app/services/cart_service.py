@@ -62,6 +62,36 @@ class CartService:
             return None
 
     @staticmethod
+    async def check_availability(shop_id: int, telegram_user_id: int) -> list[dict] | None:
+        """Проверить доступность всех товаров в корзине по текущим остаткам.
+
+        Возвращает список недоступных позиций или None, если всё в наличии.
+        """
+        async with async_session() as session:
+            result = await session.execute(
+                select(CartItem, Product, ProductVariant)
+                .join(Product, CartItem.product_id == Product.id)
+                .join(ProductVariant, CartItem.variant_id == ProductVariant.id)
+                .where(
+                    CartItem.shop_id == shop_id,
+                    CartItem.telegram_user_id == telegram_user_id,
+                )
+            )
+
+            unavailable: list[dict] = []
+
+            for cart_item, product, variant in result.all():
+                if variant.stock < cart_item.quantity:
+                    unavailable.append({
+                        "product_name": product.name,
+                        "volume": variant.volume,
+                        "requested": cart_item.quantity,
+                        "available": variant.stock,
+                    })
+
+            return unavailable if unavailable else None
+
+    @staticmethod
     async def get_items(shop_id: int, telegram_user_id: int) -> list[dict]:
         """Содержимое корзины с текущими данными о товаре (название, объём, цена).
 
