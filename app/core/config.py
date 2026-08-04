@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
 
     # ==========================
+    # Sentry (error tracking)
+    # ==========================
+
+    sentry_dsn: str | None = Field(default=None, alias="SENTRY_DSN")
+
+    # ==========================
     # Tinkoff Acquiring (СБП QR)
     # ==========================
 

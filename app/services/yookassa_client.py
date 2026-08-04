@@ -20,8 +20,14 @@ class YooKassaClient:
     """
 
     @staticmethod
-    def _auth_header() -> str:
-        credentials = f"{settings.yookassa_shop_id}:{settings.yookassa_secret_key}"
+    def _auth_header(
+        shop_id: str | None = None,
+        secret_key: str | None = None,
+    ) -> str:
+        if shop_id and secret_key:
+            credentials = f"{shop_id}:{secret_key}"
+        else:
+            credentials = f"{settings.yookassa_shop_id}:{settings.yookassa_secret_key}"
         encoded = base64.b64encode(credentials.encode()).decode()
         return f"Basic {encoded}"
 
@@ -31,9 +37,14 @@ class YooKassaClient:
         description: str,
         return_url: str,
         metadata: dict[str, str],
+        shop_id: str | None = None,
+        secret_key: str | None = None,
     ) -> dict[str, Any] | None:
         """
         Создаёт платёж.
+
+        Если переданы shop_id и secret_key — используются per-shop ключи магазина.
+        Иначе — глобальные ключи платформы (для подписок).
 
         Возвращает dict:
         - payment_id: str
@@ -42,7 +53,7 @@ class YooKassaClient:
         При ошибке возвращает None.
         """
         headers = {
-            "Authorization": YooKassaClient._auth_header(),
+            "Authorization": YooKassaClient._auth_header(shop_id, secret_key),
             "Idempotence-Key": str(uuid.uuid4()),
             "Content-Type": "application/json",
         }
@@ -87,10 +98,14 @@ class YooKassaClient:
             return None
 
     @staticmethod
-    async def get_payment(payment_id: str) -> dict[str, Any] | None:
+    async def get_payment(
+        payment_id: str,
+        shop_id: str | None = None,
+        secret_key: str | None = None,
+    ) -> dict[str, Any] | None:
         """Возвращает статус платежа по ID."""
         headers = {
-            "Authorization": YooKassaClient._auth_header(),
+            "Authorization": YooKassaClient._auth_header(shop_id, secret_key),
         }
 
         try:

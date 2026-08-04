@@ -1,11 +1,12 @@
 import aiohttp
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.auth import get_current_user, get_optional_user
+from app.api.rate_limit import limiter, user_or_ip_key
 from app.bot.bot import get_bot
 from app.core.config import settings
 from app.database.db import async_session
@@ -269,20 +270,29 @@ async def validate_promo(req: ValidatePromoRequest, user: dict = Depends(get_cur
 # ==========================
 
 @router.get("/payment-methods")
-async def get_payment_methods():
-    """Возвращает доступные способы оплаты."""
+async def get_payment_methods(shop_id: int = Depends(get_shop_id)):
+    """Возвращает доступные способы оплаты для конкретного магазина."""
+    shop = await ShopService.get(shop_id)
     methods = []
-    if settings.yookassa_enabled:
+
+    if shop and shop["yookassa_enabled"]:
         methods.append({
             "id": "yookassa",
             "label": "💳 Картой / СБП",
             "description": "Оплата онлайн через ЮKassa",
         })
-    methods.append({
-        "id": "manual",
-        "label": "🏦 Переводом на карту",
-        "description": "Ручная оплата — перевод на карту продавца",
-    })
+
+    if shop is None or shop["manual_payment_enabled"]:
+        card_number = (shop["payment_card_number"] if shop else None) or settings.payment_card_number
+        recipient = (shop["payment_recipient_name"] if shop else None) or settings.payment_recipient_name
+        methods.append({
+            "id": "manual",
+            "label": "🏦 Переводом на карту",
+            "description": "Ручная оплата — перевод на карту продавца",
+            "card_number": card_number,
+            "recipient": recipient,
+        })
+
     return methods
 
 
@@ -293,7 +303,8 @@ async def list_orders(user: dict = Depends(get_current_user)):
 
 
 @router.post("/orders")
-async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current_user)):
+@limiter.limit("10/minute", key_func=user_or_ip_key)
+async def create_order(request: Request, req: CreateOrderRequest, user: dict = Depends(get_current_user)):
     unavailable = await CartService.check_availability(user["shop_id"], user["id"])
 
     if unavailable:
@@ -322,7 +333,12 @@ async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current
             detail={"error": "out_of_stock", "items": order["items"]},
         )
 
-    if req.payment_method == "yookassa" and settings.yookassa_enabled:
+    shop = await ShopService.get(user["shop_id"])
+    shop_yookassa_enabled = shop["yookassa_enabled"] if shop else False
+    card_number = (shop["payment_card_number"] if shop else None) or settings.payment_card_number
+    recipient = (shop["payment_recipient_name"] if shop else None) or settings.payment_recipient_name
+
+    if req.payment_method == "yookassa" and shop_yookassa_enabled:
         payment = await OrderPaymentService.create_payment(
             user["shop_id"], order["order_id"]
         )
@@ -334,8 +350,8 @@ async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current
                 "discount": order["discount"],
                 "payment": "manual",
                 "payment_error": True,
-                "card_number": settings.payment_card_number,
-                "recipient": settings.payment_recipient_name,
+                "card_number": card_number,
+                "recipient": recipient,
             }
 
         return {
@@ -351,8 +367,8 @@ async def create_order(req: CreateOrderRequest, user: dict = Depends(get_current
         "total": order["total"],
         "discount": order["discount"],
         "payment": "manual",
-        "card_number": settings.payment_card_number,
-        "recipient": settings.payment_recipient_name,
+        "card_number": card_number,
+        "recipient": recipient,
     }
 
 

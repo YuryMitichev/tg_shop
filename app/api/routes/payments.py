@@ -4,8 +4,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.api.rate_limit import limiter
 from app.services.order_payment_service import OrderPaymentService
 from app.services.payment_service import PaymentService
+from app.services.shop_service import ShopService
 from app.services.subscription_payment_service import SubscriptionPaymentService
 from app.services.yookassa_client import YooKassaClient
 
@@ -15,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/tinkoff/webhook")
+@limiter.limit("60/minute")
 async def tinkoff_webhook(request: Request):
     """
     Вебхук для уведомлений от Тинькофф.
@@ -39,6 +42,7 @@ async def tinkoff_webhook(request: Request):
 
 
 @router.post("/yookassa/webhook")
+@limiter.limit("60/minute")
 async def yookassa_webhook(request: Request):
     """
     Вебхук для уведомлений от ЮKassa.
@@ -70,7 +74,33 @@ async def yookassa_webhook(request: Request):
             content={"error": "missing_payment_id"},
         )
 
-    verified = await YooKassaClient.get_payment(payment_id)
+    metadata = data.get("object", {}).get("metadata", {})
+    ptype = metadata.get("type", "subscription")
+
+    if ptype == "order":
+        try:
+            shop_id = int(metadata.get("shop_id", 0))
+        except (TypeError, ValueError):
+            shop_id = 0
+
+        from app.services.shop_service import ShopService
+
+        creds = await ShopService.get_yookassa_credentials(shop_id) if shop_id else None
+        if creds is None:
+            logger.error(
+                "ЮKassa webhook: нет per-shop ключей для магазина %d",
+                shop_id,
+            )
+            return JSONResponse(
+                status_code=400,
+                content={"error": "shop_credentials_not_found"},
+            )
+
+        verified = await YooKassaClient.get_payment(
+            payment_id, shop_id=creds[0], secret_key=creds[1]
+        )
+    else:
+        verified = await YooKassaClient.get_payment(payment_id)
 
     if verified is None:
         logger.error("ЮKassa webhook: не удалось верифицировать платёж %s", payment_id)

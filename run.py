@@ -1,17 +1,14 @@
 import asyncio
-import logging
 
 import uvicorn
 
 from app.bot.bot import start_all_bots
 from app.api.main import app
 from app.core.config import settings
+from app.core.logging import setup_logging
 
 
-logging.basicConfig(
-    level=logging.DEBUG if settings.debug else logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
+setup_logging(debug=settings.debug)
 
 
 async def main():
@@ -38,7 +35,7 @@ def run():
         asyncio.run(main())
 
     except KeyboardInterrupt:
-        logging.info("Работа бота остановлена.")
+        pass
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
-svechevarov-family.ru, www.svechevarov-family.ru {
+{$DOMAIN}, www.{$DOMAIN} {
 	reverse_proxy bot:8000
 }
 
-admin.svechevarov-family.ru {
+admin.{$DOMAIN} {
 	reverse_proxy admin:3000
 }

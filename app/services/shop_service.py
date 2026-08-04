@@ -7,6 +7,15 @@ from app.models.shop import Shop
 from app.utils.crypto import decrypt, encrypt, mask_token, token_hash
 
 
+def _mask_secret_key(key: str | None) -> str | None:
+    """Маскирует секретный ключ: 'live_abcdef123456' → '****3456'."""
+    if not key:
+        return None
+    if len(key) <= 4:
+        return "****"
+    return f"****{key[-4:]}"
+
+
 def _shop_to_dict(shop: Shop) -> dict:
     return {
         "id": shop.id,
@@ -20,6 +29,12 @@ def _shop_to_dict(shop: Shop) -> dict:
         "company_name": shop.company_name,
         "company_inn": shop.company_inn,
         "company_address": shop.company_address,
+        "payment_card_number": shop.payment_card_number,
+        "payment_recipient_name": shop.payment_recipient_name,
+        "yookassa_shop_id": shop.yookassa_shop_id,
+        "yookassa_secret_key_masked": _mask_secret_key(decrypt(shop.yookassa_secret_key) if shop.yookassa_secret_key else None),
+        "yookassa_enabled": shop.yookassa_enabled,
+        "manual_payment_enabled": shop.manual_payment_enabled,
         "created_at": shop.created_at.isoformat() if shop.created_at else None,
     }
 
@@ -208,3 +223,69 @@ class ShopService:
             await session.refresh(shop)
 
             return _shop_to_dict(shop)
+
+    @staticmethod
+    async def update_payment_settings(
+        shop_id: int,
+        payment_card_number: str | None = None,
+        payment_recipient_name: str | None = None,
+        yookassa_shop_id: str | None = None,
+        yookassa_secret_key: str | None = None,
+        yookassa_enabled: bool | None = None,
+        manual_payment_enabled: bool | None = None,
+    ) -> dict | None:
+        """
+        Обновляет платёжные настройки магазина.
+
+        None означает «не менять». Пустая строка — очистить поле.
+        yookassa_secret_key шифруется (Fernet) перед сохранением.
+        """
+        async with async_session() as session:
+            shop = await session.get(Shop, shop_id)
+            if shop is None:
+                return None
+
+            if payment_card_number is not None:
+                shop.payment_card_number = payment_card_number or None
+
+            if payment_recipient_name is not None:
+                shop.payment_recipient_name = payment_recipient_name or None
+
+            if yookassa_shop_id is not None:
+                shop.yookassa_shop_id = yookassa_shop_id or None
+
+            if yookassa_secret_key is not None:
+                shop.yookassa_secret_key = encrypt(yookassa_secret_key) if yookassa_secret_key else None
+
+            if yookassa_enabled is not None:
+                shop.yookassa_enabled = yookassa_enabled
+
+            if manual_payment_enabled is not None:
+                shop.manual_payment_enabled = manual_payment_enabled
+
+            await session.commit()
+            await session.refresh(shop)
+
+            return _shop_to_dict(shop)
+
+    @staticmethod
+    async def get_yookassa_credentials(shop_id: int) -> tuple[str, str] | None:
+        """
+        Возвращает расшифрованные ключи ЮKassa для магазина.
+
+        Используется OrderPaymentService и вебхуком для per-shop платежей.
+        Возвращает (shop_id_key, secret_key) или None.
+        """
+        async with async_session() as session:
+            shop = await session.get(Shop, shop_id)
+            if shop is None:
+                return None
+
+            if not shop.yookassa_shop_id or not shop.yookassa_secret_key:
+                return None
+
+            secret = decrypt(shop.yookassa_secret_key)
+            if secret is None:
+                return None
+
+            return (shop.yookassa_shop_id, secret)

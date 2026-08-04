@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.order import Order
+from app.services.shop_service import ShopService
 from app.services.yookassa_client import YooKassaClient
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,11 @@ class OrderPaymentService:
 
         return_url = settings.webapp_url or settings.admin_panel_url or "https://t.me"
 
+        creds = await ShopService.get_yookassa_credentials(shop_id)
+        if creds is None:
+            logger.error("ЮKassa ключи не настроены для магазина %d", shop_id)
+            return None
+
         result = await YooKassaClient.create_payment(
             amount_rub=float(amount),
             description=description,
@@ -45,6 +51,8 @@ class OrderPaymentService:
                 "shop_id": str(shop_id),
                 "order_id": str(order_id),
             },
+            shop_id=creds[0],
+            secret_key=creds[1],
         )
 
         if result is None:
@@ -93,6 +101,21 @@ class OrderPaymentService:
                 order = await session.get(Order, order_id)
                 if order is None:
                     logger.warning("ЮKassa webhook: заказ %d не найден", order_id)
+                    return False
+
+                amount_str = obj.get("amount", {}).get("value", "0")
+                try:
+                    paid_amount = int(float(amount_str))
+                except (TypeError, ValueError):
+                    paid_amount = 0
+
+                if paid_amount != order.total_amount:
+                    logger.error(
+                        "ЮKassa webhook: сумма не совпадает для заказа %d: ожидается %d, получено %d",
+                        order_id,
+                        order.total_amount,
+                        paid_amount,
+                    )
                     return False
 
                 if order.status not in (OrderStatus.PAID, OrderStatus.DONE, OrderStatus.CANCELLED):

@@ -1,9 +1,10 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.api.admin_auth import require_super_admin
+from app.api.rate_limit import limiter
 from app.bot.bot import start_shop_bot, stop_shop_bot, restart_shop_bot
 from app.services.shop_service import ShopService
 
@@ -42,7 +43,9 @@ async def list_shops(
 
 
 @router.post("/shops")
+@limiter.limit("5/minute")
 async def create_shop(
+    request: Request,
     body: CreateShopRequest,
     _admin: dict = Depends(require_super_admin),
 ):

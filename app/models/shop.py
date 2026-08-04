@@ -52,4 +52,17 @@ class Shop(Base):
 
     company_address: Mapped[str | None] = mapped_column(nullable=True)
 
+    # Per-shop платежные настройки
+    payment_card_number: Mapped[str | None] = mapped_column(nullable=True)
+
+    payment_recipient_name: Mapped[str | None] = mapped_column(nullable=True)
+
+    yookassa_shop_id: Mapped[str | None] = mapped_column(nullable=True)
+
+    yookassa_secret_key: Mapped[str | None] = mapped_column(nullable=True)
+
+    yookassa_enabled: Mapped[bool] = mapped_column(default=False)
+
+    manual_payment_enabled: Mapped[bool] = mapped_column(default=True)
+
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

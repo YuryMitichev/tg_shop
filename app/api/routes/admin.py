@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from aiogram.types import BufferedInputFile
@@ -108,6 +108,15 @@ class UpdateCompanyInfoBody(BaseModel):
     company_name: str | None = None
     company_inn: str | None = None
     company_address: str | None = None
+
+
+class UpdatePaymentSettingsBody(BaseModel):
+    payment_card_number: str | None = None
+    payment_recipient_name: str | None = None
+    yookassa_shop_id: str | None = None
+    yookassa_secret_key: str | None = None
+    yookassa_enabled: bool | None = None
+    manual_payment_enabled: bool | None = None
 
 
 class CreateAdminBody(BaseModel):
@@ -584,6 +593,44 @@ async def update_company_info(body: UpdateCompanyInfoBody, admin: dict = Depends
 
 
 # ==========================
+# Настройки (платежи магазина)
+# ==========================
+
+@router.get("/settings/payments")
+async def get_shop_payment_settings(admin: dict = Depends(require_admin)):
+    shop = await ShopService.get(admin["shop_id"])
+    if shop is None:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return {
+        "payment_card_number": shop["payment_card_number"],
+        "payment_recipient_name": shop["payment_recipient_name"],
+        "yookassa_shop_id": shop["yookassa_shop_id"],
+        "yookassa_secret_key_masked": shop["yookassa_secret_key_masked"],
+        "yookassa_enabled": shop["yookassa_enabled"],
+        "manual_payment_enabled": shop["manual_payment_enabled"],
+    }
+
+
+@router.put("/settings/payments")
+async def update_shop_payment_settings(
+    body: UpdatePaymentSettingsBody,
+    admin: dict = Depends(require_admin),
+):
+    result = await ShopService.update_payment_settings(
+        admin["shop_id"],
+        payment_card_number=body.payment_card_number,
+        payment_recipient_name=body.payment_recipient_name,
+        yookassa_shop_id=body.yookassa_shop_id,
+        yookassa_secret_key=body.yookassa_secret_key,
+        yookassa_enabled=body.yookassa_enabled,
+        manual_payment_enabled=body.manual_payment_enabled,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return {"ok": True}
+
+
+# ==========================
 # Администраторы
 # ==========================
 
@@ -774,7 +821,9 @@ async def create_broadcast(
 
 
 @router.post("/broadcasts/{broadcast_id}/send")
+@limiter.limit("3/minute")
 async def send_broadcast(
+    request: Request,
     broadcast_id: int,
     admin: dict = Depends(require_admin),
 ):
