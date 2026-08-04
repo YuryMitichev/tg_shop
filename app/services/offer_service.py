@@ -71,7 +71,7 @@ class OfferService:
 
             best = offers[0]
             for o in offers[1:]:
-                if o.variant_id == variant_id and best.variant_id is None:
+                if variant_id and o.variant_id == variant_id and best.variant_id is None:
                     best = o
 
             return best
@@ -121,12 +121,36 @@ class OfferService:
     ) -> None:
         """Помечает offer как использованный после заказа."""
         async with async_session() as session:
-            offer = await OfferService.get_best_offer(
-                shop_id, telegram_user_id, product_id, variant_id
+            now = datetime.now()
+            query = select(UserOffer).where(
+                UserOffer.shop_id == shop_id,
+                UserOffer.telegram_user_id == telegram_user_id,
+                UserOffer.product_id == product_id,
+                UserOffer.is_active == True,  # noqa: E712
+                or_(
+                    UserOffer.expires_at.is_(None),
+                    UserOffer.expires_at > now,
+                ),
             )
-            if offer:
-                offer.is_active = False
-                offer.used_at = datetime.now()
+
+            if variant_id:
+                query = query.where(
+                    (UserOffer.variant_id == variant_id)
+                    | (UserOffer.variant_id.is_(None))
+                )
+
+            result = await session.execute(
+                query.order_by(UserOffer.discount_percent.desc())
+            )
+            offers = result.scalars().all()
+
+            if offers:
+                best = offers[0]
+                for o in offers[1:]:
+                    if variant_id and o.variant_id == variant_id and best.variant_id is None:
+                        best = o
+                best.is_active = False
+                best.used_at = datetime.now()
                 await session.commit()
 
     @staticmethod
