@@ -4,13 +4,14 @@ from sqlalchemy import select
 
 from app.database.db import async_session
 from app.models.shop import Shop
+from app.utils.crypto import decrypt, encrypt, mask_token, token_hash
 
 
 def _shop_to_dict(shop: Shop) -> dict:
     return {
         "id": shop.id,
         "name": shop.name,
-        "bot_token": shop.bot_token,
+        "bot_token_masked": mask_token(decrypt(shop.bot_token) or ""),
         "owner_telegram_id": shop.owner_telegram_id,
         "is_active": shop.is_active,
         "delivery_enabled": shop.delivery_enabled,
@@ -27,23 +28,28 @@ class ShopService:
     """
     CRUD для магазинов (SaaS).
 
-    Только супер-админ имеет доступ к этим операциям.
+    bot_token хранится зашифрованным (Fernet).
+    Расшифровка — только через get_bot_token() при создании Bot.
     """
 
     _token_cache: dict[int, str] = {}
 
     @classmethod
     async def get_bot_token(cls, shop_id: int) -> str | None:
-        """Возвращает bot_token магазина (с кешированием)."""
+        """Возвращает расшифрованный bot_token (с кешированием)."""
         if shop_id in cls._token_cache:
             return cls._token_cache[shop_id]
 
-        shop = await cls.get(shop_id)
-        if shop is None:
-            return None
+        async with async_session() as session:
+            shop = await session.get(Shop, shop_id)
+            if shop is None:
+                return None
+            plaintext = decrypt(shop.bot_token)
+            if plaintext is None:
+                return None
 
-        cls._token_cache[shop_id] = shop["bot_token"]
-        return shop["bot_token"]
+        cls._token_cache[shop_id] = plaintext
+        return plaintext
 
     @classmethod
     def invalidate_token_cache(cls, shop_id: int | None = None) -> None:
@@ -62,7 +68,8 @@ class ShopService:
         async with async_session() as session:
             shop = Shop(
                 name=name,
-                bot_token=bot_token,
+                bot_token=encrypt(bot_token),
+                bot_token_hash=token_hash(bot_token),
                 owner_telegram_id=owner_telegram_id,
                 is_active=True,
             )
@@ -104,7 +111,8 @@ class ShopService:
             if name is not None:
                 shop.name = name
             if bot_token is not None:
-                shop.bot_token = bot_token
+                shop.bot_token = encrypt(bot_token)
+                shop.bot_token_hash = token_hash(bot_token)
             if owner_telegram_id is not None:
                 shop.owner_telegram_id = owner_telegram_id
             if is_active is not None:
@@ -114,7 +122,7 @@ class ShopService:
             await session.refresh(shop)
 
             if bot_token is not None:
-                cls.invalidate_token_cache(shop_id)
+                ShopService.invalidate_token_cache(shop_id)
 
             return _shop_to_dict(shop)
 
@@ -134,9 +142,10 @@ class ShopService:
 
     @staticmethod
     async def get_by_bot_token(bot_token: str) -> dict | None:
+        """Ищет магазин по хэшу токена."""
         async with async_session() as session:
             result = await session.execute(
-                select(Shop).where(Shop.bot_token == bot_token)
+                select(Shop).where(Shop.bot_token_hash == token_hash(bot_token))
             )
             shop = result.scalar_one_or_none()
             if shop is None:

@@ -2,6 +2,11 @@ import os
 
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-pytest")
 
+from cryptography.fernet import Fernet
+
+_test_key = Fernet.generate_key().decode()
+os.environ.setdefault("ENCRYPTION_KEY", _test_key)
+
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -46,6 +51,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
 )
 from app.models.shop import Shop
 from app.models.subscription import Subscription, SubscriptionPlan  # noqa: F401
+from app.utils.crypto import encrypt, token_hash
 
 
 
@@ -122,7 +128,7 @@ async def seed_data(db_session):
     session_maker = db_session
 
     async with session_maker() as session:
-        session.add(Shop(id=1, name="Test Shop", bot_token="test:token", owner_telegram_id=1))
+        session.add(Shop(id=1, name="Test Shop", bot_token=encrypt("test:token"), bot_token_hash=token_hash("test:token"), owner_telegram_id=1))
 
         session.add_all([
             Category(id=1, name="Свечи", emoji="🕯", shop_id=1),

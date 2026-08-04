@@ -127,7 +127,11 @@ async def start_shop_bot(shop_id: int) -> bool:
     if shop is None or not shop["is_active"]:
         return False
 
-    asyncio.create_task(_run_shop_bot(shop_id, shop["bot_token"]))
+    token = await ShopService.get_bot_token(shop_id)
+    if token is None:
+        return False
+
+    asyncio.create_task(_run_shop_bot(shop_id, token))
     return True
 
 
@@ -201,12 +205,13 @@ async def start_all_bots() -> None:
         logger.warning("Нет активных магазинов для запуска ботов")
         return
 
-    tasks = [
-        _run_shop_bot(shop["id"], shop["bot_token"])
-        for shop in shops
-    ]
+    tasks = []
+    for shop in shops:
+        token = await ShopService.get_bot_token(shop["id"])
+        if token:
+            tasks.append(_run_shop_bot(shop["id"], token))
 
-    await asyncio.gather(*tasks)
+    await asyncio.gather(*tasks) if tasks else None
 
 
 async def _run_platform_bot() -> None:

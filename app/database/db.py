@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
+from app.utils.crypto import encrypt, token_hash
 
 
 class Base(DeclarativeBase):
@@ -43,12 +44,13 @@ async def init_db() -> None:
         if result.first() is None:
             await conn.execute(
                 text(
-                    "INSERT INTO shops (id, name, bot_token, owner_telegram_id, is_active) "
-                    "VALUES (1, :name, :token, :owner, 1)"
+                    "INSERT INTO shops (id, name, bot_token, bot_token_hash, owner_telegram_id, is_active) "
+                    "VALUES (1, :name, :token, :token_hash, :owner, 1)"
                 ),
                 {
                     "name": settings.shop_name,
-                    "token": settings.bot_token,
+                    "token": encrypt(settings.bot_token),
+                    "token_hash": token_hash(settings.bot_token),
                     "owner": settings.admin_id_list[0] if settings.admin_id_list else 0,
                 },
             )

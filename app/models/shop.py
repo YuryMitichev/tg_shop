@@ -32,7 +32,9 @@ class Shop(Base):
 
     name: Mapped[str] = mapped_column(nullable=False)
 
-    bot_token: Mapped[str] = mapped_column(unique=True, nullable=False)
+    bot_token: Mapped[str] = mapped_column(nullable=False)
+
+    bot_token_hash: Mapped[str | None] = mapped_column(unique=True, nullable=True)
 
     owner_telegram_id: Mapped[int] = mapped_column(nullable=False)
 

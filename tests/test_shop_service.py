@@ -12,6 +12,8 @@ class TestShopService:
         assert shops[0]["id"] == 1
         assert shops[0]["name"] == "Test Shop"
         assert shops[0]["is_active"] is True
+        assert "bot_token" not in shops[0]
+        assert "bot_token_masked" in shops[0]
 
     async def test_create_shop(self, db_session, seed_data):
         shop = await ShopService.create(
@@ -22,7 +24,7 @@ class TestShopService:
 
         assert shop["id"] == 2
         assert shop["name"] == "Магазин 2"
-        assert shop["bot_token"] == "123456:ABC"
+        assert "bot_token" not in shop
         assert shop["owner_telegram_id"] == 999
         assert shop["is_active"] is True
 
@@ -41,7 +43,22 @@ class TestShopService:
         shop = await ShopService.update(1, name="Новое название")
 
         assert shop["name"] == "Новое название"
-        assert shop["bot_token"] == "test:token"
+
+    async def test_get_bot_token_decrypts(self, db_session, seed_data):
+        token = await ShopService.get_bot_token(1)
+        assert token == "test:token"
+
+    async def test_get_bot_token_caches(self, db_session, seed_data):
+        token1 = await ShopService.get_bot_token(1)
+        ShopService.invalidate_token_cache()
+        token2 = await ShopService.get_bot_token(1)
+        assert token1 == token2 == "test:token"
+
+    async def test_update_shop_token_invalidates_cache(self, db_session, seed_data):
+        await ShopService.get_bot_token(1)
+        await ShopService.update(1, bot_token="new:token:123")
+        token = await ShopService.get_bot_token(1)
+        assert token == "new:token:123"
 
     async def test_update_shop_activate_deactivate(self, db_session, seed_data):
         shop = await ShopService.update(1, is_active=False)
@@ -52,7 +69,6 @@ class TestShopService:
 
     async def test_update_shop_not_found(self, db_session, seed_data):
         shop = await ShopService.update(999, name="Нет")
-
         assert shop is None
 
     async def test_delete_shop(self, db_session, seed_data):
@@ -67,12 +83,10 @@ class TestShopService:
 
     async def test_cannot_delete_default_shop(self, db_session, seed_data):
         ok = await ShopService.delete(1)
-
         assert ok is False
 
     async def test_delete_shop_not_found(self, db_session, seed_data):
         ok = await ShopService.delete(999)
-
         assert ok is False
 
     async def test_get_all_active_only(self, db_session, seed_data):
@@ -96,3 +110,13 @@ class TestShopService:
         shop = await ShopService.get_by_bot_token("nonexistent:token")
 
         assert shop is None
+
+    async def test_create_duplicate_token_rejected(self, db_session, seed_data):
+        from sqlalchemy.exc import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            await ShopService.create(
+                name="Дубль",
+                bot_token="test:token",
+                owner_telegram_id=123,
+            )

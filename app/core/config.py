@@ -138,6 +138,22 @@ class Settings(BaseSettings):
             return f"{self.app_base_url.rstrip('/')}/app/"
         return None
 
+    # ==========================
+    # Шифрование (bot_token at rest)
+    # ==========================
+
+    encryption_key: str = Field(..., alias="ENCRYPTION_KEY")
+
+    @model_validator(mode="after")
+    def _validate_encryption_key(self):
+        if not self.encryption_key:
+            raise ValueError(
+                "ENCRYPTION_KEY обязателен. "
+                "Сгенерируйте ключ: "
+                'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
+        return self
+
     @model_validator(mode="after")
     def _validate_jwt_secret(self):
         if not self.jwt_secret:
