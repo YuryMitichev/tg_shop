@@ -10,6 +10,7 @@ from app.models.system_message import SystemMessage
 from app.models.review import Review
 from app.models.promo_code import PromoCode
 from app.models.admin_user import AdminUser
+from app.models.login_token import LoginToken
 from app.models.user_profile import UserProfile
 from app.models.communication_log import CommunicationLog
 from app.models.broadcast import Broadcast
@@ -29,6 +30,7 @@ __all__ = [
     "Review",
     "PromoCode",
     "AdminUser",
+    "LoginToken",
     "UserProfile",
     "CommunicationLog",
     "Broadcast",

@@ -1,28 +1,35 @@
 import time
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import jwt
+import pytest
 
 from app.core.config import settings
+from app.models.login_token import LoginToken
 from app.services.admin_auth_service import AdminAuthService
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 class TestMagicLinkAuth:
     """Тесты авторизации через magic link."""
 
-    def setup_method(self):
-        AdminAuthService._tokens.clear()
-
-    async def test_verify_login_token_valid(self):
+    async def test_verify_login_token_valid(self, db_session, seed_data):
         token = "test-valid-token-abc123"
-        AdminAuthService._tokens[token] = (
-            123456,
-            time.time() + 300,
-            1,
-            False,
-        )
+        async with db_session() as session:
+            session.add(LoginToken(
+                token=token,
+                telegram_user_id=123456,
+                shop_id=1,
+                is_super_admin=False,
+                expires_at=_utcnow() + timedelta(seconds=300),
+            ))
+            await session.commit()
 
-        jwt_token = AdminAuthService.verify_login_token(token)
+        jwt_token = await AdminAuthService.verify_login_token(token)
 
         assert jwt_token is not None
 
@@ -35,48 +42,56 @@ class TestMagicLinkAuth:
         assert payload["shop_id"] == 1
         assert payload["super_admin"] is False
 
-    def test_verify_login_token_expired(self):
+    async def test_verify_login_token_expired(self, db_session, seed_data):
         token = "test-expired-token"
-        AdminAuthService._tokens[token] = (
-            123456,
-            time.time() - 10,
-            1,
-            False,
-        )
+        async with db_session() as session:
+            session.add(LoginToken(
+                token=token,
+                telegram_user_id=123456,
+                shop_id=1,
+                is_super_admin=False,
+                expires_at=_utcnow() - timedelta(seconds=10),
+            ))
+            await session.commit()
 
-        result = AdminAuthService.verify_login_token(token)
-        assert result is None
-        assert token not in AdminAuthService._tokens
-
-    def test_verify_login_token_wrong(self):
-        result = AdminAuthService.verify_login_token("nonexistent-token")
+        result = await AdminAuthService.verify_login_token(token)
         assert result is None
 
-    def test_verify_login_token_single_use(self):
+    async def test_verify_login_token_wrong(self, db_session, seed_data):
+        result = await AdminAuthService.verify_login_token("nonexistent-token")
+        assert result is None
+
+    async def test_verify_login_token_single_use(self, db_session, seed_data):
         token = "test-single-use-token"
-        AdminAuthService._tokens[token] = (
-            123456,
-            time.time() + 300,
-            1,
-            True,
-        )
+        async with db_session() as session:
+            session.add(LoginToken(
+                token=token,
+                telegram_user_id=123456,
+                shop_id=1,
+                is_super_admin=True,
+                expires_at=_utcnow() + timedelta(seconds=300),
+            ))
+            await session.commit()
 
-        jwt1 = AdminAuthService.verify_login_token(token)
+        jwt1 = await AdminAuthService.verify_login_token(token)
         assert jwt1 is not None
 
-        jwt2 = AdminAuthService.verify_login_token(token)
+        jwt2 = await AdminAuthService.verify_login_token(token)
         assert jwt2 is None
 
-    def test_verify_login_token_super_admin_flag(self):
+    async def test_verify_login_token_super_admin_flag(self, db_session, seed_data):
         token = "test-super-admin-token"
-        AdminAuthService._tokens[token] = (
-            999,
-            time.time() + 300,
-            1,
-            True,
-        )
+        async with db_session() as session:
+            session.add(LoginToken(
+                token=token,
+                telegram_user_id=999,
+                shop_id=1,
+                is_super_admin=True,
+                expires_at=_utcnow() + timedelta(seconds=300),
+            ))
+            await session.commit()
 
-        jwt_token = AdminAuthService.verify_login_token(token)
+        jwt_token = await AdminAuthService.verify_login_token(token)
         payload = jwt.decode(
             jwt_token,
             settings.jwt_secret,
@@ -94,7 +109,7 @@ class TestMagicLinkAuth:
 
             assert result is False
 
-    async def test_request_login_success(self):
+    async def test_request_login_success(self, db_session, seed_data):
         with patch.object(
             AdminAuthService, "_resolve_shop_id", new_callable=AsyncMock
         ) as mock_resolve:
@@ -112,7 +127,7 @@ class TestMagicLinkAuth:
                 sent_text = mock_bot.send_message.call_args[0][1]
                 assert "login?token=" in sent_text
 
-    async def test_request_login_bot_unavailable(self):
+    async def test_request_login_bot_unavailable(self, db_session, seed_data):
         with patch.object(
             AdminAuthService, "_resolve_shop_id", new_callable=AsyncMock
         ) as mock_resolve:
@@ -124,7 +139,7 @@ class TestMagicLinkAuth:
                 result = await AdminAuthService.request_login(123456)
                 assert result is False
 
-    async def test_request_login_generates_long_token(self):
+    async def test_request_login_generates_long_token(self, db_session, seed_data):
         with patch.object(
             AdminAuthService, "_resolve_shop_id", new_callable=AsyncMock
         ) as mock_resolve:
@@ -136,6 +151,38 @@ class TestMagicLinkAuth:
 
                 await AdminAuthService.request_login(123456)
 
-                assert len(AdminAuthService._tokens) == 1
-                token = list(AdminAuthService._tokens.keys())[0]
-                assert len(token) >= 50
+            async with db_session() as session:
+                from sqlalchemy import select
+                result = await session.execute(select(LoginToken))
+                tokens = result.scalars().all()
+                assert len(tokens) == 1
+                assert len(tokens[0].token) >= 50
+
+    async def test_request_login_cleans_expired(self, db_session, seed_data):
+        async with db_session() as session:
+            session.add(LoginToken(
+                token="old-expired",
+                telegram_user_id=111,
+                shop_id=1,
+                is_super_admin=False,
+                expires_at=_utcnow() - timedelta(hours=1),
+            ))
+            await session.commit()
+
+        with patch.object(
+            AdminAuthService, "_resolve_shop_id", new_callable=AsyncMock
+        ) as mock_resolve:
+            mock_resolve.return_value = (1, False)
+
+            with patch("app.services.admin_auth_service.get_bot") as mock_get_bot:
+                mock_bot = AsyncMock()
+                mock_get_bot.return_value = mock_bot
+
+                await AdminAuthService.request_login(123456)
+
+        async with db_session() as session:
+            from sqlalchemy import select
+            result = await session.execute(
+                select(LoginToken).where(LoginToken.token == "old-expired")
+            )
+            assert result.scalar_one_or_none() is None

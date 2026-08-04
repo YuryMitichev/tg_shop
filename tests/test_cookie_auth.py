@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -6,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.main import create_app
 from app.core.config import settings
+from app.models.login_token import LoginToken
 from app.services.admin_auth_service import AdminAuthService
 
 
@@ -23,14 +25,17 @@ def super_admin_token():
 class TestVerifyTokenCookie:
     """Проверка, что /verify-token выставляет httpOnly-cookie."""
 
-    async def test_verify_token_sets_cookie(self):
+    async def test_verify_token_sets_cookie(self, db_session, seed_data):
         token = "test-cookie-token"
-        AdminAuthService._tokens[token] = (
-            123456,
-            time.time() + 300,
-            1,
-            False,
-        )
+        async with db_session() as session:
+            session.add(LoginToken(
+                token=token,
+                telegram_user_id=123456,
+                shop_id=1,
+                is_super_admin=False,
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=300),
+            ))
+            await session.commit()
 
         app = create_app()
         transport = ASGITransport(app=app)
@@ -48,7 +53,7 @@ class TestVerifyTokenCookie:
         assert any("httponly" in c.lower() for c in cookies)
         assert any("samesite=lax" in c.lower() for c in cookies)
 
-    async def test_verify_token_invalid(self):
+    async def test_verify_token_invalid(self, db_session, seed_data):
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -60,15 +65,18 @@ class TestVerifyTokenCookie:
         assert resp.status_code == 200
         assert resp.json()["ok"] is False
 
-    async def test_verify_token_no_token_in_json(self):
+    async def test_verify_token_no_token_in_json(self, db_session, seed_data):
         """Cookie-based: токен не возвращается в JSON."""
         token = "test-no-json-token"
-        AdminAuthService._tokens[token] = (
-            123456,
-            time.time() + 300,
-            1,
-            False,
-        )
+        async with db_session() as session:
+            session.add(LoginToken(
+                token=token,
+                telegram_user_id=123456,
+                shop_id=1,
+                is_super_admin=False,
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=300),
+            ))
+            await session.commit()
 
         app = create_app()
         transport = ASGITransport(app=app)

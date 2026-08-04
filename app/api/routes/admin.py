@@ -162,7 +162,7 @@ async def request_login(request: Request, body: RequestLoginBody):
 @router.post("/auth/verify-token")
 @limiter.limit("20/minute")
 async def verify_login_token(request: Request, body: VerifyTokenBody):
-    token = AdminAuthService.verify_login_token(body.token)
+    token = await AdminAuthService.verify_login_token(body.token)
 
     if token is None:
         return {"ok": False, "error": "Неверная или истекшая ссылка"}

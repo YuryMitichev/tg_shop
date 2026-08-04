@@ -1,14 +1,14 @@
 import secrets
-import time
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.bot.bot import get_bot
 from app.core.config import settings
 from app.database.db import async_session
 from app.models.admin_user import AdminUser
+from app.models.login_token import LoginToken
 
 
 class AdminAuthService:
@@ -24,8 +24,6 @@ class AdminAuthService:
 
     JWT содержит shop_id — к какому магазину у админа доступ.
     """
-
-    _tokens: dict[str, tuple[int, float, int, bool]] = {}
 
     LINK_TTL = 300
     JWT_ALGORITHM = "HS256"
@@ -62,12 +60,20 @@ class AdminAuthService:
         shop_id, is_super = resolved
 
         token = secrets.token_urlsafe(48)
-        AdminAuthService._tokens[token] = (
-            telegram_user_id,
-            time.time() + AdminAuthService.LINK_TTL,
-            shop_id,
-            is_super,
-        )
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=AdminAuthService.LINK_TTL)
+
+        async with async_session() as session:
+            await session.execute(
+                delete(LoginToken).where(LoginToken.expires_at < datetime.now(timezone.utc))
+            )
+            session.add(LoginToken(
+                token=token,
+                telegram_user_id=telegram_user_id,
+                shop_id=shop_id,
+                is_super_admin=is_super,
+                expires_at=expires_at,
+            ))
+            await session.commit()
 
         bot = get_bot(shop_id)
         if bot is None:
@@ -85,21 +91,39 @@ class AdminAuthService:
         return True
 
     @staticmethod
-    def verify_login_token(token: str) -> str | None:
-        stored = AdminAuthService._tokens.get(token)
+    async def verify_login_token(token: str) -> str | None:
+        async with async_session() as session:
+            result = await session.execute(
+                select(LoginToken).where(LoginToken.token == token)
+            )
+            login_token = result.scalar_one_or_none()
 
-        if stored is None:
-            return None
+            if login_token is None:
+                return None
 
-        telegram_user_id, expires, shop_id, is_super = stored
+            now = datetime.now(timezone.utc)
+            if login_token.expires_at.tzinfo is None:
+                login_token.expires_at = login_token.expires_at.replace(tzinfo=timezone.utc)
 
-        if time.time() > expires:
-            AdminAuthService._tokens.pop(token, None)
-            return None
+            if now > login_token.expires_at:
+                await session.delete(login_token)
+                await session.commit()
+                return None
 
-        AdminAuthService._tokens.pop(token, None)
+            payload_data = {
+                "telegram_user_id": login_token.telegram_user_id,
+                "shop_id": login_token.shop_id,
+                "is_super": login_token.is_super_admin,
+            }
 
-        return AdminAuthService._create_token(telegram_user_id, shop_id, is_super)
+            await session.delete(login_token)
+            await session.commit()
+
+        return AdminAuthService._create_token(
+            payload_data["telegram_user_id"],
+            payload_data["shop_id"],
+            payload_data["is_super"],
+        )
 
     @staticmethod
     def _create_token(telegram_user_id: int, shop_id: int = 1, is_super_admin: bool = False) -> str:

@@ -32,6 +32,7 @@ import app.services.offer_service as offer_service
 import app.services.shop_service as shop_service
 import app.services.subscription_service as subscription_service
 import app.services.order_payment_service as order_payment_service
+import app.services.admin_auth_service as admin_auth_service
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
     CartItem,
@@ -44,6 +45,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     Review,
     PromoCode,
     AdminUser,
+    LoginToken,
     UserProfile,
     CommunicationLog,
     Broadcast,
@@ -75,6 +77,7 @@ _PATCH_TARGETS = [
     shop_service,
     subscription_service,
     order_payment_service,
+    admin_auth_service,
 ]
 
 
