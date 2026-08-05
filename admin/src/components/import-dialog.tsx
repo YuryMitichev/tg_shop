@@ -1,0 +1,330 @@
+"use client";
+
+import { useState } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+
+interface ImportRow {
+  row_number: number;
+  name: string;
+  price: number | null;
+  stock: number | null;
+  warnings: string[];
+  recognized: boolean;
+}
+
+interface PreviewResponse {
+  source: string;
+  total_rows: number;
+  recognized_rows: number;
+  rows: ImportRow[];
+  unmapped_columns: string[];
+}
+
+interface ConfirmResponse {
+  created: number;
+  category_id: number;
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  ozon: "Ozon",
+  wb: "Wildberries",
+  ym: "Яндекс.Маркет",
+};
+
+interface ImportDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onImported: () => void;
+}
+
+export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogProps) {
+  const [source, setSource] = useState("ozon");
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<PreviewResponse | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  function reset() {
+    setFile(null);
+    setPreview(null);
+    setSelected(new Set());
+    setLoading(false);
+    setImporting(false);
+  }
+
+  async function handlePreview() {
+    if (!file) {
+      toast.error("Выберите файл");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const data = await api.post<PreviewResponse>(
+        `/catalog/import/preview?source=${source}`,
+        formData,
+      );
+      setPreview(data);
+      const initSelected = new Set<number>();
+      data.rows.forEach((r) => {
+        if (r.recognized) initSelected.add(r.row_number);
+      });
+      setSelected(initSelected);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка парсинга файла");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleConfirm() {
+    if (selected.size === 0) {
+      toast.error("Выберите хотя бы один товар");
+      return;
+    }
+
+    const rows = preview!.rows
+      .filter((r) => selected.has(r.row_number))
+      .map((r) => ({
+        name: r.name,
+        price: r.price ?? 0,
+        stock: r.stock ?? 0,
+      }));
+
+    setImporting(true);
+    try {
+      const result = await api.post<ConfirmResponse>("/catalog/import/confirm", { rows });
+      toast.success(`Импортировано товаров: ${result.created}`);
+      onImported();
+      reset();
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка импорта");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function toggleRow(rowNumber: number) {
+    const next = new Set(selected);
+    if (next.has(rowNumber)) {
+      next.delete(rowNumber);
+    } else {
+      next.add(rowNumber);
+    }
+    setSelected(next);
+  }
+
+  function toggleAll() {
+    if (preview && selected.size === preview.rows.filter((r) => r.recognized).length) {
+      setSelected(new Set());
+    } else if (preview) {
+      setSelected(new Set(preview.rows.filter((r) => r.recognized).map((r) => r.row_number)));
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) reset();
+        onOpenChange(v);
+      }}
+    >
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5" />
+            Импорт каталога
+          </DialogTitle>
+          <DialogDescription>
+            Загрузите выгрузку товаров из маркетплейса (.xlsx)
+          </DialogDescription>
+        </DialogHeader>
+
+        {!preview ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Маркетплейс</Label>
+              <Select value={source} onValueChange={(v) => setSource(v || "ozon")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ozon">Ozon</SelectItem>
+                  <SelectItem value="wb">Wildberries</SelectItem>
+                  <SelectItem value="ym">Яндекс.Маркет</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Файл .xlsx</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground hover:file:bg-primary/90"
+                />
+              </div>
+              {file && (
+                <p className="text-xs text-muted-foreground">
+                  Выбран: {file.name} ({(file.size / 1024).toFixed(0)} КБ)
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">
+                {SOURCE_LABELS[preview.source] ?? preview.source}
+              </Badge>
+              <span className="text-sm text-muted-foreground">
+                Всего строк: {preview.total_rows}, распознано: {preview.recognized_rows}
+              </span>
+              {preview.unmapped_columns.length > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  Нераспознанные колонки: {preview.unmapped_columns.join(", ")}
+                </span>
+              )}
+            </div>
+
+            <div className="max-h-[300px] overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8">
+                      <input
+                        type="checkbox"
+                        checked={
+                          preview.rows.filter((r) => r.recognized).length > 0 &&
+                          selected.size === preview.rows.filter((r) => r.recognized).length
+                        }
+                        onChange={toggleAll}
+                        className="h-4 w-4"
+                      />
+                    </TableHead>
+                    <TableHead className="w-8">№</TableHead>
+                    <TableHead>Название</TableHead>
+                    <TableHead className="text-right">Цена</TableHead>
+                    <TableHead className="text-right">Остаток</TableHead>
+                    <TableHead>Статус</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {preview.rows.map((row) => (
+                    <TableRow key={row.row_number} className={row.recognized ? "" : "opacity-50"}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(row.row_number)}
+                          onChange={() => toggleRow(row.row_number)}
+                          disabled={!row.recognized}
+                          className="h-4 w-4"
+                        />
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {row.row_number - 1}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate" title={row.name}>
+                        {row.name || "—"}
+                      </TableCell>
+                      <TableCell className="text-right">{row.price ?? "—"}</TableCell>
+                      <TableCell className="text-right">{row.stock ?? "—"}</TableCell>
+                      <TableCell>
+                        {row.recognized ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Выбрано: {selected.size} из {preview.recognized_rows}
+            </p>
+          </div>
+        )}
+
+        <DialogFooter>
+          {preview ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => { setPreview(null); setSelected(new Set()); }}
+                disabled={importing}
+              >
+                Назад
+              </Button>
+              <Button onClick={handleConfirm} disabled={importing || selected.size === 0}>
+                {importing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Импорт...
+                  </>
+                ) : (
+                  `Импортировать (${selected.size})`
+                )}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+                Отмена
+              </Button>
+              <Button onClick={handlePreview} disabled={loading || !file}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Парсинг...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Загрузить превью
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -12,6 +12,7 @@ from app.database.db import async_session
 from app.models.product import Product
 from app.services.admin_auth_service import AdminAuthService
 from app.services.catalog_admin_service import CatalogAdminService
+from app.services.catalog_import_service import CatalogImportService
 from app.services.order_admin_service import OrderAdminService
 from app.services.review_admin_service import ReviewAdminService
 from app.services.stats_service import StatsService
@@ -390,6 +391,80 @@ async def update_variant_stock(
     if not ok:
         return {"ok": False, "error": "Вариант не найден"}
     return {"ok": True}
+
+
+# ==========================
+# Импорт каталога (Ozon / WB / ЯМ)
+# ==========================
+
+MAX_IMPORT_FILE_SIZE = 10 * 1024 * 1024  # 10 МБ
+IMPORT_CHUNK_SIZE = 64 * 1024  # 64 КБ
+
+
+async def _read_upload_with_limit(
+    file: UploadFile,
+    max_size: int = MAX_IMPORT_FILE_SIZE,
+    chunk_size: int = IMPORT_CHUNK_SIZE,
+) -> bytes:
+    """Читает UploadFile чанками, прерываясь при превышении max_size.
+
+    В отличие от file.read(), не загружает весь файл в память:
+    если файл превышает лимит, чтение обрывается после max_size + chunk_size.
+    """
+    buf = bytearray()
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        buf.extend(chunk)
+        if len(buf) > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Файл слишком большой (макс. {max_size // (1024 * 1024)} МБ)",
+            )
+    return bytes(buf)
+
+
+class ConfirmImportRow(BaseModel):
+    name: str
+    price: int = 0
+    stock: int = 0
+
+
+class ConfirmImportBody(BaseModel):
+    rows: list[ConfirmImportRow]
+    category_id: int | None = None
+
+
+@router.post("/catalog/import/preview")
+async def preview_catalog_import(
+    source: str = "ozon",
+    file: UploadFile = File(...),
+    admin: dict = Depends(require_active_subscription),
+):
+    if source not in ("ozon", "wb", "ym"):
+        raise HTTPException(status_code=400, detail="source должен быть ozon, wb или ym")
+
+    file_bytes = await _read_upload_with_limit(file, MAX_IMPORT_FILE_SIZE)
+
+    preview = CatalogImportService.parse_marketplace_file(file_bytes, source)
+    return preview
+
+
+@router.post("/catalog/import/confirm")
+async def confirm_catalog_import(
+    body: ConfirmImportBody,
+    admin: dict = Depends(require_active_subscription),
+):
+    if not body.rows:
+        raise HTTPException(status_code=400, detail="Список строк пуст")
+
+    result = await CatalogImportService.import_rows(
+        shop_id=admin["shop_id"],
+        rows=[r.model_dump() for r in body.rows],
+        category_id=body.category_id,
+    )
+    return result
 
 
 # ==========================

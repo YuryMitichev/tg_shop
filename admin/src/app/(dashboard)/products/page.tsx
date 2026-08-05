@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Upload } from "lucide-react";
+import { ImportDialog } from "@/components/import-dialog";
 import type { Product, Category } from "@/lib/types";
 import {
   AlertDialog,
@@ -33,6 +34,7 @@ import {
 
 export default function ProductsPage() {
   const [filter, setFilter] = useState<string>("all");
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: products, isLoading, mutate } = useSWR<Product[]>(
     filter === "all" ? "/products" : `/products?category_id=${filter}`,
@@ -68,6 +70,10 @@ export default function ProductsPage() {
         <Button render={<Link href="/products/new" />}>
           <Plus className="mr-2 h-4 w-4" />
           Добавить
+        </Button>
+        <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <Upload className="mr-2 h-4 w-4" />
+          Импорт
         </Button>
       </div>
 
@@ -180,6 +186,8 @@ export default function ProductsPage() {
           ))}
         </div>
       )}
+
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={() => mutate()} />
     </div>
   );
 }

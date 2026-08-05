@@ -1,10 +1,8 @@
+import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.client.default import DefaultBotProperties
-from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramUnauthorizedError
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -33,21 +31,36 @@ class OnboardingStates(StatesGroup):
     waiting_for_token = State()
 
 
+_TOKEN_CHECK_TIMEOUT = 10  # секунд
+
+
 async def _validate_bot_token(token: str) -> dict | None:
-    """Проверяет токен через Telegram API. Возвращает инфо о боте или None."""
+    """Проверяет токен прямым HTTP-запросом к Telegram API.
+
+    Использует тот же прокси, что и боты магазинов — без него запрос
+    к api.telegram.org будет висеть на VPS в РФ.
+    """
+    import aiohttp
+
+    url = f"https://api.telegram.org/bot{token}/getMe"
     try:
-        bot = Bot(
-            token=token,
-            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-        )
-        me = await bot.get_me()
-        await bot.session.close()
-        return {
-            "id": me.id,
-            "username": me.username,
-            "first_name": me.first_name,
-        }
-    except TelegramUnauthorizedError:
+        timeout = aiohttp.ClientTimeout(total=_TOKEN_CHECK_TIMEOUT)
+        connector: aiohttp.BaseConnector | None = None
+        proxy = settings.bot_proxy
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, proxy=proxy) as resp:
+                data = await resp.json()
+                if not data.get("ok"):
+                    return None
+                r = data["result"]
+                return {
+                    "id": r["id"],
+                    "username": r["username"],
+                    "first_name": r["first_name"],
+                }
+    except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+        logger.warning("Сеть/таймаут при проверке токена: %s", e)
         return None
     except Exception:
         logger.exception("Ошибка проверки токена")
@@ -149,7 +162,11 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
     bot_info = await _validate_bot_token(token)
     if bot_info is None:
         await message.answer(
-            "❌ Неверный токен. Проверьте, что вы скопировали его полностью из @BotFather."
+            "❌ Не удалось проверить токен.\n\n"
+            "Возможные причины:\n"
+            "• Токен скопирован не полностью\n"
+            "• Telegram временно недоступен\n\n"
+            "Попробуйте ещё раз через минуту."
         )
         return
 

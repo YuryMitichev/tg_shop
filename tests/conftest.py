@@ -1,4 +1,6 @@
 import os
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-pytest")
 
@@ -7,6 +9,7 @@ from cryptography.fernet import Fernet
 _test_key = Fernet.generate_key().decode()
 os.environ.setdefault("ENCRYPTION_KEY", _test_key)
 
+import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -34,6 +37,8 @@ import app.services.subscription_service as subscription_service
 import app.services.order_payment_service as order_payment_service
 import app.services.admin_auth_service as admin_auth_service
 import app.services.message_service as message_service
+import app.services.catalog_import_service as catalog_import_service
+from app.services.admin_auth_service import AdminAuthService
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
     CartItem,
@@ -80,6 +85,7 @@ _PATCH_TARGETS = [
     order_payment_service,
     admin_auth_service,
     message_service,
+    catalog_import_service,
 ]
 
 
@@ -180,3 +186,47 @@ async def seed_data(db_session):
         "variant_ids": [1, 2, 3, 4],
         "active_product_ids": [1, 3],
     }
+
+
+# ==========================
+# Фикстуры для HTTP API тестов
+# ==========================
+
+_ADMIN_DICT = {"admin_id": 123456, "shop_id": 1, "is_super_admin": False}
+
+
+@pytest.fixture
+def admin_cookie():
+    """Возвращает dict cookie для HTTP-запросов к админ-API."""
+    token = AdminAuthService._create_token(123456, shop_id=1, is_super_admin=False)
+    return {"admin_token": token}
+
+
+@pytest.fixture
+def mock_admin_auth():
+    """Подменяет проверку токена — возвращает тестового админа."""
+    with patch(
+        "app.api.admin_auth.AdminAuthService.verify_token",
+        new_callable=AsyncMock,
+        return_value=_ADMIN_DICT,
+    ):
+        yield
+
+
+@pytest_asyncio.fixture
+async def active_subscription(db_session):
+    """Создаёт активную подписку для shop_id=1."""
+    from app.models.subscription import Subscription, SubscriptionPlan
+
+    session_maker = db_session
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    async with session_maker() as session:
+        session.add(SubscriptionPlan(
+            id=1, name="Тест", price=690, duration_days=30, is_trial=False,
+        ))
+        await session.commit()
+        session.add(Subscription(
+            shop_id=1, plan_id=1, status="active",
+            started_at=now, expires_at=now + timedelta(days=25),
+        ))
+        await session.commit()

@@ -1,32 +1,11 @@
 """Тесты доступа к админ-панели при просроченной/активной подписке."""
 from datetime import datetime, timedelta, timezone
 
-from unittest.mock import AsyncMock, patch
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.api.main import create_app
 from app.models.subscription import Subscription, SubscriptionPlan
-from app.services.admin_auth_service import AdminAuthService
-
-_ADMIN_DICT = {"admin_id": 123456, "shop_id": 1, "is_super_admin": False}
-
-
-@pytest.fixture
-def admin_cookie():
-    token = AdminAuthService._create_token(123456, shop_id=1, is_super_admin=False)
-    return {"admin_token": token}
-
-
-@pytest.fixture
-def mock_admin_auth():
-    with patch(
-        "app.api.admin_auth.AdminAuthService.verify_token",
-        new_callable=AsyncMock,
-        return_value=_ADMIN_DICT,
-    ):
-        yield
 
 
 class TestExpiredSubscriptionAccess:
