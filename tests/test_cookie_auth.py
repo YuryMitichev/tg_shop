@@ -102,7 +102,7 @@ class TestCookieAuth:
 
         assert resp.status_code == 401
 
-    async def test_me_with_valid_cookie(self, admin_token):
+    async def test_me_with_valid_cookie(self, admin_token, db_session, seed_data):
         with patch(
             "app.services.admin_auth_service.AdminAuthService.verify_token",
             new_callable=AsyncMock,
