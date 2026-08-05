@@ -14,6 +14,7 @@ import {
   Settings,
   Shield,
   Megaphone,
+  Store,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription, isRouteBlocked } from "@/lib/subscription-context";
@@ -32,9 +33,13 @@ const navItems = [
   { href: "/settings", label: "Настройки", icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isSuper = false }: { isSuper?: boolean }) {
   const pathname = usePathname();
   const { subscriptionActive } = useSubscription();
+
+  const items = isSuper
+    ? [...navItems, { href: "/shops", label: "Магазины", icon: Store }]
+    : navItems;
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r bg-card">
@@ -43,7 +48,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           const blocked = !subscriptionActive && isRouteBlocked(item.href);
 

@@ -1,5 +1,6 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 const ADMIN_API = `${API_BASE}/api/admin`;
+const SUPER_ADMIN_API = `${API_BASE}/api/super-admin`;
 export const SHOP_API = `${API_BASE}/api/shop`;
 
 export function photoUrl(photoId: number): string {
@@ -9,6 +10,7 @@ export function photoUrl(photoId: number): string {
 async function request<T>(
   path: string,
   options: RequestInit = {},
+  base: string = ADMIN_API,
 ): Promise<T> {
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
@@ -18,7 +20,7 @@ async function request<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${ADMIN_API}${path}`, {
+  const res = await fetch(`${base}${path}`, {
     ...options,
     headers,
     credentials: "include",
@@ -66,4 +68,19 @@ export const api = {
       body: formData,
     });
   },
+};
+
+export const superAdminApi = {
+  get: <T>(path: string) => request<T>(path, {}, SUPER_ADMIN_API),
+  post: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    }, SUPER_ADMIN_API),
+  patch: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: "PATCH",
+      body: body ? JSON.stringify(body) : undefined,
+    }, SUPER_ADMIN_API),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }, SUPER_ADMIN_API),
 };

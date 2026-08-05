@@ -203,6 +203,7 @@ async def get_me(admin: dict = Depends(require_admin_full_access)):
         "telegram_user_id": admin["admin_id"],
         "shop_id": admin["shop_id"],
         "subscription_active": admin.get("subscription_active", True),
+        "is_super_admin": admin.get("is_super_admin", False),
     }
 
 

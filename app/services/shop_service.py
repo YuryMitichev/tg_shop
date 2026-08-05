@@ -1,9 +1,26 @@
 import json
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.database.db import async_session
+from app.models.admin_user import AdminUser
+from app.models.broadcast import Broadcast
+from app.models.cart_item import CartItem
+from app.models.category import Category
+from app.models.communication_log import CommunicationLog
+from app.models.login_token import LoginToken
+from app.models.order import Order
+from app.models.order_item import OrderItem
+from app.models.product import Product
+from app.models.product_photo import ProductPhoto
+from app.models.product_variant import ProductVariant
+from app.models.promo_code import PromoCode
+from app.models.review import Review
 from app.models.shop import Shop
+from app.models.subscription import Subscription
+from app.models.system_message import SystemMessage
+from app.models.user_offer import UserOffer
+from app.models.user_profile import UserProfile
 from app.utils.crypto import decrypt, encrypt, mask_token, token_hash
 
 
@@ -143,6 +160,20 @@ class ShopService:
 
     @staticmethod
     async def delete(shop_id: int) -> bool:
+        """
+        Полностью удаляет магазин и все связанные данные.
+
+        Порядок удаления учитывает FK между связанными таблицами:
+          1. cart_items (→ products, product_variants)
+          2. order_items (→ orders)
+          3. product_photos (→ products)
+          4. product_variants (→ products)
+          5. таблицы без межтабличных FK (reviews, broadcasts, ...)
+          6. orders (теперь order_items пусты)
+          7. products (теперь variants/photos/cart_items пусты)
+          8. categories
+          9. shops
+        """
         if shop_id == 1:
             return False
 
@@ -151,9 +182,63 @@ class ShopService:
             if shop is None:
                 return False
 
+            await session.execute(
+                delete(CartItem).where(CartItem.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(OrderItem).where(OrderItem.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(ProductPhoto).where(ProductPhoto.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(ProductVariant).where(ProductVariant.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(Review).where(Review.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(Broadcast).where(Broadcast.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(UserOffer).where(UserOffer.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(CommunicationLog).where(CommunicationLog.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(SystemMessage).where(SystemMessage.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(LoginToken).where(LoginToken.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(PromoCode).where(PromoCode.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(UserProfile).where(UserProfile.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(AdminUser).where(AdminUser.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(Subscription).where(Subscription.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(Order).where(Order.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(Product).where(Product.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(Category).where(Category.shop_id == shop_id)
+            )
+
             await session.delete(shop)
             await session.commit()
-            return True
+
+        ShopService.invalidate_token_cache(shop_id)
+        return True
 
     @staticmethod
     async def get_by_bot_token(bot_token: str) -> dict | None:

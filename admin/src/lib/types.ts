@@ -292,3 +292,24 @@ export interface BroadcastProduct {
 export interface BroadcastTagsResponse {
   tags: string[];
 }
+
+export interface ShopManagement {
+  id: number;
+  name: string;
+  bot_token_masked: string;
+  owner_telegram_id: number;
+  is_active: boolean;
+  delivery_enabled: boolean;
+  courier_services: string[];
+  product_attrs: string[];
+  company_name: string | null;
+  company_inn: string | null;
+  company_address: string | null;
+  payment_card_number: string | null;
+  payment_recipient_name: string | null;
+  yookassa_shop_id: string | null;
+  yookassa_secret_key_masked: string | null;
+  yookassa_enabled: boolean;
+  manual_payment_enabled: boolean;
+  created_at: string | null;
+}

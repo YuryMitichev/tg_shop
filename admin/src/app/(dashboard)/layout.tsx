@@ -19,12 +19,14 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [subscriptionActive, setSubscriptionActive] = useState(true);
+  const [isSuper, setIsSuper] = useState(false);
 
   useEffect(() => {
     api
-      .get<{ telegram_user_id: number; subscription_active: boolean }>("/auth/me")
+      .get<{ telegram_user_id: number; subscription_active: boolean; is_super_admin: boolean }>("/auth/me")
       .then((res) => {
         setSubscriptionActive(res.subscription_active ?? true);
+        setIsSuper(res.is_super_admin ?? false);
         setReady(true);
       })
       .catch(() => router.push("/login"));
@@ -53,7 +55,7 @@ export default function DashboardLayout({
     <SubscriptionProvider subscriptionActive={subscriptionActive}>
       <div className="flex min-h-screen">
         <div className="hidden md:block">
-          <Sidebar />
+          <Sidebar isSuper={isSuper} />
         </div>
 
         <div className="flex flex-1 flex-col">

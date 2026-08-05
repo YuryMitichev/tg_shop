@@ -89,6 +89,69 @@ class TestShopService:
         ok = await ShopService.delete(999)
         assert ok is False
 
+    async def test_delete_shop_cascades_all_related(self, db_session, seed_data):
+        """Удаление магазина очищает все 17 связанных таблиц."""
+        from datetime import datetime, timezone
+        from app.models import (
+            Category, Product, ProductVariant, ProductPhoto,
+            Order, OrderItem, CartItem, Review, PromoCode,
+            UserProfile, AdminUser, CommunicationLog, SystemMessage,
+            LoginToken, Broadcast, UserOffer,
+        )
+        from app.models.subscription import Subscription, SubscriptionPlan
+
+        session_maker = db_session
+
+        await ShopService.create("Магазин 2", "tok:cascade", 555)
+
+        async with session_maker() as session:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+            session.add(SubscriptionPlan(id=10, name="План", price=100, duration_days=7))
+            await session.flush()
+
+            session.add_all([
+                Category(id=100, shop_id=2, name="Cat2"),
+                Product(id=100, shop_id=2, category_id=100, name="P2", description="d"),
+                ProductVariant(id=100, shop_id=2, product_id=100, volume="v", price=10, stock=1),
+                ProductPhoto(id=100, shop_id=2, product_id=100, file_id="fid"),
+                Order(id=100, shop_id=2, telegram_user_id=55, full_name="N", phone="P", address="A", total_amount=10),
+                OrderItem(id=100, shop_id=2, order_id=100, product_name="P", variant_volume="v", price=10, quantity=1),
+                CartItem(id=100, shop_id=2, telegram_user_id=55, product_id=100, variant_id=100, quantity=1),
+                Review(id=100, shop_id=2, product_id=100, telegram_user_id=55, rating=5),
+                PromoCode(id=100, shop_id=2, code="PROMO", discount_value=10),
+                UserProfile(id=100, shop_id=2, telegram_user_id=55),
+                AdminUser(id=100, shop_id=2, telegram_user_id=55),
+                CommunicationLog(id=100, shop_id=2, telegram_user_id=55),
+                SystemMessage(id=100, shop_id=2, key="k", content="c"),
+                LoginToken(id=100, token="tok-2", shop_id=2, telegram_user_id=55, expires_at=now),
+                Broadcast(id=100, shop_id=2, product_id=100, product_name="P", original_price=10, discounted_price=5),
+                UserOffer(id=100, shop_id=2, telegram_user_id=55, product_id=100, discount_percent=10),
+                Subscription(shop_id=2, plan_id=10, status="active", started_at=now, expires_at=now),
+            ])
+            await session.commit()
+
+        ok = await ShopService.delete(2)
+        assert ok is True
+
+        async with session_maker() as session:
+            from sqlalchemy import select
+            for model in [
+                Category, Product, ProductVariant, ProductPhoto,
+                Order, OrderItem, CartItem, Review, PromoCode,
+                UserProfile, AdminUser, CommunicationLog, SystemMessage,
+                LoginToken, Broadcast, UserOffer, Subscription,
+            ]:
+                rows = (await session.execute(
+                    select(model).where(model.shop_id == 2)
+                )).scalars().all()
+                assert len(rows) == 0, f"{model.__tablename__}: остались записи после cascade delete"
+
+            shop1_products = (await session.execute(
+                select(Product).where(Product.shop_id == 1)
+            )).scalars().all()
+            assert len(shop1_products) > 0, "Данные магазина #1 не должны пострадать"
+
     async def test_get_all_active_only(self, db_session, seed_data):
         await ShopService.create("Активный", "active:token", 111)
         inactive = await ShopService.create("Неактивный", "inactive:token", 222)
