@@ -184,6 +184,7 @@ async def verify_login_token(request: Request, body: VerifyTokenBody):
         httponly=True,
         secure=not app_settings.debug,
         samesite="lax",
+        domain=app_settings.cookie_domain,
         path="/",
         max_age=86400,
     )
@@ -193,7 +194,11 @@ async def verify_login_token(request: Request, body: VerifyTokenBody):
 @router.post("/auth/logout")
 async def logout():
     response = JSONResponse(content={"ok": True})
-    response.delete_cookie(key="admin_token", path="/")
+    response.delete_cookie(
+        key="admin_token",
+        domain=app_settings.cookie_domain,
+        path="/",
+    )
     return response
 
 
