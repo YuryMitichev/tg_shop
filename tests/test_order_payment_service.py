@@ -27,6 +27,9 @@ async def order_in_db(db_session, seed_data):
     return 100
 
 
+_YK_CREDS = ("test_yk_shop_id", "test_yk_secret_key")
+
+
 class TestCreatePayment:
 
     async def test_create_payment_success(self, db_session, seed_data, order_in_db):
@@ -39,6 +42,10 @@ class TestCreatePayment:
             "app.services.order_payment_service.YooKassaClient.create_payment",
             new_callable=AsyncMock,
             return_value=mock_response,
+        ), patch(
+            "app.services.order_payment_service.ShopService.get_yookassa_credentials",
+            new_callable=AsyncMock,
+            return_value=_YK_CREDS,
         ):
             result = await OrderPaymentService.create_payment(shop_id=1, order_id=order_in_db)
 
@@ -54,11 +61,27 @@ class TestCreatePayment:
         result = await OrderPaymentService.create_payment(shop_id=999, order_id=order_in_db)
         assert result is None
 
+    async def test_create_payment_no_yookassa_credentials(
+        self, db_session, seed_data, order_in_db
+    ):
+        with patch(
+            "app.services.order_payment_service.ShopService.get_yookassa_credentials",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            result = await OrderPaymentService.create_payment(shop_id=1, order_id=order_in_db)
+
+        assert result is None
+
     async def test_create_payment_yookassa_fails(self, db_session, seed_data, order_in_db):
         with patch(
             "app.services.order_payment_service.YooKassaClient.create_payment",
             new_callable=AsyncMock,
             return_value=None,
+        ), patch(
+            "app.services.order_payment_service.ShopService.get_yookassa_credentials",
+            new_callable=AsyncMock,
+            return_value=_YK_CREDS,
         ):
             result = await OrderPaymentService.create_payment(shop_id=1, order_id=order_in_db)
 
@@ -69,19 +92,26 @@ class TestCreatePayment:
     ):
         captured = {}
 
-        async def fake_create(amount_rub, description, return_url, metadata):
+        async def fake_create(amount_rub, description, return_url, metadata, **kwargs):
             captured["metadata"] = metadata
+            captured["kwargs"] = kwargs
             return {"payment_id": "yk_x", "confirmation_url": "https://yoomoney.ru/x"}
 
         with patch(
             "app.services.order_payment_service.YooKassaClient.create_payment",
             new=fake_create,
+        ), patch(
+            "app.services.order_payment_service.ShopService.get_yookassa_credentials",
+            new_callable=AsyncMock,
+            return_value=_YK_CREDS,
         ):
             await OrderPaymentService.create_payment(shop_id=1, order_id=order_in_db)
 
         assert captured["metadata"]["type"] == "order"
         assert captured["metadata"]["order_id"] == str(order_in_db)
         assert captured["metadata"]["shop_id"] == "1"
+        assert captured["kwargs"]["shop_id"] == "test_yk_shop_id"
+        assert captured["kwargs"]["secret_key"] == "test_yk_secret_key"
 
 
 class TestProcessWebhook:
@@ -96,6 +126,7 @@ class TestProcessWebhook:
             "object": {
                 "id": "yk_paid_123",
                 "status": "succeeded",
+                "amount": {"value": "1500.00", "currency": "RUB"},
                 "metadata": {
                     "type": "order",
                     "shop_id": "1",
@@ -117,6 +148,33 @@ class TestProcessWebhook:
             order = await session.get(Order, order_in_db)
             assert order.status == "paid"
             assert order.payment_id == "yk_paid_123"
+
+    async def test_payment_succeeded_wrong_amount(
+        self, db_session, seed_data, order_in_db
+    ):
+        from app.models.order import Order
+
+        data = {
+            "event": "payment.succeeded",
+            "object": {
+                "id": "yk_wrong",
+                "status": "succeeded",
+                "amount": {"value": "999.00", "currency": "RUB"},
+                "metadata": {
+                    "type": "order",
+                    "shop_id": "1",
+                    "order_id": str(order_in_db),
+                },
+            },
+        }
+
+        result = await OrderPaymentService.process_webhook(data)
+
+        assert result is False
+
+        async with db_session() as session:
+            order = await session.get(Order, order_in_db)
+            assert order.status == "new"
 
     async def test_payment_canceled(self, db_session, seed_data, order_in_db):
         data = {
@@ -155,6 +213,7 @@ class TestProcessWebhook:
             "event": "payment.succeeded",
             "object": {
                 "id": "yk_ghost",
+                "amount": {"value": "100.00", "currency": "RUB"},
                 "metadata": {
                     "type": "order",
                     "shop_id": "1",
@@ -190,6 +249,7 @@ class TestProcessWebhook:
             "event": "payment.succeeded",
             "object": {
                 "id": "yk_late",
+                "amount": {"value": "1500.00", "currency": "RUB"},
                 "metadata": {
                     "type": "order",
                     "shop_id": "1",

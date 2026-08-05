@@ -3,6 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.bot.filters.admin import IsAdmin
+from app.bot.filters.subscription import SubscriptionActive
 from app.bot.keyboards.admin import (
     get_admin_message_edit_keyboard,
     get_admin_messages_keyboard,
@@ -14,8 +15,8 @@ from app.services.message_service import MessageService
 
 def setup_messages_router() -> Router:
     router = Router()
-    router.message.filter(IsAdmin())
-    router.callback_query.filter(IsAdmin())
+    router.message.filter(IsAdmin(), SubscriptionActive())
+    router.callback_query.filter(IsAdmin(), SubscriptionActive())
 
     @router.callback_query(F.data == "admin_messages")
     async def list_messages(callback: CallbackQuery, state: FSMContext):

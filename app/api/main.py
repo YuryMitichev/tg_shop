@@ -12,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from sqlalchemy import text
 
+from app.api.admin_auth import SubscriptionExpiredException
 from app.api.rate_limit import limiter
 from app.api.routes.payments import router as payments_router
 from app.api.routes.shop import router as shop_router
@@ -59,6 +60,16 @@ def create_app() -> FastAPI:
 
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    @app.exception_handler(SubscriptionExpiredException)
+    async def subscription_expired_handler(request: Request, exc: SubscriptionExpiredException):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "subscription_expired",
+                "message": "Продлите подписку, чтобы получить доступ к этому разделу",
+            },
+        )
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):

@@ -1,10 +1,13 @@
 """Тесты per-shop платёжных настроек: ShopService, admin API, routes."""
+from datetime import datetime, timedelta, timezone
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.api.main import create_app
+from app.models.subscription import Subscription, SubscriptionPlan
 from app.services.admin_auth_service import AdminAuthService
 from app.services.shop_service import ShopService, _mask_secret_key
 from app.utils.crypto import encrypt
@@ -32,6 +35,23 @@ def mock_admin_auth():
         return_value=_ADMIN_DICT,
     ):
         yield
+
+
+@pytest.fixture
+async def active_subscription(db_session):
+    """Создаёт активную подписку для shop_id=1 (нужна для заблокированных роутов)."""
+    session_maker = db_session
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    async with session_maker() as session:
+        session.add(SubscriptionPlan(
+            id=1, name="Тест", price=690, duration_days=30, is_trial=False,
+        ))
+        await session.commit()
+        session.add(Subscription(
+            shop_id=1, plan_id=1, status="active",
+            started_at=now, expires_at=now + timedelta(days=25),
+        ))
+        await session.commit()
 
 
 class TestShopServicePaymentSettings:
@@ -207,7 +227,7 @@ class TestAdminPaymentSettings:
     """Тесты admin API: GET/PUT /settings/payments."""
 
     async def test_get_payment_settings(
-        self, db_session, seed_data, admin_cookie, mock_admin_auth
+        self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription
     ):
         await ShopService.update_payment_settings(
             shop_id=1,
@@ -234,7 +254,7 @@ class TestAdminPaymentSettings:
         assert _YK_SECRET[-4:] in data["yookassa_secret_key_masked"]
 
     async def test_update_payment_settings(
-        self, db_session, seed_data, admin_cookie, mock_admin_auth
+        self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription
     ):
         app = create_app()
         transport = ASGITransport(app=app)
@@ -260,7 +280,7 @@ class TestAdminPaymentSettings:
         assert shop["manual_payment_enabled"] is False
 
     async def test_update_payment_settings_no_secret_preserves(
-        self, db_session, seed_data, admin_cookie, mock_admin_auth
+        self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription
     ):
         await ShopService.update_payment_settings(
             shop_id=1,

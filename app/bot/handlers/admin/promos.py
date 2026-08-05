@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.filters.admin import IsAdmin
+from app.bot.filters.subscription import SubscriptionActive
 from app.bot.keyboards.admin import (
     get_admin_promo_detail_keyboard,
     get_admin_promos_keyboard,
@@ -15,8 +16,8 @@ from app.services.promo_service import PromoCodeService
 
 def setup_promos_router() -> Router:
     router = Router()
-    router.message.filter(IsAdmin())
-    router.callback_query.filter(IsAdmin())
+    router.message.filter(IsAdmin(), SubscriptionActive())
+    router.callback_query.filter(IsAdmin(), SubscriptionActive())
 
     @router.callback_query(F.data == "admin_promos")
     async def list_promos(callback: CallbackQuery, state: FSMContext):

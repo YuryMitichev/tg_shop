@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.bot.filters.admin import IsAdmin
+from app.bot.filters.subscription import SubscriptionActive
 from app.bot.keyboards.admin import get_admin_menu
 from app.bot.shop_context import get_shop_id
 from app.services.stats_service import StatsService
@@ -48,7 +49,7 @@ def setup_router() -> Router:
     # Статистика
     # ==========================
 
-    @router.callback_query(F.data == "admin_stats")
+    @router.callback_query(F.data == "admin_stats", SubscriptionActive())
     async def show_stats(callback: CallbackQuery):
         stats = await StatsService.get_stats(get_shop_id())
 

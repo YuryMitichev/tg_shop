@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from aiogram.types import BufferedInputFile
 from datetime import datetime
 
-from app.api.admin_auth import require_admin
+from app.api.admin_auth import require_admin, require_admin_full_access, require_active_subscription
 from app.api.rate_limit import limiter
 from app.bot.bot import get_bot
 from app.core.config import settings as app_settings
@@ -197,8 +197,12 @@ async def logout():
 
 
 @router.get("/auth/me")
-async def get_me(admin: dict = Depends(require_admin)):
-    return {"telegram_user_id": admin["admin_id"], "shop_id": admin["shop_id"]}
+async def get_me(admin: dict = Depends(require_admin_full_access)):
+    return {
+        "telegram_user_id": admin["admin_id"],
+        "shop_id": admin["shop_id"],
+        "subscription_active": admin.get("subscription_active", True),
+    }
 
 
 # ==========================
@@ -206,42 +210,42 @@ async def get_me(admin: dict = Depends(require_admin)):
 # ==========================
 
 @router.get("/stats")
-async def get_stats(admin: dict = Depends(require_admin)):
+async def get_stats(admin: dict = Depends(require_active_subscription)):
     return await StatsService.get_stats(admin["shop_id"])
 
 
 @router.get("/analytics/revenue")
-async def get_revenue_chart(days: int = 30, admin: dict = Depends(require_admin)):
+async def get_revenue_chart(days: int = 30, admin: dict = Depends(require_active_subscription)):
     return await StatsService.get_revenue_chart(admin["shop_id"], days)
 
 
 @router.get("/analytics/overview")
-async def get_analytics_overview(days: int = 30, admin: dict = Depends(require_admin)):
+async def get_analytics_overview(days: int = 30, admin: dict = Depends(require_active_subscription)):
     return await StatsService.get_analytics_overview(admin["shop_id"], days)
 
 
 @router.get("/analytics/categories")
-async def get_category_breakdown(days: int = 30, admin: dict = Depends(require_admin)):
+async def get_category_breakdown(days: int = 30, admin: dict = Depends(require_active_subscription)):
     return await StatsService.get_category_breakdown(admin["shop_id"], days)
 
 
 @router.get("/analytics/products")
-async def get_product_stats(days: int = 30, admin: dict = Depends(require_admin)):
+async def get_product_stats(days: int = 30, admin: dict = Depends(require_active_subscription)):
     return await StatsService.get_product_stats(admin["shop_id"], days)
 
 
 @router.get("/analytics/customers")
-async def get_customer_stats(days: int = 30, admin: dict = Depends(require_admin)):
+async def get_customer_stats(days: int = 30, admin: dict = Depends(require_active_subscription)):
     return await StatsService.get_customer_stats(admin["shop_id"], days)
 
 
 @router.get("/analytics/promos")
-async def get_promo_stats(days: int = 30, admin: dict = Depends(require_admin)):
+async def get_promo_stats(days: int = 30, admin: dict = Depends(require_active_subscription)):
     return await StatsService.get_promo_stats(admin["shop_id"], days)
 
 
 @router.get("/analytics/reviews")
-async def get_review_stats(admin: dict = Depends(require_admin)):
+async def get_review_stats(admin: dict = Depends(require_active_subscription)):
     return await StatsService.get_review_stats(admin["shop_id"])
 
 
@@ -255,13 +259,13 @@ async def list_categories(admin: dict = Depends(require_admin)):
 
 
 @router.post("/categories")
-async def create_category(body: CreateCategoryBody, admin: dict = Depends(require_admin)):
+async def create_category(body: CreateCategoryBody, admin: dict = Depends(require_active_subscription)):
     category_id = await CatalogAdminService.create_category(admin["shop_id"], body.name, body.emoji)
     return {"id": category_id}
 
 
 @router.put("/categories/{category_id}")
-async def update_category(category_id: int, body: UpdateCategoryBody, admin: dict = Depends(require_admin)):
+async def update_category(category_id: int, body: UpdateCategoryBody, admin: dict = Depends(require_active_subscription)):
     if body.name is not None:
         await CatalogAdminService.rename_category(admin["shop_id"], category_id, body.name)
     if body.emoji is not None:
@@ -270,7 +274,7 @@ async def update_category(category_id: int, body: UpdateCategoryBody, admin: dic
 
 
 @router.delete("/categories/{category_id}")
-async def delete_category(category_id: int, admin: dict = Depends(require_admin)):
+async def delete_category(category_id: int, admin: dict = Depends(require_active_subscription)):
     ok = await CatalogAdminService.delete_category(admin["shop_id"], category_id)
 
     if not ok:
@@ -284,14 +288,14 @@ async def delete_category(category_id: int, admin: dict = Depends(require_admin)
 # ==========================
 
 @router.get("/products")
-async def list_products(category_id: int | None = None, admin: dict = Depends(require_admin)):
+async def list_products(category_id: int | None = None, admin: dict = Depends(require_active_subscription)):
     if category_id is not None:
         return await CatalogAdminService.get_products(admin["shop_id"], category_id)
     return await CatalogAdminService.get_all_products(admin["shop_id"])
 
 
 @router.get("/products/{product_id}")
-async def get_product(product_id: int, admin: dict = Depends(require_admin)):
+async def get_product(product_id: int, admin: dict = Depends(require_active_subscription)):
     product = await CatalogAdminService.get_product(admin["shop_id"], product_id)
 
     if product is None:
@@ -301,7 +305,7 @@ async def get_product(product_id: int, admin: dict = Depends(require_admin)):
 
 
 @router.post("/products")
-async def create_product(body: CreateProductBody, admin: dict = Depends(require_admin)):
+async def create_product(body: CreateProductBody, admin: dict = Depends(require_active_subscription)):
     product_id = await CatalogAdminService.create_product(
         admin["shop_id"],
         category_id=body.category_id,
@@ -313,7 +317,7 @@ async def create_product(body: CreateProductBody, admin: dict = Depends(require_
 
 
 @router.put("/products/{product_id}")
-async def update_product(product_id: int, body: UpdateProductBody, admin: dict = Depends(require_admin)):
+async def update_product(product_id: int, body: UpdateProductBody, admin: dict = Depends(require_active_subscription)):
     await CatalogAdminService.update_product(
         admin["shop_id"],
         product_id,
@@ -335,13 +339,13 @@ async def update_product(product_id: int, body: UpdateProductBody, admin: dict =
 
 
 @router.delete("/products/{product_id}")
-async def delete_product(product_id: int, admin: dict = Depends(require_admin)):
+async def delete_product(product_id: int, admin: dict = Depends(require_active_subscription)):
     await CatalogAdminService.delete_product(admin["shop_id"], product_id)
     return {"ok": True}
 
 
 @router.patch("/products/{product_id}/toggle")
-async def toggle_product(product_id: int, admin: dict = Depends(require_admin)):
+async def toggle_product(product_id: int, admin: dict = Depends(require_active_subscription)):
     is_active = await CatalogAdminService.toggle_active(admin["shop_id"], product_id)
     return {"is_active": is_active}
 
@@ -350,7 +354,7 @@ async def toggle_product(product_id: int, admin: dict = Depends(require_admin)):
 async def upload_photo(
     product_id: int,
     file: UploadFile = File(...),
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     content = await file.read()
 
@@ -371,7 +375,7 @@ async def upload_photo(
 
 
 @router.delete("/products/{product_id}/photos/{photo_id}")
-async def delete_photo(product_id: int, photo_id: int, admin: dict = Depends(require_admin)):
+async def delete_photo(product_id: int, photo_id: int, admin: dict = Depends(require_active_subscription)):
     await CatalogAdminService.delete_photo(admin["shop_id"], photo_id)
     return {"ok": True}
 
@@ -380,7 +384,7 @@ async def delete_photo(product_id: int, photo_id: int, admin: dict = Depends(req
 async def update_variant_stock(
     variant_id: int,
     body: UpdateVariantStockBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     ok = await CatalogAdminService.update_variant_stock(admin["shop_id"], variant_id, body.stock)
     if not ok:
@@ -432,7 +436,7 @@ async def get_statuses(admin: dict = Depends(require_admin)):
 # ==========================
 
 @router.get("/users")
-async def list_users(admin: dict = Depends(require_admin)):
+async def list_users(admin: dict = Depends(require_active_subscription)):
     return await OrderAdminService.get_users(admin["shop_id"])
 
 
@@ -441,12 +445,12 @@ async def list_users(admin: dict = Depends(require_admin)):
 # ==========================
 
 @router.get("/promos")
-async def list_promos(admin: dict = Depends(require_admin)):
+async def list_promos(admin: dict = Depends(require_active_subscription)):
     return await PromoCodeService.get_all(admin["shop_id"])
 
 
 @router.post("/promos")
-async def create_promo(body: CreatePromoBody, admin: dict = Depends(require_admin)):
+async def create_promo(body: CreatePromoBody, admin: dict = Depends(require_active_subscription)):
     promo_id = await PromoCodeService.create(
         admin["shop_id"],
         code=body.code,
@@ -458,13 +462,13 @@ async def create_promo(body: CreatePromoBody, admin: dict = Depends(require_admi
 
 
 @router.patch("/promos/{promo_id}/toggle")
-async def toggle_promo(promo_id: int, admin: dict = Depends(require_admin)):
+async def toggle_promo(promo_id: int, admin: dict = Depends(require_active_subscription)):
     await PromoCodeService.toggle_active(admin["shop_id"], promo_id)
     return {"ok": True}
 
 
 @router.delete("/promos/{promo_id}")
-async def delete_promo(promo_id: int, admin: dict = Depends(require_admin)):
+async def delete_promo(promo_id: int, admin: dict = Depends(require_active_subscription)):
     await PromoCodeService.delete(admin["shop_id"], promo_id)
     return {"ok": True}
 
@@ -474,12 +478,12 @@ async def delete_promo(promo_id: int, admin: dict = Depends(require_admin)):
 # ==========================
 
 @router.get("/reviews")
-async def list_reviews(admin: dict = Depends(require_admin)):
+async def list_reviews(admin: dict = Depends(require_active_subscription)):
     return await ReviewAdminService.get_all_reviews(admin["shop_id"])
 
 
 @router.delete("/reviews/{review_id}")
-async def delete_review(review_id: int, admin: dict = Depends(require_admin)):
+async def delete_review(review_id: int, admin: dict = Depends(require_active_subscription)):
     ok = await ReviewAdminService.delete_review(admin["shop_id"], review_id)
     return {"ok": ok}
 
@@ -489,12 +493,12 @@ async def delete_review(review_id: int, admin: dict = Depends(require_admin)):
 # ==========================
 
 @router.get("/settings/messages")
-async def list_messages(admin: dict = Depends(require_admin)):
+async def list_messages(admin: dict = Depends(require_active_subscription)):
     return await MessageService.get_all(admin["shop_id"])
 
 
 @router.get("/settings/messages/{key}")
-async def get_message(key: str, admin: dict = Depends(require_admin)):
+async def get_message(key: str, admin: dict = Depends(require_active_subscription)):
     msg = await MessageService.get_one(admin["shop_id"], key)
 
     if msg is None:
@@ -504,19 +508,19 @@ async def get_message(key: str, admin: dict = Depends(require_admin)):
 
 
 @router.put("/settings/messages/{key}")
-async def update_message(key: str, body: UpdateMessageBody, admin: dict = Depends(require_admin)):
+async def update_message(key: str, body: UpdateMessageBody, admin: dict = Depends(require_active_subscription)):
     await MessageService.update(admin["shop_id"], key, body.content)
     return {"ok": True}
 
 
 @router.post("/settings/messages/{key}/reset")
-async def reset_message(key: str, admin: dict = Depends(require_admin)):
+async def reset_message(key: str, admin: dict = Depends(require_active_subscription)):
     await MessageService.reset(admin["shop_id"], key)
     return {"ok": True}
 
 
 @router.get("/settings/payment")
-async def get_payment_settings(admin: dict = Depends(require_admin)):
+async def get_payment_settings(admin: dict = Depends(require_active_subscription)):
     return {
         "payment_card_number": app_settings.payment_card_number,
         "payment_recipient_name": app_settings.payment_recipient_name,
@@ -529,7 +533,7 @@ async def get_payment_settings(admin: dict = Depends(require_admin)):
 # ==========================
 
 @router.get("/settings/delivery")
-async def get_delivery_settings(admin: dict = Depends(require_admin)):
+async def get_delivery_settings(admin: dict = Depends(require_active_subscription)):
     shop = await ShopService.get(admin["shop_id"])
     return {
         "delivery_enabled": shop["delivery_enabled"] if shop else True,
@@ -539,7 +543,7 @@ async def get_delivery_settings(admin: dict = Depends(require_admin)):
 
 
 @router.put("/settings/delivery")
-async def update_delivery_settings(body: UpdateDeliveryBody, admin: dict = Depends(require_admin)):
+async def update_delivery_settings(body: UpdateDeliveryBody, admin: dict = Depends(require_active_subscription)):
     await ShopService.update_delivery_settings(
         admin["shop_id"],
         body.delivery_enabled,
@@ -553,7 +557,7 @@ async def update_delivery_settings(body: UpdateDeliveryBody, admin: dict = Depen
 # ==========================
 
 @router.get("/settings/product-attrs")
-async def get_product_attrs(admin: dict = Depends(require_admin)):
+async def get_product_attrs(admin: dict = Depends(require_active_subscription)):
     shop = await ShopService.get(admin["shop_id"])
     return {
         "product_attrs": shop["product_attrs"] if shop else ["volume"],
@@ -562,7 +566,7 @@ async def get_product_attrs(admin: dict = Depends(require_admin)):
 
 
 @router.put("/settings/product-attrs")
-async def update_product_attrs(body: UpdateProductAttrsBody, admin: dict = Depends(require_admin)):
+async def update_product_attrs(body: UpdateProductAttrsBody, admin: dict = Depends(require_active_subscription)):
     await ShopService.update_product_attrs(admin["shop_id"], body.product_attrs)
     return {"ok": True}
 
@@ -572,7 +576,7 @@ async def update_product_attrs(body: UpdateProductAttrsBody, admin: dict = Depen
 # ==========================
 
 @router.get("/settings/company")
-async def get_company_info(admin: dict = Depends(require_admin)):
+async def get_company_info(admin: dict = Depends(require_active_subscription)):
     shop = await ShopService.get(admin["shop_id"])
     return {
         "company_name": shop["company_name"] if shop else None,
@@ -582,7 +586,7 @@ async def get_company_info(admin: dict = Depends(require_admin)):
 
 
 @router.put("/settings/company")
-async def update_company_info(body: UpdateCompanyInfoBody, admin: dict = Depends(require_admin)):
+async def update_company_info(body: UpdateCompanyInfoBody, admin: dict = Depends(require_active_subscription)):
     await ShopService.update_company_info(
         admin["shop_id"],
         body.company_name,
@@ -597,7 +601,7 @@ async def update_company_info(body: UpdateCompanyInfoBody, admin: dict = Depends
 # ==========================
 
 @router.get("/settings/payments")
-async def get_shop_payment_settings(admin: dict = Depends(require_admin)):
+async def get_shop_payment_settings(admin: dict = Depends(require_active_subscription)):
     shop = await ShopService.get(admin["shop_id"])
     if shop is None:
         raise HTTPException(status_code=404, detail="Shop not found")
@@ -614,7 +618,7 @@ async def get_shop_payment_settings(admin: dict = Depends(require_admin)):
 @router.put("/settings/payments")
 async def update_shop_payment_settings(
     body: UpdatePaymentSettingsBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     result = await ShopService.update_payment_settings(
         admin["shop_id"],
@@ -635,18 +639,18 @@ async def update_shop_payment_settings(
 # ==========================
 
 @router.get("/admins")
-async def list_admins(admin: dict = Depends(require_admin)):
+async def list_admins(admin: dict = Depends(require_active_subscription)):
     return await AdminUserService.get_all(admin["shop_id"])
 
 
 @router.post("/admins")
-async def create_admin(body: CreateAdminBody, admin: dict = Depends(require_admin)):
+async def create_admin(body: CreateAdminBody, admin: dict = Depends(require_active_subscription)):
     admin_id = await AdminUserService.add(admin["shop_id"], body.telegram_user_id, body.display_name)
     return {"id": admin_id}
 
 
 @router.delete("/admins/{admin_id}")
-async def delete_admin(admin_id: int, admin: dict = Depends(require_admin)):
+async def delete_admin(admin_id: int, admin: dict = Depends(require_active_subscription)):
     if admin_id < 0:
         return {"ok": False, "error": "Нельзя удалить супер-админа из .env"}
     ok = await AdminUserService.delete(admin["shop_id"], admin_id)
@@ -680,7 +684,7 @@ async def crm_user_detail(telegram_user_id: int, admin: dict = Depends(require_a
 async def crm_update_notes(
     telegram_user_id: int,
     body: UpdateNotesBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     ok = await CrmService.update_notes(admin["shop_id"], telegram_user_id, body.notes)
     return {"ok": ok}
@@ -690,7 +694,7 @@ async def crm_update_notes(
 async def crm_update_phone(
     telegram_user_id: int,
     body: UpdatePhoneBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     ok = await CrmService.update_phone(admin["shop_id"], telegram_user_id, body.phone)
     return {"ok": ok}
@@ -700,7 +704,7 @@ async def crm_update_phone(
 async def crm_add_tag(
     telegram_user_id: int,
     body: AddTagBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     ok = await CrmService.add_tag(admin["shop_id"], telegram_user_id, body.tag)
     return {"ok": ok}
@@ -710,14 +714,14 @@ async def crm_add_tag(
 async def crm_remove_tag(
     telegram_user_id: int,
     tag: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     ok = await CrmService.remove_tag(admin["shop_id"], telegram_user_id, tag)
     return {"ok": ok}
 
 
 @router.get("/crm/tags")
-async def crm_all_tags(admin: dict = Depends(require_admin)):
+async def crm_all_tags(admin: dict = Depends(require_active_subscription)):
     return await CrmService.get_all_tags(admin["shop_id"])
 
 
@@ -730,7 +734,7 @@ async def crm_messages(
     telegram_user_id: int,
     page: int = 1,
     per_page: int = 50,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     return await CrmService.get_communication_history(admin["shop_id"], telegram_user_id, page, per_page)
 
@@ -739,7 +743,7 @@ async def crm_messages(
 async def crm_send_message(
     telegram_user_id: int,
     body: SendMessageBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     bot = get_bot(admin["shop_id"])
     if bot is None:
@@ -773,13 +777,13 @@ async def crm_send_message(
 async def list_broadcasts(
     page: int = 1,
     per_page: int = 20,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     return await BroadcastService.get_broadcasts(admin["shop_id"], page, per_page)
 
 
 @router.get("/broadcasts/{broadcast_id}")
-async def get_broadcast(broadcast_id: int, admin: dict = Depends(require_admin)):
+async def get_broadcast(broadcast_id: int, admin: dict = Depends(require_active_subscription)):
     broadcast = await BroadcastService.get_broadcast(admin["shop_id"], broadcast_id)
     if broadcast is None:
         return {"ok": False, "error": "Рассылка не найдена"}
@@ -789,7 +793,7 @@ async def get_broadcast(broadcast_id: int, admin: dict = Depends(require_admin))
 @router.post("/broadcasts/preview")
 async def preview_recipients(
     body: PreviewRecipientsBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     return await BroadcastService.preview_recipients(admin["shop_id"], body.tags)
 
@@ -797,7 +801,7 @@ async def preview_recipients(
 @router.post("/broadcasts")
 async def create_broadcast(
     body: CreateBroadcastBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     try:
         expires_dt = None
@@ -825,7 +829,7 @@ async def create_broadcast(
 async def send_broadcast(
     request: Request,
     broadcast_id: int,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_active_subscription),
 ):
     bot = get_bot(admin["shop_id"])
     if bot is None:

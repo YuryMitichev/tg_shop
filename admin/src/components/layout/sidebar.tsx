@@ -16,6 +16,7 @@ import {
   Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSubscription, isRouteBlocked } from "@/lib/subscription-context";
 
 const navItems = [
   { href: "/dashboard", label: "Дашборд", icon: LayoutDashboard },
@@ -33,6 +34,7 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { subscriptionActive } = useSubscription();
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r bg-card">
@@ -43,6 +45,7 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {navItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const blocked = !subscriptionActive && isRouteBlocked(item.href);
 
           return (
             <Link
@@ -50,7 +53,8 @@ export function Sidebar() {
               href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                active
+                blocked && "pointer-events-none cursor-not-allowed opacity-40",
+                active && !blocked
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
               )}

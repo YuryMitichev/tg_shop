@@ -66,6 +66,9 @@ async def trial_subscription(db_session, seed_data):
     return {"shop_id": 1, "plan_id": 10}
 
 
+_YK_CREDS = ("test_shop_id", "test_secret_key")
+
+
 class TestYooKassaWebhookOrder:
     """Вебхук ЮKassa — оплата заказа."""
 
@@ -76,6 +79,7 @@ class TestYooKassaWebhookOrder:
         verified = {
             "id": "pay-123",
             "status": "succeeded",
+            "amount": {"value": "1500.00", "currency": "RUB"},
             "metadata": {"type": "order", "shop_id": "1", "order_id": "100"},
         }
 
@@ -83,6 +87,10 @@ class TestYooKassaWebhookOrder:
             "app.api.routes.payments.YooKassaClient.get_payment",
             new_callable=AsyncMock,
             return_value=verified,
+        ), patch(
+            "app.api.routes.payments.ShopService.get_yookassa_credentials",
+            new_callable=AsyncMock,
+            return_value=_YK_CREDS,
         ), patch(
             "app.services.order_payment_service.OrderPaymentService._notify_user",
             new_callable=AsyncMock,
@@ -94,7 +102,10 @@ class TestYooKassaWebhookOrder:
                     "/payments/yookassa/webhook",
                     json={
                         "event": "payment.succeeded",
-                        "object": {"id": "pay-123"},
+                        "object": {
+                            "id": "pay-123",
+                            "metadata": {"type": "order", "shop_id": "1", "order_id": "100"},
+                        },
                     },
                 )
 
@@ -119,6 +130,7 @@ class TestYooKassaWebhookOrder:
         verified = {
             "id": "pay-123",
             "status": "succeeded",
+            "amount": {"value": "1500.00", "currency": "RUB"},
             "metadata": {"type": "order", "shop_id": "1", "order_id": "100"},
         }
 
@@ -126,6 +138,10 @@ class TestYooKassaWebhookOrder:
             "app.api.routes.payments.YooKassaClient.get_payment",
             new_callable=AsyncMock,
             return_value=verified,
+        ), patch(
+            "app.api.routes.payments.ShopService.get_yookassa_credentials",
+            new_callable=AsyncMock,
+            return_value=_YK_CREDS,
         ), patch(
             "app.services.order_payment_service.OrderPaymentService._notify_user",
             new_callable=AsyncMock,
@@ -137,7 +153,10 @@ class TestYooKassaWebhookOrder:
                     "/payments/yookassa/webhook",
                     json={
                         "event": "payment.succeeded",
-                        "object": {"id": "pay-123"},
+                        "object": {
+                            "id": "pay-123",
+                            "metadata": {"type": "order", "shop_id": "1", "order_id": "100"},
+                        },
                     },
                 )
 
@@ -154,6 +173,7 @@ class TestYooKassaWebhookOrder:
         verified = {
             "id": "pay-404",
             "status": "succeeded",
+            "amount": {"value": "100.00", "currency": "RUB"},
             "metadata": {"type": "order", "shop_id": "1", "order_id": "999"},
         }
 
@@ -161,6 +181,10 @@ class TestYooKassaWebhookOrder:
             "app.api.routes.payments.YooKassaClient.get_payment",
             new_callable=AsyncMock,
             return_value=verified,
+        ), patch(
+            "app.api.routes.payments.ShopService.get_yookassa_credentials",
+            new_callable=AsyncMock,
+            return_value=_YK_CREDS,
         ):
             app = create_app()
             transport = ASGITransport(app=app)
@@ -169,7 +193,10 @@ class TestYooKassaWebhookOrder:
                     "/payments/yookassa/webhook",
                     json={
                         "event": "payment.succeeded",
-                        "object": {"id": "pay-404"},
+                        "object": {
+                            "id": "pay-404",
+                            "metadata": {"type": "order", "shop_id": "1", "order_id": "999"},
+                        },
                     },
                 )
 

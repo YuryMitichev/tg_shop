@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
+import { SubscriptionBanner } from "@/components/layout/subscription-banner";
+import { SubscriptionProvider, isRouteBlocked } from "@/lib/subscription-context";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 export default function DashboardLayout({
   children,
@@ -13,12 +16,17 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [ready, setReady] = useState(false);
+  const [subscriptionActive, setSubscriptionActive] = useState(true);
 
   useEffect(() => {
     api
-      .get<{ telegram_user_id: number }>("/auth/me")
-      .then(() => setReady(true))
+      .get<{ telegram_user_id: number; subscription_active: boolean }>("/auth/me")
+      .then((res) => {
+        setSubscriptionActive(res.subscription_active ?? true);
+        setReady(true);
+      })
       .catch(() => router.push("/login"));
   }, [router]);
 
@@ -39,23 +47,30 @@ export default function DashboardLayout({
     );
   }
 
+  const showBanner = !subscriptionActive && isRouteBlocked(pathname);
+
   return (
-    <div className="flex min-h-screen">
-      <div className="hidden md:block">
-        <Sidebar />
-      </div>
+    <SubscriptionProvider subscriptionActive={subscriptionActive}>
+      <div className="flex min-h-screen">
+        <div className="hidden md:block">
+          <Sidebar />
+        </div>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b bg-card px-6">
-          <div className="flex-1" />
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Выйти
-          </Button>
-        </header>
+        <div className="flex flex-1 flex-col">
+          <header className="flex h-14 items-center justify-between border-b bg-card px-6">
+            <div className="flex-1" />
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Выйти
+            </Button>
+          </header>
 
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          <main className="flex-1 overflow-y-auto p-6">
+            {showBanner && <SubscriptionBanner />}
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </SubscriptionProvider>
   );
 }

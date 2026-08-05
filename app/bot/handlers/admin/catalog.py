@@ -3,6 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.bot.filters.admin import IsAdmin
+from app.bot.filters.subscription import SubscriptionActive
 from app.bot.keyboards.admin import (
     get_admin_categories_keyboard,
     get_admin_edit_keyboard,
@@ -28,8 +29,8 @@ from app.services.catalog_admin_service import CatalogAdminService
 
 def setup_catalog_router() -> Router:
     router = Router()
-    router.message.filter(IsAdmin())
-    router.callback_query.filter(IsAdmin())
+    router.message.filter(IsAdmin(), SubscriptionActive())
+    router.callback_query.filter(IsAdmin(), SubscriptionActive())
 
     # ==========================
     # Управление категориями
