@@ -12,7 +12,6 @@ from app.bot.middlewares.throttling import ThrottlingMiddleware
 from app.bot.middlewares.crm import CrmMiddleware
 from app.bot.middlewares.shop import ShopMiddleware
 from app.database.db import init_db
-from app.database.seed import seed_if_empty
 from app.services.crm_service import CrmService
 from app.services.broadcast_service import BroadcastService
 from app.services.order_service import OrderService
@@ -166,7 +165,6 @@ async def start_all_bots() -> None:
     """Запуск всех активных ботов из БД + фоновых задач."""
 
     await init_db()
-    await seed_if_empty()
 
     try:
         cancelled = await OrderService.auto_cancel_stale_orders(days=14)

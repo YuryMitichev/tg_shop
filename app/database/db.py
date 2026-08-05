@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
-from app.utils.crypto import encrypt, token_hash
 
 
 class Base(DeclarativeBase):
@@ -38,27 +37,11 @@ async def init_db() -> None:
     """
     Заполняет БД стартовыми данными после применения миграций Alembic.
 
-    Создаёт:
-    — магазин по умолчанию (id=1) из переменных окружения;
-    — тарифы подписок по умолчанию.
+    Создаёт тарифы подписок по умолчанию.
+    Магазины создаются через онбординг платформенного бота,
+    поэтому здесь нет жёстко заданного магазина #1.
 
     Безопасно вызывать при каждом старте — существующие записи не затираются.
     """
-    from sqlalchemy import select
-    from app.models.shop import Shop
-
-    async with async_session() as session:
-        existing = await session.scalar(select(Shop).where(Shop.id == 1))
-        if existing is None:
-            shop = Shop(
-                id=1,
-                name=settings.shop_name,
-                bot_token=encrypt(settings.bot_token),
-                bot_token_hash=token_hash(settings.bot_token),
-                owner_telegram_id=settings.admin_id_list[0] if settings.admin_id_list else 0,
-            )
-            session.add(shop)
-            await session.commit()
-
     from app.services.subscription_service import SubscriptionService
     await SubscriptionService.ensure_default_plans()

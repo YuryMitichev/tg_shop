@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     # Telegram
     # ==========================
 
-    bot_token: str = Field(..., alias="BOT_TOKEN")
+    # Токен магазина по умолчанию. В SaaS-режиме магазины создаются
+    # через онбординг платформенного бота, поэтому это поле необязательное.
+    bot_token: str | None = Field(default=None, alias="BOT_TOKEN")
 
     # Токен платформенного бота (registrar) — для онбординга новых магазинов.
     platform_bot_token: str | None = Field(default=None, alias="PLATFORM_BOT_TOKEN")
