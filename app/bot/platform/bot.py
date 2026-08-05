@@ -73,6 +73,7 @@ def _main_menu(is_new: bool = True) -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=btn_text)],
             [KeyboardButton(text="📋 Мои магазины"), KeyboardButton(text="💳 Подписка")],
+            [KeyboardButton(text="🛠 Поддержка"), KeyboardButton(text="ℹ️ О платформе")],
         ],
         resize_keyboard=True,
     )
@@ -251,6 +252,65 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
     await message.answer(text, reply_markup=kb, disable_web_page_preview=True)
 
     await state.clear()
+
+
+async def on_support(message: Message) -> None:
+    username = settings.support_bot_username
+    if username:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="💬 Написать в поддержку", url=f"https://t.me/{username}")],
+            ]
+        )
+        await message.answer(
+            "🛠 <b>Техническая поддержка</b>\n\n"
+            "Нажмите кнопку ниже — откроется чат с нашим ботом поддержки.\n"
+            "Мы ответим на любой вопрос: настройка, оплата, баги, фичи.",
+            reply_markup=kb,
+        )
+    else:
+        await message.answer(
+            "🛠 <b>Техническая поддержка</b>\n\n"
+            "Поддержка временно недоступна. Попробуйте позже."
+        )
+
+
+async def on_about(message: Message) -> None:
+    text = (
+        "🛍 <b>TG Shop — платформа магазинов в Telegram</b>\n\n"
+
+        "📦 <b>Что это?</b>\n"
+        "Конструктор, который за 5 минут превращает Telegram-бота\n"
+        "в полноценный интернет-магазин: каталог, корзина, оплата,\n"
+        "заказы и CRM — всё внутри Telegram.\n\n"
+
+        "👥 <b>Для кого</b>\n"
+        "• Малый бизнес и самозанятые\n"
+        "• Продавцы свечей, косметики, еды, мерча и не только\n"
+        "• Те, кто устал вести продажи через записи в блокноте\n"
+        "  и переписки в личке\n\n"
+
+        "✅ <b>Какие проблемы решает</b>\n"
+        "• Клиентам больше не нужно писать вам в личку —\n"
+        "  они выбирают и заказывают сами в боте\n"
+        "• Все заказы, клиенты и товары — в одном месте\n"
+        "• Не нужен программист: каталог, категории и цены\n"
+        "  настраиваются через удобную админ-панель\n\n"
+
+        "🚀 <b>Преимущества</b>\n"
+        "• <b>Запуск за 5 минут</b> — создал бота, добавил товары, продаёшь\n"
+        "• <b>Корзина и оформление заказа</b> — клиент сам собирает покупку\n"
+        "• <b>Админ-панель</b> на ПК — управляйте магазином с компьютера\n"
+        "• <b>CRM</b> — история заказов и база клиентов всегда под рукой\n"
+        "• <b>Рассылки</b> — возвращайте клиентов уведомлениями об акциях\n"
+        "• <b>Промокоды и отзывы</b> — инструменты для роста продаж\n"
+        "• <b>Мини-приложение</b> — красивый каталог прямо в Telegram\n\n"
+
+        "🎁 <b>7 дней бесплатно</b> — попробуйте все возможности без оплаты.\n\n"
+
+        "Готовы начать? Нажмите <b>🚀 Создать магазин</b> в меню 👇"
+    )
+    await message.answer(text)
 
 
 async def on_my_shops(message: Message) -> None:
@@ -432,6 +492,8 @@ def get_platform_router() -> Dispatcher:
     )
     dp.message.register(on_my_shops, F.text == "📋 Мои магазины")
     dp.message.register(on_subscription, F.text == "💳 Подписка")
+    dp.message.register(on_support, F.text == "🛠 Поддержка")
+    dp.message.register(on_about, F.text == "ℹ️ О платформе")
     dp.callback_query.register(on_enter_token, F.data == "enter_token")
     dp.callback_query.register(
         on_subscription_shop, F.data.startswith("sub_shop:")

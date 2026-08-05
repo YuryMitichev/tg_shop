@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # URL админ-панели (отдельный поддомен).
     admin_panel_url: str | None = Field(default=None, alias="ADMIN_PANEL_URL")
 
+    # Username бота техподдержки (без @). Используется для кнопки
+    # «Поддержка» в главном меню платформенного бота.
+    support_bot_username: str | None = Field(default=None, alias="SUPPORT_BOT_USERNAME")
+
     @property
     def admin_id_list(self) -> list[int]:
         return [int(x.strip()) for x in self.admin_ids.split(",") if x.strip()]
