@@ -20,7 +20,7 @@ services:
       resources:
         limits:
           memory: 1g
-          cpus: "1.5"
+          cpus: "0.7"
 
   backup:
     image: postgres:16-alpine
