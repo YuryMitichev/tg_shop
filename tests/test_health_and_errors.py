@@ -77,7 +77,7 @@ class TestGlobalExceptionHandler:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/shop/products/99999")
+            resp = await client.get("/api/shop/products/99999", headers={"X-Shop-Id": "1"})
         assert resp.status_code == 404
         assert "detail" in resp.json()
 

@@ -21,9 +21,9 @@ async def plans(db_session):
             ),
             SubscriptionPlan(
                 id=2,
-                name="Старт",
-                description="Для микро-бизнеса",
-                price=690,
+                name="Подписка — 1 месяц",
+                description="Полный функционал магазина. Стоимость: 5000₽/мес.",
+                price=5000,
                 duration_days=30,
                 is_trial=False,
             ),

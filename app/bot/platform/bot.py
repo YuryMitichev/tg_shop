@@ -300,41 +300,52 @@ async def _show_subscription_for_shop(message: Message | CallbackQuery, shop: di
     else:
         status_line = "❌ <b>Истекла</b> — бот остановлен"
 
-    text = (
-        f"🏪 <b>{shop['name']}</b> (ID: {shop_id})\n\n"
-        f"Статус подписки: {status_line}\n\n"
-        f"{'---' * 10}\n"
-        f"📦 <b>Доступные тарифы:</b>\n\n"
-    )
-
     plans = await SubscriptionService.get_plans()
 
     if not plans:
-        text += "Тарифы не настроены. Обратитесь к администратору."
+        text = (
+            f"🏪 <b>{shop['name']}</b> (ID: {shop_id})\n\n"
+            f"Статус подписки: {status_line}\n\n"
+            f"Тарифы не настроены. Обратитесь к администратору."
+        )
         await (message.answer if isinstance(message, Message) else message.message.answer)(
             text, reply_markup=_main_menu(is_new=False)
         )
         return
 
+    features = plans[0].get("features", [])
+
+    text = (
+        f"🏪 <b>{shop['name']}</b> (ID: {shop_id})\n\n"
+        f"Статус подписки: {status_line}\n\n"
+        f"{'---' * 10}\n"
+        f"📦 <b>Тариф: 5000 ₽ / месяц</b>\n\n"
+    )
+
+    for feature in features:
+        text += f"  ✅ {feature}\n"
+
+    text += f"\n{'---' * 10}\n"
+    text += "<b>Выберите период оплаты:</b>\n\n"
+
     kb_rows = []
     for plan in plans:
-        text += f"🔸 <b>{plan['name']}</b> — {int(plan['price'])} ₽ / {plan['duration_days']} дней\n"
         if plan["description"]:
-            text += f"<i>{plan['description']}</i>\n"
-        for feature in plan.get("features", []):
-            text += f"  ✅ {feature}\n"
-        text += "\n"
+            text += f"🔸 <b>{plan['name']}</b> — {int(plan['price']):,} ₽\n"
+            text += f"<i>{plan['description']}</i>\n\n"
+        else:
+            text += f"🔸 <b>{plan['name']}</b> — {int(plan['price']):,} ₽\n\n"
 
         if settings.yookassa_enabled:
             kb_rows.append([
                 InlineKeyboardButton(
-                    text=f"💳 Оплатить «{plan['name']}» — {int(plan['price'])} ₽",
+                    text=f"💳 {plan['name']} — {int(plan['price']):,} ₽".replace(",", " "),
                     callback_data=f"pay:{shop_id}:{plan['id']}",
                 )
             ])
 
     if not settings.yookassa_enabled:
-        text += "\n⚠️ Оплата временно недоступна. Обратитесь к администратору."
+        text += "⚠️ Оплата временно недоступна. Обратитесь к администратору."
 
     kb = InlineKeyboardMarkup(inline_keyboard=kb_rows) if kb_rows else None
 

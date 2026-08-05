@@ -20,23 +20,31 @@ async def plans(db_session):
             ),
             SubscriptionPlan(
                 id=2,
-                name="Старт",
-                description="Для микро-бизнеса",
-                price=690,
+                name="Подписка — 1 месяц",
+                description="Полный функционал магазина. Стоимость: 5000₽/мес.",
+                price=5000,
                 duration_days=30,
                 is_trial=False,
             ),
             SubscriptionPlan(
                 id=3,
-                name="Бизнес",
-                description="Для растущих магазинов",
-                price=1490,
-                duration_days=30,
+                name="Подписка — 6 месяцев",
+                description="Полный функционал магазина. Выгода 3000₽ (скидка 10%).",
+                price=27000,
+                duration_days=180,
+                is_trial=False,
+            ),
+            SubscriptionPlan(
+                id=4,
+                name="Подписка — 12 месяцев",
+                description="Полный функционал магазина. Выгода 12000₽ (скидка 20%).",
+                price=48000,
+                duration_days=365,
                 is_trial=False,
             ),
         ])
         await session.commit()
-    return {1: "Триал", 2: "Старт", 3: "Бизнес"}
+    return {1: "Триал", 2: "1 мес", 3: "6 мес", 4: "12 мес"}
 
 
 class TestGetPlans:
@@ -79,7 +87,7 @@ class TestGetPlan:
     async def test_get_plan_basic(self, db_session, seed_data, plans):
         plan = await SubscriptionService.get_plan(2)
         assert plan is not None
-        assert plan["name"] == "Старт"
+        assert plan["name"] == "Подписка — 1 месяц"
         assert plan["is_trial"] is False
 
     async def test_get_plan_not_found(self, db_session, seed_data, plans):
@@ -318,17 +326,21 @@ class TestEnsureDefaultPlans:
             plans = {p.name: p for p in result.scalars().all()}
 
         assert "Триал 7 дней" in plans
-        assert "Старт" in plans
-        assert "Бизнес" in plans
+        assert "Подписка — 1 месяц" in plans
+        assert "Подписка — 6 месяцев" in plans
+        assert "Подписка — 12 месяцев" in plans
 
         assert plans["Триал 7 дней"].price == 0
         assert plans["Триал 7 дней"].is_trial is True
 
-        assert plans["Старт"].price == 690
-        assert plans["Старт"].is_trial is False
+        assert plans["Подписка — 1 месяц"].price == 5000
+        assert plans["Подписка — 1 месяц"].is_trial is False
 
-        assert plans["Бизнес"].price == 1490
-        assert plans["Бизнес"].is_trial is False
+        assert plans["Подписка — 6 месяцев"].price == 27000
+        assert plans["Подписка — 6 месяцев"].is_trial is False
+
+        assert plans["Подписка — 12 месяцев"].price == 48000
+        assert plans["Подписка — 12 месяцев"].is_trial is False
 
     async def test_idempotent(self, db_session):
         await SubscriptionService.ensure_default_plans()
@@ -339,7 +351,7 @@ class TestEnsureDefaultPlans:
             result = await session.execute(select(SubscriptionPlan))
             plans = result.scalars().all()
 
-        assert len(plans) == 3
+        assert len(plans) == 4
 
     async def test_features_stored_as_json(self, db_session):
         import json as _json
@@ -349,7 +361,7 @@ class TestEnsureDefaultPlans:
         async with db_session() as session:
             from sqlalchemy import select
             result = await session.execute(
-                select(SubscriptionPlan).where(SubscriptionPlan.name == "Старт")
+                select(SubscriptionPlan).where(SubscriptionPlan.name == "Подписка — 1 месяц")
             )
             plan = result.scalar_one()
             features = _json.loads(plan.features)

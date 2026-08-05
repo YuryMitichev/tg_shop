@@ -26,8 +26,9 @@ router = APIRouter()
 
 
 async def get_shop_id(x_shop_id: int | None = Header(None, alias="X-Shop-Id")) -> int:
-    """Определяет shop_id из заголовка X-Shop-Id (по умолчанию 1)."""
-    return x_shop_id or 1
+    if x_shop_id is None:
+        raise HTTPException(status_code=400, detail="X-Shop-Id header is required")
+    return x_shop_id
 
 
 @router.get("/shop-config")

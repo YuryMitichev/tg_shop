@@ -49,9 +49,7 @@ async def validate_init_data(init_data: str, bot_token: str) -> dict | None:
 async def _resolve_bot_token(shop_id: int | None) -> str | None:
     """Возвращает bot_token для магазина."""
     if shop_id is None:
-        from app.core.config import settings
-        return settings.bot_token
-
+        return None
     return await ShopService.get_bot_token(shop_id)
 
 
@@ -76,7 +74,7 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=401, detail="Invalid auth")
 
-    user["shop_id"] = x_shop_id or 1
+    user["shop_id"] = x_shop_id
     return user
 
 
@@ -96,6 +94,6 @@ async def get_optional_user(
 
     user = await validate_init_data(init_data, bot_token)
     if user:
-        user["shop_id"] = x_shop_id or 1
+        user["shop_id"] = x_shop_id
     return user
 

@@ -222,7 +222,7 @@ async def active_subscription(db_session):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     async with session_maker() as session:
         session.add(SubscriptionPlan(
-            id=1, name="Тест", price=690, duration_days=30, is_trial=False,
+            id=1, name="Тест", price=5000, duration_days=30, is_trial=False,
         ))
         await session.commit()
         session.add(Subscription(
