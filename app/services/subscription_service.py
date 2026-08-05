@@ -7,6 +7,11 @@ from app.database.db import async_session
 from app.models.subscription import Subscription, SubscriptionPlan
 
 
+def _utcnow() -> datetime:
+    """UTC без tzinfo — для совместимости с TIMESTAMP WITHOUT TIME ZONE."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class SubscriptionService:
     """Управление подписками магазинов."""
 
@@ -127,7 +132,7 @@ class SubscriptionService:
         if plan is None:
             return None
 
-        now = datetime.now(timezone.utc)
+        now = _utcnow()
         expires = now + timedelta(days=plan["duration_days"])
 
         async with async_session() as session:
@@ -162,7 +167,7 @@ class SubscriptionService:
     @staticmethod
     async def get_active_subscription(shop_id: int) -> dict | None:
         """Возвращает активную подписку магазина или None."""
-        now = datetime.now(timezone.utc)
+        now = _utcnow()
 
         async with async_session() as session:
             result = await session.execute(
@@ -173,12 +178,7 @@ class SubscriptionService:
             if sub is None:
                 return None
 
-            if sub.expires_at.tzinfo is None:
-                sub_expires = sub.expires_at.replace(tzinfo=timezone.utc)
-            else:
-                sub_expires = sub.expires_at
-
-            is_expired = sub_expires < now
+            is_expired = sub.expires_at < now
 
             return {
                 "id": sub.id,
@@ -199,7 +199,7 @@ class SubscriptionService:
     @staticmethod
     async def get_expired_shops() -> list[int]:
         """Возвращает shop_id всех магазинов с истекшей подпиской."""
-        now = datetime.now(timezone.utc)
+        now = _utcnow()
 
         async with async_session() as session:
             result = await session.execute(
@@ -261,7 +261,7 @@ class SubscriptionService:
         if plan is None or plan["is_trial"]:
             return None
 
-        now = datetime.now(timezone.utc)
+        now = _utcnow()
         duration = timedelta(days=plan["duration_days"])
 
         async with async_session() as session:
@@ -271,16 +271,12 @@ class SubscriptionService:
             sub = result.scalar_one_or_none()
 
             if sub is not None:
-                current_expires = sub.expires_at
-                if current_expires.tzinfo is None:
-                    current_expires = current_expires.replace(tzinfo=timezone.utc)
-
-                base = max(now, current_expires)
+                base = max(now, sub.expires_at)
                 new_expires = base + duration
 
                 sub.plan_id = plan_id
                 sub.status = "active"
-                sub.expires_at = new_expires.replace(tzinfo=None)
+                sub.expires_at = new_expires
                 sub.cancelled_at = None
                 sub.external_payment_id = payment_id
             else:
@@ -309,7 +305,7 @@ class SubscriptionService:
 
         Только те, у кого статус trial и подписка ещё не истекла.
         """
-        now = datetime.now(timezone.utc)
+        now = _utcnow()
         threshold = now + timedelta(hours=hours)
 
         async with async_session() as session:
