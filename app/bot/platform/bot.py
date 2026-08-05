@@ -345,10 +345,7 @@ async def on_subscription(message: Message) -> None:
     user_shops = [s for s in shops if s["owner_telegram_id"] == tg_id]
 
     if not user_shops:
-        await message.answer(
-            "У вас пока нет магазинов для оплаты подписки.",
-            reply_markup=_main_menu(),
-        )
+        await _show_plans_without_shop(message)
         return
 
     if len(user_shops) == 1:
@@ -369,6 +366,46 @@ async def on_subscription(message: Message) -> None:
             "Выберите магазин для управления подпиской:",
             reply_markup=kb,
         )
+
+
+async def _show_plans_without_shop(message: Message) -> None:
+    """Показывает тарифы подписки пользователю без магазина."""
+    plans = await SubscriptionService.get_plans()
+
+    if not plans:
+        await message.answer(
+            "Тарифы не настроены. Обратитесь к администратору.",
+            reply_markup=_main_menu(),
+        )
+        return
+
+    features = plans[0].get("features", [])
+
+    text = (
+        "💳 <b>Подписка</b>\n\n"
+        f"{'---' * 10}\n"
+        f"📦 <b>Тариф: 5000 ₽ / месяц</b>\n\n"
+    )
+
+    for feature in features:
+        text += f"  ✅ {feature}\n"
+
+    text += f"\n{'---' * 10}\n"
+    text += "<b>Доступные периоды оплаты:</b>\n\n"
+
+    for plan in plans:
+        if plan["description"]:
+            text += f"🔸 <b>{plan['name']}</b> — {int(plan['price']):,} ₽\n"
+            text += f"<i>{plan['description']}</i>\n\n"
+        else:
+            text += f"🔸 <b>{plan['name']}</b> — {int(plan['price']):,} ₽\n\n"
+
+    text += (
+        "🎁 <b>7 дней бесплатно</b> при создании первого магазина.\n\n"
+        "Создайте магазин кнопкой «➕ Создать магазин» — триал активируется автоматически."
+    )
+
+    await message.answer(text, reply_markup=_main_menu(), disable_web_page_preview=True)
 
 
 async def _show_subscription_for_shop(message: Message | CallbackQuery, shop: dict) -> None:

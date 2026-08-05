@@ -111,6 +111,10 @@ class UpdateCompanyInfoBody(BaseModel):
     company_address: str | None = None
 
 
+class UpdateShopNameBody(BaseModel):
+    name: str
+
+
 class UpdatePaymentSettingsBody(BaseModel):
     payment_card_number: str | None = None
     payment_recipient_name: str | None = None
@@ -342,7 +346,7 @@ async def update_product(product_id: int, body: UpdateProductBody, admin: dict =
                 await session.commit()
 
     if body.is_active is not None:
-        await CatalogAdminService.toggle_active(admin["shop_id"], product_id)
+        await CatalogAdminService.set_active(admin["shop_id"], product_id, body.is_active)
 
     return {"ok": True}
 
@@ -676,6 +680,27 @@ async def update_company_info(body: UpdateCompanyInfoBody, admin: dict = Depends
         body.company_inn,
         body.company_address,
     )
+    return {"ok": True}
+
+
+# ==========================
+# Настройки (название магазина)
+# ==========================
+
+@router.get("/settings/shop")
+async def get_shop_info(admin: dict = Depends(require_active_subscription)):
+    shop = await ShopService.get(admin["shop_id"])
+    return {
+        "name": shop["name"] if shop else None,
+    }
+
+
+@router.put("/settings/shop")
+async def update_shop_name(body: UpdateShopNameBody, admin: dict = Depends(require_active_subscription)):
+    name = body.name.strip()
+    if not name or len(name) > 100:
+        raise HTTPException(status_code=400, detail="Название должно содержать от 1 до 100 символов")
+    await ShopService.update(admin["shop_id"], name=name)
     return {"ok": True}
 
 

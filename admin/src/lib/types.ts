@@ -172,6 +172,10 @@ export interface CompanyInfo {
   company_address: string | null;
 }
 
+export interface ShopInfo {
+  name: string | null;
+}
+
 export interface Stats {
   total_orders: number;
   new_orders: number;

@@ -20,7 +20,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { RotateCcw, Save } from "lucide-react";
-import type { SystemMessage, DeliverySettings, ProductAttrsSettings, CompanyInfo } from "@/lib/types";
+import type { SystemMessage, DeliverySettings, ProductAttrsSettings, CompanyInfo, ShopInfo } from "@/lib/types";
 
 export default function SettingsPage() {
   const { data: messages, isLoading, mutate } = useSWR<SystemMessage[]>("/settings/messages", fetcher);
@@ -74,14 +74,19 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="text-2xl font-bold">Настройки</h1>
 
-      <Tabs defaultValue="messages">
+      <Tabs defaultValue="shop">
         <TabsList>
+          <TabsTrigger value="shop">Магазин</TabsTrigger>
           <TabsTrigger value="messages">Сообщения</TabsTrigger>
           <TabsTrigger value="delivery">Доставка</TabsTrigger>
           <TabsTrigger value="attrs">Характеристики</TabsTrigger>
           <TabsTrigger value="company">Реквизиты</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="shop">
+          <ShopNameSettings />
+        </TabsContent>
 
         <TabsContent value="messages" className="space-y-4">
           {isLoading ? (
@@ -359,6 +364,64 @@ function ProductAttrsSettingsTab() {
 
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />
+            Сохранить
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ShopNameSettings() {
+  const { data, isLoading, mutate } = useSWR<ShopInfo>("/settings/shop", fetcher);
+
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setName(data.name || "");
+    }
+  }, [data]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.put("/settings/shop", { name });
+      mutate();
+      toast.success("Название магазина обновлено");
+      setTimeout(() => window.location.reload(), 800);
+    } catch {
+      toast.error("Ошибка");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Название магазина</CardTitle>
+        <CardDescription>
+          Отображается в боковом меню админ-панели. Новые магазили задают название при онбординге.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>Название</Label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Например: Свечи Варвара"
+            maxLength={100}
+          />
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={handleSave} disabled={saving || !name.trim()}>
             <Save className="mr-2 h-4 w-4" />
             Сохранить
           </Button>

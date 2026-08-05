@@ -261,6 +261,23 @@ class CatalogAdminService:
             return product.is_active
 
     @staticmethod
+    async def set_active(shop_id: int, product_id: int, is_active: bool) -> None:
+        async with async_session() as session:
+            result = await session.execute(
+                select(Product).where(
+                    Product.shop_id == shop_id,
+                    Product.id == product_id,
+                )
+            )
+            product = result.scalar_one_or_none()
+
+            if not product:
+                return
+
+            product.is_active = is_active
+            await session.commit()
+
+    @staticmethod
     async def update_product(
         shop_id: int,
         product_id: int,
