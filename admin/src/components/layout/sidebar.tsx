@@ -33,7 +33,7 @@ const navItems = [
   { href: "/settings", label: "Настройки", icon: Settings },
 ];
 
-export function Sidebar({ isSuper = false }: { isSuper?: boolean }) {
+export function Sidebar({ isSuper = false, shopName }: { isSuper?: boolean; shopName?: string }) {
   const pathname = usePathname();
   const { subscriptionActive } = useSubscription();
 
@@ -44,7 +44,7 @@ export function Sidebar({ isSuper = false }: { isSuper?: boolean }) {
   return (
     <aside className="flex h-screen w-60 flex-col border-r bg-card">
       <div className="flex h-14 items-center gap-2 border-b px-5">
-        <span className="text-lg font-semibold">Свечеваров</span>
+        <span className="text-lg font-semibold">{shopName || "Магазин"}</span>
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">

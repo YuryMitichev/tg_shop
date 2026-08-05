@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Админ-панель — Свечеваров",
+  title: "Админ-панель",
   description: "Панель управления магазином",
 };
 

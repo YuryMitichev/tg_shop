@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class OnboardingStates(StatesGroup):
+    waiting_for_name = State()
     waiting_for_token = State()
 
 
@@ -113,8 +114,28 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
 
 async def on_create_shop(message: Message, state: FSMContext) -> None:
+    await message.answer(
+        "📝 <b>Как назовём ваш магазин?</b>\n\n"
+        "Это название будет отображаться в админ-панели.\n"
+        "Например: <i>Свечеваров</i>, <i>Магазин сладостей</i>\n\n"
+        "Отправьте название следующим сообщением.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    await state.set_state(OnboardingStates.waiting_for_name)
+
+
+async def on_name_received(message: Message, state: FSMContext) -> None:
+    name = message.text.strip()
+    if not name or len(name) > 100:
+        await message.answer(
+            "❌ Название должно быть от 1 до 100 символов.\nПопробуйте ещё раз."
+        )
+        return
+
+    await state.update_data(shop_name=name)
+
     text = (
-        "<b>Шаг 1. Создайте бота в @BotFather</b>\n\n"
+        "<b>Отлично! Теперь создайте бота в @BotFather</b>\n\n"
         "1. Откройте @BotFather\n"
         "2. Отправьте команду <code>/newbot</code>\n"
         "3. Введите название бота (например: <i>Мой магазин</i>)\n"
@@ -166,8 +187,11 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
         )
         return
 
+    data = await state.get_data()
+    shop_name = data.get("shop_name") or bot_info["first_name"]
+
     shop = await ShopService.create(
-        name=bot_info["first_name"],
+        name=shop_name,
         bot_token=token,
         owner_telegram_id=message.from_user.id,
     )
@@ -414,5 +438,6 @@ def get_platform_router() -> Dispatcher:
     )
     dp.callback_query.register(on_pay, F.data.startswith("pay:"))
     dp.message.register(on_token_received, StateFilter(OnboardingStates.waiting_for_token))
+    dp.message.register(on_name_received, StateFilter(OnboardingStates.waiting_for_name))
 
     return dp
