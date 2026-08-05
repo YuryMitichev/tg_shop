@@ -31,40 +31,39 @@ class OnboardingStates(StatesGroup):
     waiting_for_token = State()
 
 
-_TOKEN_CHECK_TIMEOUT = 10  # секунд
-
-
 async def _validate_bot_token(token: str) -> dict | None:
-    """Проверяет токен прямым HTTP-запросом к Telegram API.
+    """Проверяет токен через aiogram.Bot.get_me().
 
-    Использует тот же прокси, что и боты магазинов — без него запрос
-    к api.telegram.org будет висеть на VPS в РФ.
+    Использует ту же инфраструктуру соединений, что и боты магазинов
+    (включая прокси), вместо отдельного прямого HTTP-запроса.
     """
-    import aiohttp
+    from aiogram import Bot
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.client.session.aiohttp import AiohttpSession
+    from aiogram.enums import ParseMode
 
-    url = f"https://api.telegram.org/bot{token}/getMe"
+    session = None
+    if settings.bot_proxy:
+        session = AiohttpSession(proxy=settings.bot_proxy)
+
+    bot = Bot(
+        token=token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        session=session,
+    )
+
     try:
-        timeout = aiohttp.ClientTimeout(total=_TOKEN_CHECK_TIMEOUT)
-        connector: aiohttp.BaseConnector | None = None
-        proxy = settings.bot_proxy
-
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url, proxy=proxy) as resp:
-                data = await resp.json()
-                if not data.get("ok"):
-                    return None
-                r = data["result"]
-                return {
-                    "id": r["id"],
-                    "username": r["username"],
-                    "first_name": r["first_name"],
-                }
-    except (asyncio.TimeoutError, aiohttp.ClientError) as e:
-        logger.warning("Сеть/таймаут при проверке токена: %s", e)
+        me = await bot.get_me()
+        return {
+            "id": me.id,
+            "username": me.username or "",
+            "first_name": me.first_name,
+        }
+    except Exception as e:
+        logger.warning("Ошибка проверки токена: %s", e)
         return None
-    except Exception:
-        logger.exception("Ошибка проверки токена")
-        return None
+    finally:
+        await bot.session.close()
 
 
 def _main_menu(is_new: bool = True) -> ReplyKeyboardMarkup:
