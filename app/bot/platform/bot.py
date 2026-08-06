@@ -22,8 +22,12 @@ from app.services.shop_service import ShopService
 from app.services.subscription_service import SubscriptionService
 from app.services.subscription_payment_service import SubscriptionPaymentService
 from app.services.admin_user_service import AdminUserService
-from app.services.offer_agreement_service import OfferAgreementService, get_offer_text
-from app.bot.bot import start_shop_bot
+from app.services.offer_agreement_service import (
+    OfferAgreementService,
+    get_offer_text,
+    get_privacy_policy_text,
+)
+from app.bot.bot import start_shop_bot, stop_shop_bot
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +93,47 @@ def _botfather_kb() -> InlineKeyboardMarkup:
     )
 
 
+def _shop_actions_kb(shop: dict) -> InlineKeyboardMarkup:
+    """Инлайн-кнопки действий для конкретного магазина владельца."""
+    shop_id = shop["id"]
+    rows: list[list[InlineKeyboardButton]] = []
+
+    admin_url = settings.admin_panel_url
+    if admin_url:
+        rows.append([InlineKeyboardButton(text="📊 Админ-панель", url=admin_url)])
+
+    if settings.webapp_enabled and settings.webapp_url:
+        webapp_url = f"{settings.webapp_url}?shop={shop_id}"
+        rows.append(
+            [InlineKeyboardButton(text="📱 Мини-приложение", web_app=WebAppInfo(url=webapp_url))]
+        )
+
+    rows.append(
+        [
+            InlineKeyboardButton(text="💳 Подписка", callback_data=f"sub_shop:{shop_id}"),
+            InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete_shop:{shop_id}"),
+        ]
+    )
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _send_shop_card(message: Message, shop: dict) -> None:
+    """Отправляет карточку магазина с инлайн-кнопками действий."""
+    sub = await SubscriptionService.get_active_subscription(shop["id"])
+    status = "✅ Активна" if sub and sub["is_active"] else "❌ Истекла"
+    expires = sub["expires_at"][:10] if sub else "—"
+
+    await message.answer(
+        f"🏪 <b>{shop['name']}</b>\n"
+        f"   ID: {shop['id']}\n"
+        f"   Статус: {'🟢 активен' if shop['is_active'] else '🔴 отключён'}\n"
+        f"   Подписка: {status}\n"
+        f"   До: {expires}",
+        reply_markup=_shop_actions_kb(shop),
+    )
+
+
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     tg_id = message.from_user.id
@@ -97,22 +142,22 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     user_shops = [s for s in shops if s["owner_telegram_id"] == tg_id]
 
     if user_shops:
-        text = (
-            f"👋 Привет! У вас {len(user_shops)} магазин(ов) в системе.\n\n"
-            "Выберите действие:"
+        await message.answer(
+            f"👋 У вас {len(user_shops)} магазин(ов) в системе.\n"
+            "Управляйте каждым магазином кнопками в карточках ниже 👇",
+            reply_markup=_main_menu(is_new=False),
         )
-        kb = _main_menu(is_new=False)
+        for shop in user_shops:
+            await _send_shop_card(message, shop)
     else:
-        text = (
+        await message.answer(
             "👋 <b>Добро пожаловать!</b>\n\n"
             "Это платформа для создания магазинов в Telegram.\n"
             "Каталог, корзина, заказы, CRM и админ-панель — "
             "всё готово, настройка за 5 минут.\n\n"
-            "🎁 <b>7 дней бесплатно</b> — нажмите кнопку ниже 👇"
+            "🎁 <b>7 дней бесплатно</b> — нажмите кнопку ниже 👇",
+            reply_markup=_main_menu(is_new=True),
         )
-        kb = _main_menu(is_new=True)
-
-    await message.answer(text, reply_markup=kb)
 
 
 async def on_create_shop(message: Message, state: FSMContext) -> None:
@@ -204,6 +249,47 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
         display_name=message.from_user.full_name,
     )
 
+    already_accepted = await OfferAgreementService.has_accepted(message.from_user.id)
+
+    if already_accepted:
+        await _finalize_shop_creation(message, shop, bot_info["username"], state)
+        return
+
+    await state.update_data(shop_id=shop["id"], bot_username=bot_info["username"])
+    await state.set_state(None)
+
+    await message.answer(
+        f"✅ <b>Магазин «{shop['name']}» создан!</b>\n\n"
+        "🎁 Для активации бесплатного периода (7 дней) необходимо принять "
+        "условия <b>публичной оферты</b> и <b>политики конфиденциальности</b>.\n\n"
+        "Ознакомьтесь с документами и нажмите кнопку ниже для активации.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Принять оферту и политику",
+                        callback_data=f"accept_offer_trial:{shop['id']}",
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="📄 Читать оферту",
+                        callback_data="show_offer",
+                    ),
+                    InlineKeyboardButton(
+                        text="🔒 Читать политику",
+                        callback_data="show_privacy",
+                    ),
+                ],
+            ]
+        ),
+    )
+
+
+async def _finalize_shop_creation(
+    message: Message, shop: dict, bot_username: str | None, state: FSMContext
+) -> None:
+    """Активирует триал, запускает бота магазина и отправляет сообщение об успехе."""
     await SubscriptionService.start_trial(shop["id"])
 
     await message.answer(
@@ -228,11 +314,11 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
     if settings.app_base_url:
         webapp_url = f"{settings.app_base_url.rstrip('/')}/app/"
 
-    text = (
-        f"🎉 <b>Готово! Ваш магазин работает!</b>\n\n"
-        f"🤖 Бот: @{bot_info['username']}\n"
-        f"🎁 Подписка: 7 дней бесплатно\n\n"
-    )
+    text = f"🎉 <b>Готово! Ваш магазин работает!</b>\n\n"
+
+    if bot_username:
+        text += f"🤖 Бот: @{bot_username}\n"
+    text += f"🎁 Подписка: 7 дней бесплатно\n\n"
 
     if admin_url:
         text += f"📊 <b>Админ-панель:</b>\n{admin_url}\n\n"
@@ -241,9 +327,13 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
 
     text += "Что нужно сделать:\n"
     text += "1. Узнайте свой Telegram ID у @userinfobot — он понадобится для входа в админку\n"
-    text += "2. Зайдите в админ-панель — код входа придёт от бота @{}\n".format(bot_info["username"])
-    text += "3. Добавьте товары, настройте каталог\n"
-    text += "4. Откройте бота @{} — нажмите /start\n".format(bot_info["username"])
+    if bot_username:
+        text += f"2. Зайдите в админ-панель — код входа придёт от бота @{bot_username}\n"
+        text += "3. Добавьте товары, настройте каталог\n"
+        text += f"4. Откройте бота @{bot_username} — нажмите /start\n"
+    else:
+        text += "2. Добавьте товары, настройте каталог\n"
+        text += "3. Откройте своего бота — нажмите /start\n"
 
     kb_rows = []
     if admin_url:
@@ -366,6 +456,53 @@ async def on_show_offer(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+async def on_show_privacy(callback: CallbackQuery) -> None:
+    """Показывает текст политики конфиденциальности (inline-кнопка)."""
+    privacy_text = get_privacy_policy_text()
+    if not privacy_text:
+        await callback.message.answer("Текст политики конфиденциальности временно недоступен.")
+        await callback.answer()
+        return
+
+    for chunk in _split_text(privacy_text):
+        await callback.message.answer(chunk)
+
+    await callback.answer()
+
+
+async def on_accept_offer_and_trial(callback: CallbackQuery, state: FSMContext) -> None:
+    """Принимает оферту + политику и активирует бесплатный период."""
+    shop_id = int(callback.data.split(":")[1])
+
+    await OfferAgreementService.accept(
+        telegram_user_id=callback.from_user.id,
+        full_name=callback.from_user.full_name,
+        username=callback.from_user.username,
+    )
+
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(
+        "✅ <b>Вы приняли условия оферты и политики конфиденциальности.</b>\n\n"
+        "🎁 Активирую бесплатный период..."
+    )
+    await callback.answer("Оферта и политика приняты")
+
+    data = await state.get_data()
+    bot_username = data.get("bot_username")
+
+    shop = await ShopService.get(shop_id)
+    if shop is None:
+        await callback.message.answer("❌ Магазин не найден. Обратитесь в поддержку.")
+        await state.clear()
+        return
+
+    if not bot_username:
+        bot_info = await _validate_bot_token(shop["bot_token"])
+        bot_username = bot_info["username"] if bot_info else None
+
+    await _finalize_shop_creation(callback.message, shop, bot_username, state)
+
+
 async def _create_and_send_payment(message: Message, shop_id: int, plan_id: int) -> None:
     """Создаёт платёж и отправляет ссылку."""
     result = await SubscriptionPaymentService.create_payment(
@@ -460,20 +597,10 @@ async def on_my_shops(message: Message) -> None:
         await message.answer("У вас пока нет магазинов.", reply_markup=_main_menu())
         return
 
+    await message.answer("📋 <b>Ваши магазины:</b>", reply_markup=_main_menu(is_new=False))
+
     for shop in user_shops:
-        sub = await SubscriptionService.get_active_subscription(shop["id"])
-        status = "✅ Активна" if sub and sub["is_active"] else "❌ Истекла"
-        expires = sub["expires_at"][:10] if sub else "—"
-
-        await message.answer(
-            f"🏪 <b>{shop['name']}</b>\n"
-            f"   ID: {shop['id']}\n"
-            f"   Статус: {'🟢 активен' if shop['is_active'] else '🔴 отключён'}\n"
-            f"   Подписка: {status}\n"
-            f"   До: {expires}\n"
-        )
-
-    await message.answer("Выберите действие:", reply_markup=_main_menu(is_new=False))
+        await _send_shop_card(message, shop)
 
 
 async def on_subscription(message: Message) -> None:
@@ -659,6 +786,76 @@ async def on_subscription_shop(callback: CallbackQuery) -> None:
     await _show_subscription_for_shop(callback, shop)
 
 
+async def on_delete_shop(callback: CallbackQuery) -> None:
+    """Показывает подтверждение удаления магазина (только владелец)."""
+    shop_id = int(callback.data.split(":")[1])
+    shop = await ShopService.get(shop_id)
+
+    if shop is None:
+        await callback.answer("Магазин не найден", show_alert=True)
+        return
+
+    if shop["owner_telegram_id"] != callback.from_user.id:
+        await callback.answer("Это не ваш магазин", show_alert=True)
+        return
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Да, удалить",
+                    callback_data=f"delete_shop_confirm:{shop_id}",
+                ),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="delete_shop_cancel"),
+            ]
+        ]
+    )
+    await callback.message.answer(
+        f"⚠️ <b>Удалить магазин «{shop['name']}»?</b>\n\n"
+        "Будут удалены все товары, заказы, клиенты и настройки.\n"
+        "Это действие <b>нельзя отменить</b>.",
+        reply_markup=kb,
+    )
+    await callback.answer()
+
+
+async def on_delete_shop_confirm(callback: CallbackQuery) -> None:
+    """Удаляет магазин после подтверждения (только владелец)."""
+    shop_id = int(callback.data.split(":")[1])
+    shop = await ShopService.get(shop_id)
+
+    if shop is None:
+        await callback.answer("Магазин не найден", show_alert=True)
+        return
+
+    if shop["owner_telegram_id"] != callback.from_user.id:
+        await callback.answer("Это не ваш магазин", show_alert=True)
+        return
+
+    shop_name = shop["name"]
+    try:
+        await stop_shop_bot(shop_id)
+    except Exception:
+        logger.exception("Не удалось остановить бота магазина %d при удалении", shop_id)
+
+    await ShopService.delete(shop_id)
+
+    await callback.message.edit_text(
+        f"✅ Магазин «{shop_name}» удалён.",
+        reply_markup=None,
+    )
+    await callback.answer("Магазин удалён")
+
+
+async def on_delete_shop_cancel(callback: CallbackQuery) -> None:
+    """Отмена удаления магазина."""
+    try:
+        await callback.message.delete()
+    except Exception:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer("Удаление отменено")
+
+
 def get_platform_router() -> Dispatcher:
     """Создаёт и настраивает Dispatcher для платформенного бота."""
     dp = Dispatcher()
@@ -675,14 +872,23 @@ def get_platform_router() -> Dispatcher:
     dp.message.register(on_offer, F.text == "📄 Оферта")
     dp.callback_query.register(on_accept_offer, F.data == "accept_offer")
     dp.callback_query.register(on_show_offer, F.data == "show_offer")
+    dp.callback_query.register(on_show_privacy, F.data == "show_privacy")
     dp.callback_query.register(
         on_accept_offer_and_pay, F.data.startswith("accept_offer_pay:")
+    )
+    dp.callback_query.register(
+        on_accept_offer_and_trial, F.data.startswith("accept_offer_trial:")
     )
     dp.callback_query.register(on_enter_token, F.data == "enter_token")
     dp.callback_query.register(
         on_subscription_shop, F.data.startswith("sub_shop:")
     )
     dp.callback_query.register(on_pay, F.data.startswith("pay:"))
+    dp.callback_query.register(on_delete_shop, F.data.startswith("delete_shop:"))
+    dp.callback_query.register(
+        on_delete_shop_confirm, F.data.startswith("delete_shop_confirm:")
+    )
+    dp.callback_query.register(on_delete_shop_cancel, F.data == "delete_shop_cancel")
     dp.message.register(on_token_received, StateFilter(OnboardingStates.waiting_for_token))
     dp.message.register(on_name_received, StateFilter(OnboardingStates.waiting_for_name))
 

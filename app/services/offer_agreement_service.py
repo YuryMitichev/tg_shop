@@ -8,14 +8,23 @@ from app.database.db import async_session
 from app.models.offer_acceptance import OfferAcceptance
 
 _OFFER_FILE = Path(__file__).resolve().parent.parent / "data" / "offer.txt"
+_PRIVACY_FILE = Path(__file__).resolve().parent.parent / "data" / "privacy_policy.txt"
 
 OFFER_VERSION = "2026-08-06"
+PRIVACY_POLICY_VERSION = "2026-08-06"
 
 
 def get_offer_text() -> str:
     """Возвращает текст оферты из файла."""
     if _OFFER_FILE.exists():
         return _OFFER_FILE.read_text(encoding="utf-8")
+    return ""
+
+
+def get_privacy_policy_text() -> str:
+    """Возвращает текст политики конфиденциальности из файла."""
+    if _PRIVACY_FILE.exists():
+        return _PRIVACY_FILE.read_text(encoding="utf-8")
     return ""
 
 
