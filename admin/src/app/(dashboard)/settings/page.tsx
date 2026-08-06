@@ -169,40 +169,190 @@ export default function SettingsPage() {
   );
 }
 
+interface PaymentSettingsData {
+  payment_card_number: string | null;
+  payment_recipient_name: string | null;
+  yookassa_shop_id: string | null;
+  yookassa_secret_key_masked: string | null;
+  yookassa_enabled: boolean;
+  manual_payment_enabled: boolean;
+}
+
 function PaymentSettings() {
-  const { data, isLoading } = useSWR<{ payment_card_number: string | null; payment_recipient_name: string | null; tinkoff_enabled: boolean }>("/settings/payment", fetcher);
+  const { data, isLoading, mutate } = useSWR<PaymentSettingsData>("/settings/payments", fetcher);
+
+  const [manualEnabled, setManualEnabled] = useState(true);
+  const [cardNumber, setCardNumber] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+
+  const [yookassaEnabled, setYookassaEnabled] = useState(false);
+  const [yookassaShopId, setYookassaShopId] = useState("");
+  const [yookassaSecretKey, setYookassaSecretKey] = useState("");
+  const [yookassaSecretTouched, setYookassaSecretTouched] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setManualEnabled(data.manual_payment_enabled);
+      setCardNumber(data.payment_card_number || "");
+      setRecipientName(data.payment_recipient_name || "");
+      setYookassaEnabled(data.yookassa_enabled);
+      setYookassaShopId(data.yookassa_shop_id || "");
+      setYookassaSecretKey("");
+      setYookassaSecretTouched(false);
+    }
+  }, [data]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.put("/settings/payments", {
+        payment_card_number: cardNumber,
+        payment_recipient_name: recipientName,
+        yookassa_shop_id: yookassaShopId,
+        yookassa_secret_key: yookassaSecretTouched ? yookassaSecretKey : null,
+        yookassa_enabled: yookassaEnabled,
+        manual_payment_enabled: manualEnabled,
+      });
+      mutate();
+      toast.success("Сохранено");
+    } catch {
+      toast.error("Ошибка");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (isLoading) return <Skeleton className="h-48 w-full" />;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Реквизиты для оплаты</CardTitle>
-        <CardDescription>
-          Настраиваются в файле .env на сервере
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        <div>
-          <span className="text-muted-foreground">Номер карты: </span>
-          <span className="font-mono font-medium">
-            {data?.payment_card_number || "—"}
-          </span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Получатель: </span>
-          <span className="font-medium">
-            {data?.payment_recipient_name || "—"}
-          </span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Tinkoff эквайринг: </span>
-          <Badge variant={data?.tinkoff_enabled ? "default" : "secondary"}>
-            {data?.tinkoff_enabled ? "Подключён" : "Не подключён"}
-          </Badge>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {/* Ручной перевод */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">💰 Перевод на карту</CardTitle>
+              <CardDescription className="mt-1">
+                Покупатель переводит деньги на вашу карту вручную
+              </CardDescription>
+            </div>
+            <Switch checked={manualEnabled} onCheckedChange={setManualEnabled} />
+          </div>
+        </CardHeader>
+        {manualEnabled && (
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Номер карты</Label>
+              <Input
+                value={cardNumber}
+                onChange={(e) => setCardNumber(e.target.value)}
+                placeholder="2200 1234 5678 9010"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Поддерживаются буквы и пробелы — покупатель увидит как есть
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Получатель</Label>
+              <Input
+                value={recipientName}
+                onChange={(e) => setRecipientName(e.target.value)}
+                placeholder="Иван И."
+              />
+            </div>
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                Как это работает для покупателя
+              </summary>
+              <div className="mt-2 space-y-1 rounded-md bg-muted p-3 text-xs leading-relaxed">
+                <p>1. Покупатель выбирает «Перевод на карту» при оформлении заказа.</p>
+                <p>2. Бот показывает номер карты, получателя и сумму.</p>
+                <p>3. Покупатель делает перевод и нажимает «Я оплатил».</p>
+                <p>4. Вы проверяете поступление и подтверждаете заказ в админке.</p>
+              </div>
+            </details>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ЮKassa */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">🏦 ЮKassa</CardTitle>
+              <CardDescription className="mt-1">
+                Онлайн-оплата картой через ЮKassa (эквайринг)
+              </CardDescription>
+            </div>
+            <Switch checked={yookassaEnabled} onCheckedChange={setYookassaEnabled} />
+          </div>
+        </CardHeader>
+        {yookassaEnabled && (
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>shopId</Label>
+              <Input
+                value={yookassaShopId}
+                onChange={(e) => setYookassaShopId(e.target.value)}
+                placeholder="123456"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Секретный ключ</Label>
+              <Input
+                value={yookassaSecretTouched ? yookassaSecretKey : ""}
+                onChange={(e) => {
+                  setYookassaSecretKey(e.target.value);
+                  setYookassaSecretTouched(true);
+                }}
+                placeholder={
+                  data?.yookassa_secret_key_masked
+                    ? `Текущий: ${data.yookassa_secret_key_masked} — введите новый для замены`
+                    : "live_XXXXXXXXXXXXX или test_XXXXXXXXXXXXX"
+                }
+                className="font-mono"
+              />
+            </div>
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                Как подключить ЮKassa — инструкция
+              </summary>
+              <div className="mt-2 space-y-2 rounded-md bg-muted p-3 text-xs leading-relaxed">
+                <p><b>Шаг 1.</b> Зарегистрируйтесь на{" "}
+                  <a href="https://yookassa.ru" target="_blank" rel="noopener noreferrer"
+                     className="text-blue-500 underline">
+                    yookassa.ru
+                  </a>{" "}и пройдите проверку (ИНН, реквизиты).</p>
+                <p><b>Шаг 2.</b> В личном кабинете ЮKassa откройте раздел
+                  «Интеграция» → «Настройки API».</p>
+                <p><b>Шаг 3.</b> Скопируйте значения:</p>
+                <ul className="ml-4 list-disc space-y-0.5">
+                  <li><b>shopId</b> — номер магазина (вверху страницы)</li>
+                  <li><b>Секретный ключ</b> — нажмите «Выпустить ключ»,
+                    скопируйте значение целиком</li>
+                </ul>
+                <p><b>Шаг 4.</b> Вставьте оба значения в поля выше и нажмите «Сохранить».</p>
+                <p className="text-muted-foreground">
+                  После подключения покупатель сможет оплатить картой прямо в боте.
+                  Деньги поступают на ваш счёт ЮKassa за вычетом комиссии (обычно 2.8%).
+                </p>
+              </div>
+            </details>
+          </CardContent>
+        )}
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={saving}>
+          <Save className="mr-2 h-4 w-4" />
+          Сохранить
+        </Button>
+      </div>
+    </div>
   );
 }
 
