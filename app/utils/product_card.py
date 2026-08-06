@@ -30,7 +30,7 @@ class ProductCard:
         lines.append("")
         lines.append(f"💰 <b>{variant['price']} ₽</b>")
 
-        if variant["burn"]:
-            lines.append(f"🔥 До {variant['burn']}")
+        if variant.get("attributes", {}).get("burn"):
+            lines.append(f"🔥 До {variant['attributes']['burn']}")
 
         return "\n".join(lines)

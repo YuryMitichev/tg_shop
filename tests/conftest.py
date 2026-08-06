@@ -38,6 +38,7 @@ import app.services.order_payment_service as order_payment_service
 import app.services.admin_auth_service as admin_auth_service
 import app.services.message_service as message_service
 import app.services.catalog_import_service as catalog_import_service
+import app.services.product_attr_service as product_attr_service
 from app.services.admin_auth_service import AdminAuthService
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
@@ -46,6 +47,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     Order,
     OrderItem,
     Product,
+    ProductAttributeDef,
     ProductPhoto,
     ProductVariant,
     Review,
@@ -86,6 +88,7 @@ _PATCH_TARGETS = [
     admin_auth_service,
     message_service,
     catalog_import_service,
+    product_attr_service,
 ]
 
 
@@ -153,8 +156,8 @@ async def seed_data(db_session):
                 name="Кашемир",
                 description="Теплый аромат",
                 variants=[
-                    ProductVariant(id=1, volume="75 г", price=450, burn="10 часов", stock=10),
-                    ProductVariant(id=2, volume="200 г", price=990, burn="45 часов", stock=5),
+                    ProductVariant(id=1, volume="75 г", price=450, stock=10, attributes={"burn": "10 часов"}),
+                    ProductVariant(id=2, volume="200 г", price=990, stock=5, attributes={"burn": "45 часов"}),
                 ],
             ),
             Product(
@@ -164,7 +167,7 @@ async def seed_data(db_session):
                 description="Свежий аромат",
                 is_active=False,
                 variants=[
-                    ProductVariant(id=3, volume="100 г", price=550, stock=0),
+                    ProductVariant(id=3, volume="100 г", price=550, stock=0, attributes={}),
                 ],
             ),
             Product(
@@ -173,7 +176,7 @@ async def seed_data(db_session):
                 name="Диффузор Кашемир",
                 description="Для дома",
                 variants=[
-                    ProductVariant(id=4, volume="100 мл", price=1290, stock=3),
+                    ProductVariant(id=4, volume="100 мл", price=1290, stock=3, attributes={}),
                 ],
             ),
         ])

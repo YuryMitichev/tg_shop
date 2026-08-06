@@ -1,5 +1,6 @@
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
 
 from app.database.db import Base
 
@@ -13,13 +14,9 @@ class ProductVariant(Base):
 
     volume: Mapped[str] = mapped_column(nullable=False)
     price: Mapped[int] = mapped_column(nullable=False)
-    burn: Mapped[str | None] = mapped_column(nullable=True)
     photo: Mapped[str | None] = mapped_column(nullable=True)
     stock: Mapped[int] = mapped_column(default=0, nullable=False)
 
-    size: Mapped[str | None] = mapped_column(nullable=True)
-    color: Mapped[str | None] = mapped_column(nullable=True)
-    scent: Mapped[str | None] = mapped_column(nullable=True)
-    dimensions: Mapped[str | None] = mapped_column(nullable=True)
+    attributes: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     product: Mapped["Product"] = relationship(back_populates="variants")

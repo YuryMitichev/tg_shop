@@ -53,6 +53,11 @@ _COLUMN_KEYWORDS: dict[str, list[str]] = {
 
 _ALL_FIELDS = list(_COLUMN_ALIASES["ozon"].keys())
 
+# Сколько первых строк проверять в поисках строки заголовков.
+# Выгрузки WB имеют двухуровневый заголовок (группы колонок → имена полей),
+# поэтому простого чтения первой строки недостаточно.
+HEADER_SCAN_ROWS = 5
+
 
 def _match_column(header: str, source: MarketplaceSource) -> str | None:
     """Сопоставляет заголовок колонки с полем (name/price/stock/sku).
@@ -116,8 +121,15 @@ class CatalogImportService:
         wb = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
         ws = wb.active
 
-        header_cells = list(ws.iter_rows(min_row=1, max_row=1, values_only=True))
-        if not header_cells:
+        # Выгрузки маркетплейсов (особенно Wildberries) могут иметь
+        # многоуровневые заголовки: первая строка — названия групп колонок
+        # («Основная информация», «Габариты» …), вторая — реальные имена полей.
+        # Сканируем первые несколько строк и выбираем ту, где больше всего
+        # сопоставленных полей — это и есть строка заголовков.
+        candidate_rows = list(
+            ws.iter_rows(min_row=1, max_row=HEADER_SCAN_ROWS, values_only=True)
+        )
+        if not candidate_rows:
             wb.close()
             return {
                 "source": source,
@@ -127,18 +139,35 @@ class CatalogImportService:
                 "unmapped_columns": [],
             }
 
-        raw_headers = [str(c).strip() if c is not None else "" for c in header_cells[0]]
-
+        best_header_idx = 0
+        best_match_count = -1
         column_map: dict[str, int] = {}
-        unmapped_columns: list[str] = []
+        raw_headers: list[str] = []
 
-        for col_idx, header in enumerate(raw_headers):
+        for idx, cand_row in enumerate(candidate_rows):
+            cand_headers = [
+                str(c).strip() if c is not None else "" for c in cand_row
+            ]
+            cand_map: dict[str, int] = {}
+            for col_idx, header in enumerate(cand_headers):
+                if not header:
+                    continue
+                field = _match_column(header, source)
+                if field and field not in cand_map:
+                    cand_map[field] = col_idx
+            if len(cand_map) > best_match_count:
+                best_match_count = len(cand_map)
+                best_header_idx = idx
+                column_map = cand_map
+                raw_headers = cand_headers
+
+        header_row_num = best_header_idx + 1  # 1-based
+
+        unmapped_columns: list[str] = []
+        for header in raw_headers:
             if not header:
                 continue
-            field = _match_column(header, source)
-            if field and field not in column_map:
-                column_map[field] = col_idx
-            elif not field:
+            if not _match_column(header, source):
                 unmapped_columns.append(header)
 
         name_idx = column_map.get("name")
@@ -148,7 +177,8 @@ class CatalogImportService:
         rows: list[dict] = []
 
         for row_num, row in enumerate(
-            ws.iter_rows(min_row=2, values_only=True), start=2
+            ws.iter_rows(min_row=header_row_num + 1, values_only=True),
+            start=header_row_num + 1,
         ):
             if row is None or all(c is None or str(c).strip() == "" for c in row):
                 continue
@@ -234,6 +264,7 @@ class CatalogImportService:
                         volume="Стандарт",
                         price=row.get("price") or 0,
                         stock=row.get("stock") or 0,
+                        attributes=row.get("attributes") or {},
                     )
                 ]
                 session.add(product)

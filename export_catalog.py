@@ -85,13 +85,9 @@ async def export_catalog(shop_name: str, output: str) -> None:
                         "id": v.id,
                         "volume": v.volume,
                         "price": v.price,
-                        "burn": v.burn,
                         "photo": v.photo,
                         "stock": v.stock,
-                        "size": v.size,
-                        "color": v.color,
-                        "scent": v.scent,
-                        "dimensions": v.dimensions,
+                        "attributes": v.attributes or {},
                     }
                     for v in variants
                 ],

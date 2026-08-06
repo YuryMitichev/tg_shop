@@ -20,7 +20,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { RotateCcw, Save } from "lucide-react";
-import type { SystemMessage, DeliverySettings, ProductAttrsSettings, CompanyInfo, ShopInfo } from "@/lib/types";
+import type { SystemMessage, DeliverySettings, ProductAttrsSettings, ProductAttrDef, CompanyInfo, ShopInfo } from "@/lib/types";
 
 export default function SettingsPage() {
   const { data: messages, isLoading, mutate } = useSWR<SystemMessage[]>("/settings/messages", fetcher);
@@ -454,68 +454,81 @@ function DeliverySettings() {
 function ProductAttrsSettingsTab() {
   const { data, isLoading, mutate } = useSWR<ProductAttrsSettings>("/settings/product-attrs", fetcher);
 
-  const [attrs, setAttrs] = useState<string[]>(["volume"]);
-  const [saving, setSaving] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (data) {
-      setAttrs(data.product_attrs);
-    }
-  }, [data]);
-
-  function toggleAttr(key: string) {
-    setAttrs((prev) =>
-      prev.includes(key) ? prev.filter((a) => a !== key) : [...prev, key]
-    );
-  }
-
-  async function handleSave() {
-    setSaving(true);
+  async function handleAdd() {
+    const label = newLabel.trim();
+    if (!label) return;
+    setAdding(true);
     try {
-      await api.put("/settings/product-attrs", { product_attrs: attrs });
+      await api.post("/settings/product-attrs", { label });
+      setNewLabel("");
       mutate();
-      toast.success("Сохранено");
+      toast.success("Характеристика добавлена");
     } catch {
       toast.error("Ошибка");
     } finally {
-      setSaving(false);
+      setAdding(false);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    setDeletingId(id);
+    try {
+      await api.delete(`/settings/product-attrs/${id}`);
+      mutate();
+      toast.success("Удалено");
+    } catch {
+      toast.error("Ошибка");
+    } finally {
+      setDeletingId(null);
     }
   }
 
   if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  const attrs = data?.attrs ?? [];
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Характеристики товаров</CardTitle>
         <CardDescription>
-          Выберите характеристики, которые будут отображаться в карточке товара.
-          Наименование, описание и цена показываются всегда.
+          Управляйте характеристиками, которые можно указать для вариантов товара.
+          «Объём» — встроенная характеристика, она доступна всегда.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-3">
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
           <div className="flex flex-wrap gap-2">
-            {data?.available?.map((attr) => {
-              const selected = attrs.includes(attr.key);
-              return (
-                <Button
-                  key={attr.key}
-                  variant={selected ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleAttr(attr.key)}
+            <Badge variant="secondary" className="text-sm">Объём (встроенная)</Badge>
+            {attrs.map((attr: ProductAttrDef) => (
+              <Badge key={attr.id} variant="default" className="gap-1 text-sm">
+                {attr.label}
+                <button
+                  onClick={() => handleDelete(attr.id)}
+                  disabled={deletingId === attr.id}
+                  className="ml-1 hover:text-red-400 disabled:opacity-50"
                 >
-                  {attr.label}
-                </Button>
-              );
-            })}
+                  ×
+                </button>
+              </Badge>
+            ))}
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={saving}>
-            <Save className="mr-2 h-4 w-4" />
-            Сохранить
+        <div className="flex gap-2">
+          <Input
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            placeholder="Название характеристики (например: Цвет, Вес, Материал)"
+            disabled={adding}
+          />
+          <Button onClick={handleAdd} disabled={adding || !newLabel.trim()}>
+            Добавить
           </Button>
         </div>
       </CardContent>

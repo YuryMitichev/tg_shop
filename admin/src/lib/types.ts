@@ -8,12 +8,8 @@ export interface Variant {
   id?: number;
   volume: string;
   price: number;
-  burn?: string | null;
   stock?: number;
-  size?: string | null;
-  color?: string | null;
-  scent?: string | null;
-  dimensions?: string | null;
+  attributes?: Record<string, string>;
 }
 
 export interface Photo {
@@ -156,14 +152,16 @@ export interface DeliverySettings {
   available_couriers: string[];
 }
 
-export interface ProductAttrOption {
+export interface ProductAttrDef {
+  id: number;
   key: string;
   label: string;
+  position: number;
+  is_required: boolean;
 }
 
 export interface ProductAttrsSettings {
-  product_attrs: string[];
-  available: ProductAttrOption[];
+  attrs: ProductAttrDef[];
 }
 
 export interface CompanyInfo {
@@ -305,7 +303,6 @@ export interface ShopManagement {
   is_active: boolean;
   delivery_enabled: boolean;
   courier_services: string[];
-  product_attrs: string[];
   company_name: string | null;
   company_inn: string | null;
   company_address: string | null;

@@ -2,6 +2,7 @@ from app.models.shop import Shop
 from app.models.category import Category
 from app.models.product import Product
 from app.models.product_variant import ProductVariant
+from app.models.product_attribute_def import ProductAttributeDef
 from app.models.product_photo import ProductPhoto
 from app.models.cart_item import CartItem
 from app.models.order import Order
@@ -22,6 +23,7 @@ __all__ = [
     "Category",
     "Product",
     "ProductVariant",
+    "ProductAttributeDef",
     "ProductPhoto",
     "CartItem",
     "Order",

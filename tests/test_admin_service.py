@@ -100,7 +100,7 @@ class TestAdminProducts:
             description="Описание",
             variants=[
                 {"volume": "50 мл", "price": 690},
-                {"volume": "100 мл", "price": 1190, "burn": None},
+                {"volume": "100 мл", "price": 1190, "attributes": {}},
             ],
         )
 

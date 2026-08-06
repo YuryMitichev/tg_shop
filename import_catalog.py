@@ -92,13 +92,9 @@ async def import_catalog(file_path: str, shop_id: int) -> None:
                     product_id=product.id,
                     volume=v_data["volume"],
                     price=v_data["price"],
-                    burn=v_data.get("burn"),
                     photo=v_data.get("photo"),
                     stock=v_data.get("stock", 0),
-                    size=v_data.get("size"),
-                    color=v_data.get("color"),
-                    scent=v_data.get("scent"),
-                    dimensions=v_data.get("dimensions"),
+                    attributes=v_data.get("attributes") or {},
                 )
                 session.add(variant)
 

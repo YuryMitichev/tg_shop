@@ -28,12 +28,8 @@ def _product_to_dict(product: Product) -> dict:
                 "id": variant.id,
                 "volume": variant.volume,
                 "price": variant.price,
-                "burn": variant.burn,
                 "stock": variant.stock,
-                "size": variant.size,
-                "color": variant.color,
-                "scent": variant.scent,
-                "dimensions": variant.dimensions,
+                "attributes": variant.attributes or {},
             }
             for variant in product.variants
         ],
@@ -205,12 +201,8 @@ class CatalogAdminService:
                     shop_id=shop_id,
                     volume=variant["volume"],
                     price=variant["price"],
-                    burn=variant.get("burn"),
                     stock=variant.get("stock", 0),
-                    size=variant.get("size"),
-                    color=variant.get("color"),
-                    scent=variant.get("scent"),
-                    dimensions=variant.get("dimensions"),
+                    attributes=variant.get("attributes") or {},
                 )
                 for variant in variants
             ]

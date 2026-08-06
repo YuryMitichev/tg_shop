@@ -24,7 +24,8 @@ from app.services.review_service import ReviewService
 from app.services.crm_service import CrmService
 from app.services.broadcast_service import BroadcastService
 from app.services.shop_service import ShopService
-from app.models.shop import AVAILABLE_COURIERS, AVAILABLE_PRODUCT_ATTRS
+from app.services.product_attr_service import ProductAttrService
+from app.models.shop import AVAILABLE_COURIERS
 from app.utils.order_status import STATUS_LABELS
 
 router = APIRouter()
@@ -101,8 +102,13 @@ class UpdateDeliveryBody(BaseModel):
     courier_services: list[str]
 
 
-class UpdateProductAttrsBody(BaseModel):
-    product_attrs: list[str]
+class CreateAttrDefBody(BaseModel):
+    label: str
+
+
+class UpdateAttrDefBody(BaseModel):
+    label: str | None = None
+    position: int | None = None
 
 
 class UpdateCompanyInfoBody(BaseModel):
@@ -441,6 +447,7 @@ class ConfirmImportRow(BaseModel):
     name: str
     price: int = 0
     stock: int = 0
+    attributes: dict = {}
 
 
 class ConfirmImportBody(BaseModel):
@@ -645,16 +652,35 @@ async def update_delivery_settings(body: UpdateDeliveryBody, admin: dict = Depen
 
 @router.get("/settings/product-attrs")
 async def get_product_attrs(admin: dict = Depends(require_active_subscription)):
-    shop = await ShopService.get(admin["shop_id"])
     return {
-        "product_attrs": shop["product_attrs"] if shop else ["volume"],
-        "available": AVAILABLE_PRODUCT_ATTRS,
+        "attrs": await ProductAttrService.list_defs(admin["shop_id"]),
     }
 
 
-@router.put("/settings/product-attrs")
-async def update_product_attrs(body: UpdateProductAttrsBody, admin: dict = Depends(require_active_subscription)):
-    await ShopService.update_product_attrs(admin["shop_id"], body.product_attrs)
+@router.post("/settings/product-attrs")
+async def create_product_attr(body: CreateAttrDefBody, admin: dict = Depends(require_active_subscription)):
+    return await ProductAttrService.create_def(admin["shop_id"], body.label)
+
+
+@router.put("/settings/product-attrs/{attr_id}")
+async def update_product_attr(
+    attr_id: int,
+    body: UpdateAttrDefBody,
+    admin: dict = Depends(require_active_subscription),
+):
+    result = await ProductAttrService.update_def(
+        admin["shop_id"], attr_id, label=body.label, position=body.position,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Характеристика не найдена")
+    return result
+
+
+@router.delete("/settings/product-attrs/{attr_id}")
+async def delete_product_attr(attr_id: int, admin: dict = Depends(require_active_subscription)):
+    ok = await ProductAttrService.delete_def(admin["shop_id"], attr_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Характеристика не найдена")
     return {"ok": True}
 
 

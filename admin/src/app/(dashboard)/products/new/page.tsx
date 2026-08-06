@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
@@ -20,29 +20,17 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import type { Category, ProductAttrsSettings } from "@/lib/types";
-
-const ATTR_FIELDS: { key: string; label: string; placeholder: string }[] = [
-  { key: "volume", label: "Объём", placeholder: "200 мл" },
-  { key: "size", label: "Размер", placeholder: "L" },
-  { key: "color", label: "Цвет", placeholder: "Красный" },
-  { key: "scent", label: "Аромат", placeholder: "Лаванда" },
-  { key: "dimensions", label: "Д/Ш/В", placeholder: "10×5×3 см" },
-];
+import type { Category, ProductAttrsSettings, ProductAttrDef } from "@/lib/types";
 
 interface VariantRow {
   volume: string;
   price: string;
-  burn: string;
   stock: string;
-  size: string;
-  color: string;
-  scent: string;
-  dimensions: string;
+  attributes: Record<string, string>;
 }
 
 function emptyVariant(): VariantRow {
-  return { volume: "", price: "", burn: "", stock: "", size: "", color: "", scent: "", dimensions: "" };
+  return { volume: "", price: "", stock: "", attributes: {} };
 }
 
 export default function NewProductPage() {
@@ -50,13 +38,7 @@ export default function NewProductPage() {
   const { data: categories } = useSWR<Category[]>("/categories", fetcher);
   const { data: attrsData } = useSWR<ProductAttrsSettings>("/settings/product-attrs", fetcher);
 
-  const [enabledAttrs, setEnabledAttrs] = useState<string[]>(["volume"]);
-
-  useEffect(() => {
-    if (attrsData) {
-      setEnabledAttrs(attrsData.product_attrs);
-    }
-  }, [attrsData]);
+  const attrDefs: ProductAttrDef[] = attrsData?.attrs ?? [];
 
   const [categoryId, setCategoryId] = useState("");
   const [name, setName] = useState("");
@@ -78,7 +60,13 @@ export default function NewProductPage() {
     );
   }
 
-  const visibleAttrFields = ATTR_FIELDS.filter((f) => enabledAttrs.includes(f.key));
+  function updateAttr(index: number, key: string, value: string) {
+    setVariants(
+      variants.map((v, i) =>
+        i === index ? { ...v, attributes: { ...v.attributes, [key]: value } } : v,
+      ),
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -107,16 +95,18 @@ export default function NewProductPage() {
         category_id: Number(categoryId),
         name,
         description,
-        variants: validVariants.map((v) => ({
-          volume: v.volume || "—",
-          price: Number(v.price),
-          burn: v.burn || null,
-          stock: v.stock ? Number(v.stock) : 0,
-          size: v.size || null,
-          color: v.color || null,
-          scent: v.scent || null,
-          dimensions: v.dimensions || null,
-        })),
+        variants: validVariants.map((v) => {
+          const attributes: Record<string, string> = {};
+          for (const [k, val] of Object.entries(v.attributes)) {
+            if (val.trim()) attributes[k] = val.trim();
+          }
+          return {
+            volume: v.volume || "—",
+            price: Number(v.price),
+            stock: v.stock ? Number(v.stock) : 0,
+            attributes,
+          };
+        }),
       });
 
       toast.success("Товар создан");
@@ -190,13 +180,21 @@ export default function NewProductPage() {
             {variants.map((variant, i) => (
               <div key={i} className="rounded-lg border p-3 space-y-2">
                 <div className="flex items-end gap-2 flex-wrap">
-                  {visibleAttrFields.map((field) => (
-                    <div key={field.key} className="flex-1 min-w-[100px] space-y-1">
-                      <Label className="text-xs">{field.label}</Label>
+                  <div className="flex-1 min-w-[100px] space-y-1">
+                    <Label className="text-xs">Объём</Label>
+                    <Input
+                      placeholder="200 мл"
+                      value={variant.volume}
+                      onChange={(e) => updateVariant(i, "volume", e.target.value)}
+                    />
+                  </div>
+                  {attrDefs.map((attr) => (
+                    <div key={attr.id} className="flex-1 min-w-[100px] space-y-1">
+                      <Label className="text-xs">{attr.label}</Label>
                       <Input
-                        placeholder={field.placeholder}
-                        value={variant[field.key as keyof VariantRow]}
-                        onChange={(e) => updateVariant(i, field.key as keyof VariantRow, e.target.value)}
+                        placeholder={attr.label}
+                        value={variant.attributes[attr.key] ?? ""}
+                        onChange={(e) => updateAttr(i, attr.key, e.target.value)}
                       />
                     </div>
                   ))}

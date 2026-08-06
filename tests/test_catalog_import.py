@@ -98,6 +98,39 @@ class TestParseMarketplaceFile:
         assert result["rows"][0]["price"] == 1290
         assert result["rows"][0]["stock"] == 3
 
+    def test_parse_wb_multirow_header(self):
+        """Выгрузка WB: первая строка — названия групп колонок (объединённые
+        ячейки дают None в продолжениях), вторая — реальные имена полей.
+        Парсер должен найти строку заголовков и распознать данные."""
+        wb = Workbook()
+        ws = wb.active
+        # Row 1 — группы (как из объединённых ячеек: значение только в первой)
+        ws.append(["Основная информация", None, None, "Габариты", "Дополнительная информация"])
+        # Row 2 — реальные заголовки
+        ws.append(["Наименование", "Цена продавца", "Количество", "Вес брутто", "Ссылка на фото"])
+        # Row 3+ — данные
+        ws.append(["Свеча «Лаванда»", 450, 10, 0.5, "https://..."])
+        ws.append(["Диффузор «Цитрус»", 1290, 3, 0.3, "https://..."])
+        buf = BytesIO()
+        wb.save(buf)
+        data = buf.getvalue()
+
+        result = CatalogImportService.parse_marketplace_file(data, "wb")
+
+        assert result["recognized_rows"] == 2
+        assert result["total_rows"] == 2
+        assert result["rows"][0]["name"] == "Свеча «Лаванда»"
+        assert result["rows"][0]["price"] == 450
+        assert result["rows"][0]["stock"] == 10
+        assert result["rows"][1]["name"] == "Диффузор «Цитрус»"
+        assert result["rows"][1]["price"] == 1290
+        assert result["rows"][1]["stock"] == 3
+        # Группы колонок из строки 1 не должны попадать в unmapped
+        assert "Основная информация" not in result["unmapped_columns"]
+        # А нераспознанные поля из строки-заголовка — должны
+        assert "Вес брутто" in result["unmapped_columns"]
+        assert "Ссылка на фото" in result["unmapped_columns"]
+
     def test_parse_ym_file(self):
         data = _make_xlsx(
             ["Название", "Цена", "Остатки"],

@@ -20,7 +20,7 @@ from app.services.order_service import OrderService
 from app.services.promo_service import PromoCodeService
 from app.services.review_service import ReviewService
 from app.services.shop_service import ShopService
-from app.models.shop import AVAILABLE_PRODUCT_ATTRS
+from app.services.product_attr_service import ProductAttrService
 
 router = APIRouter()
 
@@ -35,8 +35,13 @@ async def get_shop_id(x_shop_id: int | None = Header(None, alias="X-Shop-Id")) -
 async def get_shop_config(shop_id: int = Depends(get_shop_id)):
     """Конфиг магазина для мини-аппа: включённые характеристики товара и т.д."""
     shop = await ShopService.get(shop_id)
-    attrs = shop["product_attrs"] if shop else ["volume"]
-    labels = {a["key"]: a["label"] for a in AVAILABLE_PRODUCT_ATTRS}
+
+    attr_defs = await ProductAttrService.list_defs(shop_id) if shop else []
+
+    product_attrs = ["volume"] + [d["key"] for d in attr_defs]
+    attr_labels = {"volume": "Объём"}
+    for d in attr_defs:
+        attr_labels[d["key"]] = d["label"]
 
     bot_username = None
     bot = get_bot(shop_id)
@@ -48,8 +53,8 @@ async def get_shop_config(shop_id: int = Depends(get_shop_id)):
             pass
 
     return {
-        "product_attrs": attrs,
-        "attr_labels": {k: labels.get(k, k) for k in attrs},
+        "product_attrs": product_attrs,
+        "attr_labels": attr_labels,
         "bot_username": bot_username,
         "company": {
             "name": shop["company_name"] if shop else None,

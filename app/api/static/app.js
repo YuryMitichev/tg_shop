@@ -253,7 +253,7 @@ const App = {
             }
 
             const attrParts = this.productAttrs
-                .map(k => v[k])
+                .map(k => (v.attributes && v.attributes[k]) || v[k])
                 .filter(val => val);
             const attrLabel = attrParts.length > 0 ? attrParts.join(" · ") : "—";
 

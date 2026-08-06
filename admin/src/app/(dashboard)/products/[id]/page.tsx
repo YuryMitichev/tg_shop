@@ -21,15 +21,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Loader2, Trash2, Upload, Star, Package } from "lucide-react";
 import Link from "next/link";
-import type { Product, Category, ProductAttrsSettings } from "@/lib/types";
-
-const ATTR_LABELS: Record<string, string> = {
-  volume: "Объём",
-  size: "Размер",
-  color: "Цвет",
-  scent: "Аромат",
-  dimensions: "Д/Ш/В",
-};
+import type { Product, Category, ProductAttrsSettings, ProductAttrDef } from "@/lib/types";
 
 export default function EditProductPage() {
   const params = useParams();
@@ -40,7 +32,7 @@ export default function EditProductPage() {
   const { data: categories } = useSWR<Category[]>("/categories", fetcher);
   const { data: attrsData } = useSWR<ProductAttrsSettings>("/settings/product-attrs", fetcher);
 
-  const [enabledAttrs, setEnabledAttrs] = useState<string[]>(["volume"]);
+  const attrDefs: ProductAttrDef[] = attrsData?.attrs ?? [];
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -55,12 +47,6 @@ export default function EditProductPage() {
       setCategoryId(String(product.category_id));
     }
   }, [product]);
-
-  useEffect(() => {
-    if (attrsData) {
-      setEnabledAttrs(attrsData.product_attrs);
-    }
-  }, [attrsData]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -180,12 +166,15 @@ export default function EditProductPage() {
             {product.variants.map((v) => (
               <div key={v.id} className="flex items-center justify-between rounded-lg border p-3">
                 <div className="space-y-0.5">
-                  {enabledAttrs.map((attrKey) => {
-                    const val = (v as unknown as Record<string, string | null | undefined>)[attrKey];
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-medium">Объём:</span> {v.volume}
+                  </p>
+                  {attrDefs.map((attr) => {
+                    const val = v.attributes?.[attr.key];
                     if (!val) return null;
                     return (
-                      <p key={attrKey} className="text-sm text-muted-foreground">
-                        <span className="font-medium">{ATTR_LABELS[attrKey] || attrKey}:</span> {val}
+                      <p key={attr.id} className="text-sm text-muted-foreground">
+                        <span className="font-medium">{attr.label}:</span> {val}
                       </p>
                     );
                   })}

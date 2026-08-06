@@ -16,13 +16,14 @@ AVAILABLE_COURIERS = [
     "Почта России",
 ]
 
-AVAILABLE_PRODUCT_ATTRS = [
-    {"key": "size", "label": "Размер"},
-    {"key": "volume", "label": "Объём"},
-    {"key": "color", "label": "Цвет"},
-    {"key": "scent", "label": "Аромат"},
-    {"key": "dimensions", "label": "Длина/Ширина/Высота"},
-]
+DEFAULT_ATTR_LABELS = {
+    "volume": "Объём",
+    "burn": "Время горения",
+    "size": "Размер",
+    "color": "Цвет",
+    "scent": "Аромат",
+    "dimensions": "Длина/Ширина/Высота",
+}
 
 
 class Shop(Base):
@@ -43,8 +44,6 @@ class Shop(Base):
     delivery_enabled: Mapped[bool] = mapped_column(default=True)
 
     courier_services: Mapped[str] = mapped_column(default="[]")
-
-    product_attrs: Mapped[str] = mapped_column(default='["volume"]')
 
     company_name: Mapped[str | None] = mapped_column(nullable=True)
 

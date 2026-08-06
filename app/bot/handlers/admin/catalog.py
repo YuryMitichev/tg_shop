@@ -240,7 +240,8 @@ def setup_catalog_router() -> Router:
         lines = [f"🕯 <b>{product['name']}</b>\n", product["description"], ""]
 
         for variant in product["variants"]:
-            burn = f", горит {variant['burn']}" if variant["burn"] else ""
+            burn_val = variant.get("attributes", {}).get("burn")
+            burn = f", горит {burn_val}" if burn_val else ""
             lines.append(f"• {variant['volume']} — {variant['price']} ₽{burn}")
 
         lines.append("")
@@ -436,10 +437,13 @@ def setup_catalog_router() -> Router:
         data = await state.get_data()
 
         variants = data.get("variants", [])
+        attributes = {}
+        if burn:
+            attributes["burn"] = burn
         variants.append({
             "volume": data["current_volume"],
             "price": data["current_price"],
-            "burn": burn,
+            "attributes": attributes,
         })
 
         await state.update_data(variants=variants)
