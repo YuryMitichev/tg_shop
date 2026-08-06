@@ -12,6 +12,7 @@ from app.models.login_token import LoginToken
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.product import Product
+from app.models.product_attribute_def import ProductAttributeDef
 from app.models.product_photo import ProductPhoto
 from app.models.product_variant import ProductVariant
 from app.models.promo_code import PromoCode
@@ -192,6 +193,11 @@ class ShopService:
             )
             await session.execute(
                 delete(ProductVariant).where(ProductVariant.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(ProductAttributeDef).where(
+                    ProductAttributeDef.shop_id == shop_id
+                )
             )
             await session.execute(
                 delete(Review).where(Review.shop_id == shop_id)

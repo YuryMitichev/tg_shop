@@ -36,7 +36,11 @@ async function request<T>(
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error || "Ошибка запроса");
+    throw new Error(
+      (data as { error?: string; detail?: string }).error ||
+        (data as { detail?: string }).detail ||
+        "Ошибка запроса"
+    );
   }
 
   return data as T;
