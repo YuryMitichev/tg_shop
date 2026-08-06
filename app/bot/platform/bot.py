@@ -22,6 +22,7 @@ from app.services.shop_service import ShopService
 from app.services.subscription_service import SubscriptionService
 from app.services.subscription_payment_service import SubscriptionPaymentService
 from app.services.admin_user_service import AdminUserService
+from app.services.offer_agreement_service import OfferAgreementService, get_offer_text
 from app.bot.bot import start_shop_bot
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ def _main_menu(is_new: bool = True) -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=btn_text)],
             [KeyboardButton(text="📋 Мои магазины"), KeyboardButton(text="💳 Подписка")],
-            [KeyboardButton(text="🛠 Поддержка"), KeyboardButton(text="ℹ️ О платформе")],
+            [KeyboardButton(text="📄 Оферта"), KeyboardButton(text="🛠 Поддержка"), KeyboardButton(text="ℹ️ О платформе")],
         ],
         resize_keyboard=True,
     )
@@ -252,6 +253,67 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
     await message.answer(text, reply_markup=kb, disable_web_page_preview=True)
 
     await state.clear()
+
+
+def _split_text(text: str, max_length: int = 4000) -> list[str]:
+    """Разбивает длинный текст на части для отправки в Telegram (лимит 4096)."""
+    if len(text) <= max_length:
+        return [text]
+    chunks = []
+    while text:
+        if len(text) <= max_length:
+            chunks.append(text)
+            break
+        split_at = text.rfind("\n\n", 0, max_length)
+        if split_at == -1:
+            split_at = text.rfind("\n", 0, max_length)
+        if split_at == -1:
+            split_at = max_length
+        chunks.append(text[:split_at])
+        text = text[split_at:].lstrip("\n")
+    return chunks
+
+
+async def on_offer(message: Message) -> None:
+    """Показывает текст публичной оферты и кнопку принятия."""
+    offer_text = get_offer_text()
+
+    if not offer_text:
+        await message.answer("Текст оферты временно недоступен.")
+        return
+
+    accepted = await OfferAgreementService.has_accepted(message.from_user.id)
+
+    for chunk in _split_text(offer_text)[:-1]:
+        await message.answer(chunk)
+
+    last_chunk = _split_text(offer_text)[-1]
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [] if accepted else [InlineKeyboardButton(text="✅ Принять условия оферты", callback_data="accept_offer")]
+        ]
+    )
+
+    if accepted:
+        last_chunk += "\n\n✅ <b>Вы уже приняли условия оферты.</b>"
+
+    await message.answer(last_chunk, reply_markup=kb)
+
+
+async def on_accept_offer(callback: CallbackQuery) -> None:
+    """Записывает факт принятия оферты."""
+    await OfferAgreementService.accept(
+        telegram_user_id=callback.from_user.id,
+        full_name=callback.from_user.full_name,
+        username=callback.from_user.username,
+    )
+
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(
+        "✅ <b>Вы приняли условия публичной оферты.</b>\n\n"
+        "Спасибо! Запись о принятии сохранена."
+    )
+    await callback.answer("Оферта принята")
 
 
 async def on_support(message: Message) -> None:
@@ -527,6 +589,8 @@ def get_platform_router() -> Dispatcher:
     dp.message.register(on_subscription, F.text == "💳 Подписка")
     dp.message.register(on_support, F.text == "🛠 Поддержка")
     dp.message.register(on_about, F.text == "ℹ️ О платформе")
+    dp.message.register(on_offer, F.text == "📄 Оферта")
+    dp.callback_query.register(on_accept_offer, F.data == "accept_offer")
     dp.callback_query.register(on_enter_token, F.data == "enter_token")
     dp.callback_query.register(
         on_subscription_shop, F.data.startswith("sub_shop:")

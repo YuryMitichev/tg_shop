@@ -7,6 +7,7 @@ from app.api.admin_auth import require_super_admin
 from app.api.rate_limit import limiter
 from app.bot.bot import start_shop_bot, stop_shop_bot, restart_shop_bot
 from app.services.shop_service import ShopService
+from app.services.offer_agreement_service import OfferAgreementService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -124,3 +125,12 @@ async def delete_shop(
     if not ok:
         raise HTTPException(status_code=404, detail="Магазин не найден")
     return {"ok": True}
+
+
+# ==========================
+# Оферта — записи о принятии
+# ==========================
+
+@router.get("/offer/acceptances")
+async def list_offer_acceptances(_admin: dict = Depends(require_super_admin)):
+    return {"acceptances": await OfferAgreementService.list_acceptances()}

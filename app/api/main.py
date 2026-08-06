@@ -111,6 +111,11 @@ def create_app() -> FastAPI:
                 media_type="application/json",
             )
 
+    @app.get("/api/offer")
+    async def get_offer():
+        from app.services.offer_agreement_service import get_offer_text, OFFER_VERSION
+        return {"text": get_offer_text(), "version": OFFER_VERSION}
+
     app.include_router(payments_router, prefix="/payments", tags=["payments"])
     app.include_router(shop_router, prefix="/api/shop", tags=["shop"])
     app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
