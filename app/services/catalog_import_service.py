@@ -24,14 +24,17 @@ _COLUMN_ALIASES: dict[str, dict[str, list[str]]] = {
     "ozon": {
         "name": ["Название товара", "Название", "Product name", "Наименование"],
         "description": ["Описание", "Description", "Описание товара"],
+        "category": ["Категория", "Категория товара", "Категория продавца", "Item category"],
     },
     "wb": {
         "name": ["Наименование", "Название", "Коммерческое наименование"],
         "description": ["Описание", "Описание товара", "Composition", "Состав"],
+        "category": ["Категория", "Категория продавца", "Предмет", "Категория товара"],
     },
     "ym": {
         "name": ["Название", "Наименование товара", "name", "Название товара"],
         "description": ["Описание", "Описание товара", "description"],
+        "category": ["Категория", "Категория продавца", "category", "Категория товара"],
     },
 }
 
@@ -39,6 +42,7 @@ _COLUMN_ALIASES: dict[str, dict[str, list[str]]] = {
 _COLUMN_KEYWORDS: dict[str, list[str]] = {
     "name": ["назван", "наименован", "product name", "коммерческое наименован"],
     "description": ["описан", "description"],
+    "category": ["категори", "предмет"],
 }
 
 _MATCHED_FIELDS = list(_COLUMN_KEYWORDS.keys())
@@ -127,6 +131,7 @@ class CatalogImportService:
 
         name_idx = column_map.get("name")
         desc_idx = column_map.get("description")
+        cat_idx = column_map.get("category")
 
         rows: list[dict] = []
 
@@ -143,12 +148,17 @@ class CatalogImportService:
             if desc_idx is not None and desc_idx < len(row) and row[desc_idx]:
                 description = str(row[desc_idx]).strip()
 
+            category = ""
+            if cat_idx is not None and cat_idx < len(row) and row[cat_idx]:
+                category = str(row[cat_idx]).strip()
+
             recognized = bool(name)
 
             rows.append({
                 "row_number": row_num,
                 "name": name,
                 "description": description,
+                "category": category,
                 "recognized": recognized,
             })
 
@@ -175,12 +185,32 @@ class CatalogImportService:
         Товары создаются скрытыми (is_active=False) — пользователь
         заполнит цену, характеристики и фото вручную перед публикацией.
 
-        Если category_id не указан — создаёт (или находит) категорию
-        с именем «Импортировано».
+        Если в строке есть поле category — создаётся или находится
+        категория с этим именем. Иначе используется category_id или
+        категория «Импортировано».
 
-        Возвращает {created, category_id}.
+        Возвращает {created, category_id, categories}.
         """
         async with async_session() as session:
+            category_cache: dict[str, int] = {}
+
+            async def _get_category_id(name: str) -> int:
+                if name in category_cache:
+                    return category_cache[name]
+                result = await session.execute(
+                    select(Category).where(
+                        Category.shop_id == shop_id,
+                        Category.name == name,
+                    )
+                )
+                cat = result.scalar_one_or_none()
+                if cat is None:
+                    cat = Category(shop_id=shop_id, name=name)
+                    session.add(cat)
+                    await session.flush()
+                category_cache[name] = cat.id
+                return cat.id
+
             if category_id is None:
                 result = await session.execute(
                     select(Category).where(
@@ -197,9 +227,15 @@ class CatalogImportService:
 
             created = 0
             for row in rows:
+                row_category_name = row.get("category", "").strip()
+                if row_category_name:
+                    row_cat_id = await _get_category_id(row_category_name)
+                else:
+                    row_cat_id = category_id
+
                 product = Product(
                     shop_id=shop_id,
-                    category_id=category_id,
+                    category_id=row_cat_id,
                     name=row["name"],
                     description=row.get("description") or "",
                     is_active=False,

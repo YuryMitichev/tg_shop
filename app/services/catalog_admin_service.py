@@ -314,6 +314,78 @@ class CatalogAdminService:
             return True
 
     @staticmethod
+    async def update_variant(
+        shop_id: int,
+        variant_id: int,
+        volume: str | None = None,
+        price: int | None = None,
+        stock: int | None = None,
+        attributes: dict | None = None,
+    ) -> bool:
+        async with async_session() as session:
+            result = await session.execute(
+                select(ProductVariant).where(
+                    ProductVariant.shop_id == shop_id,
+                    ProductVariant.id == variant_id,
+                )
+            )
+            variant = result.scalar_one_or_none()
+
+            if not variant:
+                return False
+
+            if volume is not None:
+                variant.volume = volume
+            if price is not None:
+                variant.price = price
+            if stock is not None:
+                variant.stock = max(0, stock)
+            if attributes is not None:
+                variant.attributes = attributes
+
+            await session.commit()
+            return True
+
+    @staticmethod
+    async def add_variant(
+        shop_id: int,
+        product_id: int,
+        volume: str,
+        price: int,
+        stock: int = 0,
+        attributes: dict | None = None,
+    ) -> int | None:
+        async with async_session() as session:
+            variant = ProductVariant(
+                shop_id=shop_id,
+                product_id=product_id,
+                volume=volume,
+                price=price,
+                stock=stock,
+                attributes=attributes or {},
+            )
+            session.add(variant)
+            await session.commit()
+            await session.refresh(variant)
+            return variant.id
+
+    @staticmethod
+    async def delete_variant(shop_id: int, variant_id: int) -> bool:
+        async with async_session() as session:
+            result = await session.execute(
+                select(ProductVariant).where(
+                    ProductVariant.shop_id == shop_id,
+                    ProductVariant.id == variant_id,
+                )
+            )
+            variant = result.scalar_one_or_none()
+            if not variant:
+                return False
+            await session.delete(variant)
+            await session.commit()
+            return True
+
+    @staticmethod
     async def add_photo(shop_id: int, product_id: int, file_id: str) -> int | None:
         async with async_session() as session:
             result = await session.execute(

@@ -56,12 +56,8 @@ class UpdateCategoryBody(BaseModel):
 class VariantCreate(BaseModel):
     volume: str
     price: int
-    burn: str | None = None
     stock: int = 0
-    size: str | None = None
-    color: str | None = None
-    scent: str | None = None
-    dimensions: str | None = None
+    attributes: dict = {}
 
 
 class CreateProductBody(BaseModel):
@@ -76,6 +72,13 @@ class UpdateProductBody(BaseModel):
     description: str | None = None
     category_id: int | None = None
     is_active: bool | None = None
+
+
+class UpdateVariantBody(BaseModel):
+    volume: str | None = None
+    price: int | None = None
+    stock: int | None = None
+    attributes: dict | None = None
 
 
 class UpdateVariantStockBody(BaseModel):
@@ -411,6 +414,52 @@ async def update_variant_stock(
     return {"ok": True}
 
 
+@router.put("/variants/{variant_id}")
+async def update_variant(
+    variant_id: int,
+    body: UpdateVariantBody,
+    admin: dict = Depends(require_active_subscription),
+):
+    ok = await CatalogAdminService.update_variant(
+        admin["shop_id"],
+        variant_id,
+        volume=body.volume,
+        price=body.price,
+        stock=body.stock,
+        attributes=body.attributes,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Вариант не найден")
+    return {"ok": True}
+
+
+@router.post("/products/{product_id}/variants")
+async def add_variant(
+    product_id: int,
+    body: VariantCreate,
+    admin: dict = Depends(require_active_subscription),
+):
+    variant_id = await CatalogAdminService.add_variant(
+        admin["shop_id"],
+        product_id,
+        volume=body.volume,
+        price=body.price,
+        stock=body.stock,
+        attributes=body.attributes,
+    )
+    if variant_id is None:
+        raise HTTPException(status_code=404, detail="Товар не найден")
+    return {"id": variant_id}
+
+
+@router.delete("/variants/{variant_id}")
+async def delete_variant(variant_id: int, admin: dict = Depends(require_active_subscription)):
+    ok = await CatalogAdminService.delete_variant(admin["shop_id"], variant_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Вариант не найден")
+    return {"ok": True}
+
+
 # ==========================
 # Импорт каталога (Ozon / WB / ЯМ)
 # ==========================
@@ -446,6 +495,7 @@ async def _read_upload_with_limit(
 class ConfirmImportRow(BaseModel):
     name: str
     description: str = ""
+    category: str = ""
 
 
 class ConfirmImportBody(BaseModel):

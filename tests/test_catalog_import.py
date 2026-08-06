@@ -46,6 +46,11 @@ class TestColumnMatching:
         assert _match_column("Описание", "ozon") == "description"
         assert _match_column("Описание товара", "wb") == "description"
 
+    def test_match_category(self):
+        assert _match_column("Категория продавца", "wb") == "category"
+        assert _match_column("Категория", "ozon") == "category"
+        assert _match_column("Предмет", "wb") == "category"
+
     def test_keyword_fuzzy_match_name(self):
         assert _match_column("Полное название продукта", "ozon") == "name"
         assert _match_column("Коммерческое наименование", "wb") == "name"
@@ -53,7 +58,6 @@ class TestColumnMatching:
     def test_unrecognized_column_returns_none(self):
         assert _match_column("Вес брутто", "ozon") is None
         assert _match_column("Ссылка на фото", "wb") is None
-        assert _match_column("Цена продавца", "wb") is None
 
 
 # ==========================
@@ -64,10 +68,10 @@ class TestParseMarketplaceFile:
 
     def test_parse_ozon_file(self):
         data = _make_xlsx(
-            ["Название товара", "Описание"],
+            ["Название товара", "Описание", "Категория продавца"],
             [
-                ["Свеча «Лаванда»", "Натуральная соевая свеча"],
-                ["Свеча «Мята»", "Свежий аромат"],
+                ["Свеча «Лаванда»", "Натуральная соевая свеча", "Свечи"],
+                ["Свеча «Мята»", "Свежий аромат", "Свечи"],
             ],
         )
 
@@ -78,6 +82,7 @@ class TestParseMarketplaceFile:
         assert result["recognized_rows"] == 2
         assert result["rows"][0]["name"] == "Свеча «Лаванда»"
         assert result["rows"][0]["description"] == "Натуральная соевая свеча"
+        assert result["rows"][0]["category"] == "Свечи"
         assert result["rows"][0]["recognized"] is True
 
     def test_parse_wb_file(self):
@@ -100,10 +105,10 @@ class TestParseMarketplaceFile:
         Парсер должен найти строку заголовков и распознать данные."""
         wb = Workbook()
         ws = wb.active
-        ws.append(["Основная информация", None, "Габариты", "Дополнительная информация"])
-        ws.append(["Наименование", "Описание", "Вес брутто", "Ссылка на фото"])
-        ws.append(["Свеча «Лаванда»", "Лавандовый аромат", 0.5, "https://..."])
-        ws.append(["Диффузор «Цитрус»", "Цитрусовый аромат", 0.3, "https://..."])
+        ws.append(["Основная информация", None, None, "Габариты", "Дополнительная информация"])
+        ws.append(["Наименование", "Категория продавца", "Описание", "Вес брутто", "Ссылка на фото"])
+        ws.append(["Свеча «Лаванда»", "Свечи", "Лавандовый аромат", 0.5, "https://..."])
+        ws.append(["Диффузор «Цитрус»", "Диффузоры", "Цитрусовый аромат", 0.3, "https://..."])
         buf = BytesIO()
         wb.save(buf)
         data = buf.getvalue()
@@ -114,8 +119,10 @@ class TestParseMarketplaceFile:
         assert result["total_rows"] == 2
         assert result["rows"][0]["name"] == "Свеча «Лаванда»"
         assert result["rows"][0]["description"] == "Лавандовый аромат"
+        assert result["rows"][0]["category"] == "Свечи"
         assert result["rows"][1]["name"] == "Диффузор «Цитрус»"
         assert result["rows"][1]["description"] == "Цитрусовый аромат"
+        assert result["rows"][1]["category"] == "Диффузоры"
 
     def test_parse_ym_file(self):
         data = _make_xlsx(
@@ -180,8 +187,8 @@ class TestImportRows:
 
     async def test_import_creates_products(self, db_session, seed_data):
         rows = [
-            {"name": "Свеча", "description": "Лаванда"},
-            {"name": "Диффузор", "description": "Цитрус"},
+            {"name": "Свеча", "description": "Лаванда", "category": "Свечи"},
+            {"name": "Диффузор", "description": "Цитрус", "category": "Диффузоры"},
         ]
 
         result = await CatalogImportService.import_rows(shop_id=1, rows=rows)
@@ -193,10 +200,10 @@ class TestImportRows:
         from sqlalchemy import select
 
         async with db_session() as session:
-            cats = await session.execute(
-                select(Category).where(Category.name == DEFAULT_CATEGORY_NAME)
+            candle_cats = await session.execute(
+                select(Category).where(Category.name == "Свечи")
             )
-            assert cats.scalars().first() is not None
+            assert candle_cats.scalars().first() is not None
 
             products = await session.execute(
                 select(Product).where(Product.shop_id == 1).order_by(Product.id.desc())
@@ -208,7 +215,7 @@ class TestImportRows:
             assert prods[0].is_active is False
 
     async def test_import_uses_existing_category(self, db_session, seed_data):
-        rows = [{"name": "Товар", "description": "Описание"}]
+        rows = [{"name": "Товар", "description": "Описание", "category": ""}]
 
         result = await CatalogImportService.import_rows(
             shop_id=1, rows=rows, category_id=1

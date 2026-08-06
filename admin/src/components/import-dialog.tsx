@@ -35,6 +35,7 @@ interface ImportRow {
   row_number: number;
   name: string;
   description: string;
+  category: string;
   recognized: boolean;
 }
 
@@ -117,6 +118,7 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
       .map((r) => ({
         name: r.name,
         description: r.description,
+        category: r.category,
       }));
 
     setImporting(true);
@@ -231,6 +233,7 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
                       />
                     </TableHead>
                     <TableHead>Название</TableHead>
+                    <TableHead>Категория</TableHead>
                     <TableHead className="max-w-[200px]">Описание</TableHead>
                     <TableHead className="w-8"></TableHead>
                   </TableRow>
@@ -249,6 +252,9 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate" title={row.name}>
                         {row.name || "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[120px] truncate text-muted-foreground" title={row.category}>
+                        {row.category || "—"}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground" title={row.description}>
                         {row.description || "—"}
