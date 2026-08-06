@@ -34,65 +34,82 @@ class AdminAuthService:
     JWT_EXPIRES = timedelta(hours=24)
 
     @staticmethod
-    async def _resolve_shop_id(telegram_user_id: int) -> tuple[int, bool] | None:
-        """Определяет shop_id и флаг супер-админа для пользователя.
+    async def _resolve_shop_ids(telegram_user_id: int) -> list[tuple[int, bool]]:
+        """Определяет список магазинов для пользователя.
 
-        Возвращает (shop_id, is_super_admin) или None.
+        Приоритет: собственные магазины (AdminUser), затем — платформенный админ.
+        Возвращает список (shop_id, is_super_admin).
         """
-        if telegram_user_id in settings.super_admin_id_list:
-            return (1, True)
-
-        if telegram_user_id in settings.admin_id_list:
-            return (1, False)
+        is_super = telegram_user_id in settings.super_admin_id_list
 
         async with async_session() as session:
             result = await session.execute(
-                select(AdminUser).where(AdminUser.telegram_user_id == telegram_user_id)
+                select(AdminUser)
+                .where(AdminUser.telegram_user_id == telegram_user_id)
+                .order_by(AdminUser.created_at.desc())
             )
-            admin = result.scalar_one_or_none()
-            if admin:
-                return (admin.shop_id, False)
+            admins = result.scalars().all()
 
-        return None
+        if admins:
+            return [(a.shop_id, is_super) for a in admins]
+
+        if is_super:
+            return [(1, True)]
+
+        if telegram_user_id in settings.admin_id_list:
+            return [(1, False)]
+
+        return []
 
     @staticmethod
     async def request_login(telegram_user_id: int) -> bool:
-        resolved = await AdminAuthService._resolve_shop_id(telegram_user_id)
-        if resolved is None:
+        from app.services.shop_service import ShopService
+
+        shops = await AdminAuthService._resolve_shop_ids(telegram_user_id)
+        if not shops:
             return False
 
-        shop_id, is_super = resolved
-
-        token = secrets.token_urlsafe(48)
-        expires_at = _utcnow() + timedelta(seconds=AdminAuthService.LINK_TTL)
+        base_url = settings.admin_panel_url or "https://t.me"
 
         async with async_session() as session:
             await session.execute(
                 delete(LoginToken).where(LoginToken.expires_at < _utcnow())
             )
-            session.add(LoginToken(
-                token=token,
-                telegram_user_id=telegram_user_id,
-                shop_id=shop_id,
-                is_super_admin=is_super,
-                expires_at=expires_at,
-            ))
             await session.commit()
 
-        bot = get_bot(shop_id)
-        if bot is None:
-            return False
+        sent_any = False
+        for shop_id, is_super in shops:
+            bot = get_bot(shop_id)
+            if bot is None:
+                continue
 
-        base_url = settings.admin_panel_url or "https://t.me"
-        login_url = f"{base_url.rstrip('/')}/login?token={token}"
+            token = secrets.token_urlsafe(48)
+            expires_at = _utcnow() + timedelta(seconds=AdminAuthService.LINK_TTL)
 
-        await bot.send_message(
-            telegram_user_id,
-            f"🔐 <b>Вход в админ-панель</b>\n\n"
-            f"Нажмите на ссылку для входа:\n\n{login_url}\n\n"
-            f"Ссылка действует 5 минут.",
-        )
-        return True
+            async with async_session() as session:
+                session.add(LoginToken(
+                    token=token,
+                    telegram_user_id=telegram_user_id,
+                    shop_id=shop_id,
+                    is_super_admin=is_super,
+                    expires_at=expires_at,
+                ))
+                await session.commit()
+
+            login_url = f"{base_url.rstrip('/')}/login?token={token}"
+
+            shop = await ShopService.get(shop_id)
+            shop_label = f" — «{shop['name']}»" if shop else ""
+
+            await bot.send_message(
+                telegram_user_id,
+                f"🔐 <b>Вход в админ-панель</b>{shop_label}\n\n"
+                f"Нажмите на ссылку для входа:\n\n{login_url}\n\n"
+                f"Ссылка действует 5 минут.",
+            )
+            sent_any = True
+
+        return sent_any
 
     @staticmethod
     async def verify_login_token(token: str) -> str | None:

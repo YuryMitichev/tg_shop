@@ -101,9 +101,9 @@ class TestMagicLinkAuth:
 
     async def test_request_login_unknown_user(self):
         with patch.object(
-            AdminAuthService, "_resolve_shop_id", new_callable=AsyncMock
+            AdminAuthService, "_resolve_shop_ids", new_callable=AsyncMock
         ) as mock_resolve:
-            mock_resolve.return_value = None
+            mock_resolve.return_value = []
 
             result = await AdminAuthService.request_login(999999)
 
@@ -111,9 +111,9 @@ class TestMagicLinkAuth:
 
     async def test_request_login_success(self, db_session, seed_data):
         with patch.object(
-            AdminAuthService, "_resolve_shop_id", new_callable=AsyncMock
+            AdminAuthService, "_resolve_shop_ids", new_callable=AsyncMock
         ) as mock_resolve:
-            mock_resolve.return_value = (1, False)
+            mock_resolve.return_value = [(1, False)]
 
             with patch("app.services.admin_auth_service.get_bot") as mock_get_bot:
                 mock_bot = AsyncMock()
@@ -127,11 +127,28 @@ class TestMagicLinkAuth:
                 sent_text = mock_bot.send_message.call_args[0][1]
                 assert "login?token=" in sent_text
 
+    async def test_request_login_multiple_shops(self, db_session, seed_data):
+        with patch.object(
+            AdminAuthService, "_resolve_shop_ids", new_callable=AsyncMock
+        ) as mock_resolve:
+            mock_resolve.return_value = [(2, False), (1, False)]
+
+            with patch("app.services.admin_auth_service.get_bot") as mock_get_bot:
+                mock_bot_a = AsyncMock()
+                mock_bot_b = AsyncMock()
+                mock_get_bot.side_effect = [mock_bot_a, mock_bot_b]
+
+                result = await AdminAuthService.request_login(123456)
+
+                assert result is True
+                assert mock_bot_a.send_message.call_count == 1
+                assert mock_bot_b.send_message.call_count == 1
+
     async def test_request_login_bot_unavailable(self, db_session, seed_data):
         with patch.object(
-            AdminAuthService, "_resolve_shop_id", new_callable=AsyncMock
+            AdminAuthService, "_resolve_shop_ids", new_callable=AsyncMock
         ) as mock_resolve:
-            mock_resolve.return_value = (1, False)
+            mock_resolve.return_value = [(1, False)]
 
             with patch("app.services.admin_auth_service.get_bot") as mock_get_bot:
                 mock_get_bot.return_value = None
@@ -141,9 +158,9 @@ class TestMagicLinkAuth:
 
     async def test_request_login_generates_long_token(self, db_session, seed_data):
         with patch.object(
-            AdminAuthService, "_resolve_shop_id", new_callable=AsyncMock
+            AdminAuthService, "_resolve_shop_ids", new_callable=AsyncMock
         ) as mock_resolve:
-            mock_resolve.return_value = (1, False)
+            mock_resolve.return_value = [(1, False)]
 
             with patch("app.services.admin_auth_service.get_bot") as mock_get_bot:
                 mock_bot = AsyncMock()
@@ -170,9 +187,9 @@ class TestMagicLinkAuth:
             await session.commit()
 
         with patch.object(
-            AdminAuthService, "_resolve_shop_id", new_callable=AsyncMock
+            AdminAuthService, "_resolve_shop_ids", new_callable=AsyncMock
         ) as mock_resolve:
-            mock_resolve.return_value = (1, False)
+            mock_resolve.return_value = [(1, False)]
 
             with patch("app.services.admin_auth_service.get_bot") as mock_get_bot:
                 mock_bot = AsyncMock()
