@@ -316,6 +316,82 @@ async def on_accept_offer(callback: CallbackQuery) -> None:
     await callback.answer("Оферта принята")
 
 
+async def _show_offer_before_payment(callback: CallbackQuery, shop_id: int, plan_id: int) -> None:
+    """Показывает краткую оферту с кнопкой принятия перед оплатой."""
+    await callback.message.answer(
+        "📄 <b>Перед оплатой необходимо принять условия публичной оферты.</b>\n\n"
+        "Ознакомьтесь с полным текстом в разделе «📄 Оферта».\n\n"
+        "Нажмите кнопку ниже, чтобы принять и продолжить оплату.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Принять условия оферты",
+                        callback_data=f"accept_offer_pay:{shop_id}:{plan_id}",
+                    ),
+                    InlineKeyboardButton(
+                        text="📄 Читать оферту",
+                        callback_data="show_offer",
+                    ),
+                ],
+            ]
+        ),
+    )
+
+
+async def on_show_offer(callback: CallbackQuery) -> None:
+    """Показывает текст оферты (inline-кнопка)."""
+    offer_text = get_offer_text()
+    if not offer_text:
+        await callback.message.answer("Текст оферты временно недоступен.")
+        await callback.answer()
+        return
+
+    accepted = await OfferAgreementService.has_accepted(callback.from_user.id)
+    chunks = _split_text(offer_text)
+
+    for chunk in chunks[:-1]:
+        await callback.message.answer(chunk)
+
+    last_chunk = chunks[-1]
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [] if accepted else [InlineKeyboardButton(text="✅ Принять условия оферты", callback_data="accept_offer")]
+        ]
+    )
+    if accepted:
+        last_chunk += "\n\n✅ <b>Вы уже приняли условия оферты.</b>"
+
+    await callback.message.answer(last_chunk, reply_markup=kb)
+    await callback.answer()
+
+
+async def _create_and_send_payment(message: Message, shop_id: int, plan_id: int) -> None:
+    """Создаёт платёж и отправляет ссылку."""
+    result = await SubscriptionPaymentService.create_payment(
+        shop_id=shop_id,
+        plan_id=plan_id,
+    )
+
+    if result is None:
+        await message.answer(
+            "❌ Не удалось создать платёж. Попробуйте позже или обратитесь к администратору."
+        )
+        return
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Оплатить", url=result["confirmation_url"])],
+        ]
+    )
+
+    await message.answer(
+        "👇 Нажмите кнопку ниже для перехода к оплате.\n\n"
+        "После оплаты подписка активируется автоматически.",
+        reply_markup=kb,
+    )
+
+
 async def on_support(message: Message) -> None:
     username = settings.support_bot_username
     if username:
@@ -538,30 +614,37 @@ async def on_pay(callback: CallbackQuery) -> None:
         await callback.answer("Оплата скоро будет доступна", show_alert=True)
         return
 
-    await callback.answer("Создаю платёж...")
-
-    result = await SubscriptionPaymentService.create_payment(
-        shop_id=shop_id,
-        plan_id=plan_id,
-    )
-
-    if result is None:
-        await callback.message.answer(
-            "❌ Не удалось создать платёж. Попробуйте позже или обратитесь к администратору."
-        )
+    accepted = await OfferAgreementService.has_accepted(callback.from_user.id)
+    if not accepted:
+        await callback.answer("Сначала примите условия оферты", show_alert=True)
+        await _show_offer_before_payment(callback, shop_id, plan_id)
         return
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="💳 Оплатить", url=result["confirmation_url"])],
-        ]
+    await callback.answer("Создаю платёж...")
+
+    await _create_and_send_payment(callback.message, shop_id, plan_id)
+
+
+async def on_accept_offer_and_pay(callback: CallbackQuery) -> None:
+    """Принимает оферту и сразу создаёт платёж."""
+    _, shop_id_str, plan_id_str = callback.data.split(":")
+    shop_id = int(shop_id_str)
+    plan_id = int(plan_id_str)
+
+    await OfferAgreementService.accept(
+        telegram_user_id=callback.from_user.id,
+        full_name=callback.from_user.full_name,
+        username=callback.from_user.username,
     )
 
+    await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        "👇 Нажмите кнопку ниже для перехода к оплате.\n\n"
-        "После оплаты подписка активируется автоматически.",
-        reply_markup=kb,
+        "✅ <b>Вы приняли условия публичной оферты.</b>\n\n"
+        "Создаём платёж..."
     )
+    await callback.answer("Оферта принята")
+
+    await _create_and_send_payment(callback.message, shop_id, plan_id)
 
 
 async def on_subscription_shop(callback: CallbackQuery) -> None:
@@ -591,6 +674,10 @@ def get_platform_router() -> Dispatcher:
     dp.message.register(on_about, F.text == "ℹ️ О платформе")
     dp.message.register(on_offer, F.text == "📄 Оферта")
     dp.callback_query.register(on_accept_offer, F.data == "accept_offer")
+    dp.callback_query.register(on_show_offer, F.data == "show_offer")
+    dp.callback_query.register(
+        on_accept_offer_and_pay, F.data.startswith("accept_offer_pay:")
+    )
     dp.callback_query.register(on_enter_token, F.data == "enter_token")
     dp.callback_query.register(
         on_subscription_shop, F.data.startswith("sub_shop:")

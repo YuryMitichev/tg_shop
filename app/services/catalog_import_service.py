@@ -52,6 +52,8 @@ _MATCHED_FIELDS = list(_COLUMN_KEYWORDS.keys())
 # поэтому простого чтения первой строки недостаточно.
 HEADER_SCAN_ROWS = 5
 
+PREVIEW_ROW_LIMIT = 500
+
 
 def _match_column(header: str, source: MarketplaceSource) -> str | None:
     """Сопоставляет заголовок колонки с полем (name/description).
@@ -134,6 +136,7 @@ class CatalogImportService:
         cat_idx = column_map.get("category")
 
         rows: list[dict] = []
+        truncated = False
 
         for row_num, row in enumerate(
             ws.iter_rows(min_row=header_row_num + 1, values_only=True),
@@ -162,6 +165,10 @@ class CatalogImportService:
                 "recognized": recognized,
             })
 
+            if len(rows) >= PREVIEW_ROW_LIMIT:
+                truncated = True
+                break
+
         wb.close()
 
         recognized_count = sum(1 for r in rows if r["recognized"])
@@ -172,6 +179,7 @@ class CatalogImportService:
             "recognized_rows": recognized_count,
             "rows": rows,
             "unmapped_columns": [],
+            "truncated": truncated,
         }
 
     @staticmethod

@@ -11,6 +11,7 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
   base: string = ADMIN_API,
+  timeoutMs: number = 30000,
 ): Promise<T> {
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
@@ -20,11 +21,25 @@ async function request<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${base}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("Превышено время ожидания сервера. Попробуйте файл поменьше.");
+    }
+    throw new Error("Сервер недоступен. Проверьте подключение и попробуйте позже.");
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (res.status === 401) {
     if (typeof window !== "undefined") {
@@ -48,11 +63,16 @@ async function request<T>(
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body?: unknown) =>
-    request<T>(path, {
-      method: "POST",
-      body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
-    }),
+  post: <T>(path: string, body?: unknown, timeoutMs?: number) =>
+    request<T>(
+      path,
+      {
+        method: "POST",
+        body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+      },
+      ADMIN_API,
+      timeoutMs,
+    ),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: "PUT",

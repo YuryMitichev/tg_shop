@@ -467,8 +467,8 @@ function ProductAttrsSettingsTab() {
       setNewLabel("");
       mutate();
       toast.success("Характеристика добавлена");
-    } catch {
-      toast.error("Ошибка");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setAdding(false);
     }
@@ -480,8 +480,8 @@ function ProductAttrsSettingsTab() {
       await api.delete(`/settings/product-attrs/${id}`);
       mutate();
       toast.success("Удалено");
-    } catch {
-      toast.error("Ошибка");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setDeletingId(null);
     }
@@ -555,8 +555,8 @@ function ShopNameSettings() {
       mutate();
       toast.success("Название магазина обновлено");
       setTimeout(() => window.location.reload(), 800);
-    } catch {
-      toast.error("Ошибка");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setSaving(false);
     }

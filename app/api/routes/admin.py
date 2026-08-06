@@ -1,3 +1,6 @@
+import asyncio
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -27,6 +30,8 @@ from app.services.shop_service import ShopService
 from app.services.product_attr_service import ProductAttrService
 from app.models.shop import AVAILABLE_COURIERS
 from app.utils.order_status import STATUS_LABELS
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -514,7 +519,9 @@ async def preview_catalog_import(
 
     file_bytes = await _read_upload_with_limit(file, MAX_IMPORT_FILE_SIZE)
 
-    preview = CatalogImportService.parse_marketplace_file(file_bytes, source)
+    preview = await asyncio.to_thread(
+        CatalogImportService.parse_marketplace_file, file_bytes, source
+    )
     return preview
 
 
@@ -774,7 +781,14 @@ async def update_shop_name(body: UpdateShopNameBody, admin: dict = Depends(requi
     name = body.name.strip()
     if not name or len(name) > 100:
         raise HTTPException(status_code=400, detail="Название должно содержать от 1 до 100 символов")
-    await ShopService.update(admin["shop_id"], name=name)
+    result = await ShopService.update(admin["shop_id"], name=name)
+    if result is None:
+        logger.warning("Shop not found for update: shop_id=%s", admin["shop_id"])
+        raise HTTPException(status_code=404, detail="Магазин не найден")
+    logger.info(
+        "Shop name updated: shop_id=%s, new_name=%r",
+        admin["shop_id"], result["name"],
+    )
     return {"ok": True}
 
 

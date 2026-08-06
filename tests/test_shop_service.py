@@ -1,5 +1,7 @@
 import pytest
+from httpx import ASGITransport, AsyncClient
 
+from app.api.main import create_app
 from app.services.shop_service import ShopService
 
 
@@ -183,3 +185,93 @@ class TestShopService:
                 bot_token="test:token",
                 owner_telegram_id=123,
             )
+
+
+class TestShopNameEndpoint:
+    """Endpoint-тесты для PUT /api/admin/settings/shop."""
+
+    async def test_get_shop_name(
+        self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription
+    ):
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/admin/settings/shop", cookies=admin_cookie)
+
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "Test Shop"
+
+    async def test_update_shop_name(
+        self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription
+    ):
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.put(
+                "/api/admin/settings/shop",
+                cookies=admin_cookie,
+                json={"name": "Новое название"},
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+        shop = await ShopService.get(1)
+        assert shop["name"] == "Новое название"
+
+    async def test_update_shop_name_persists_after_refetch(
+        self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription
+    ):
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            put_resp = await client.put(
+                "/api/admin/settings/shop",
+                cookies=admin_cookie,
+                json={"name": "Обновлённый магазин"},
+            )
+            assert put_resp.status_code == 200
+
+            get_resp = await client.get("/api/admin/settings/shop", cookies=admin_cookie)
+
+        assert get_resp.status_code == 200
+        assert get_resp.json()["name"] == "Обновлённый магазин"
+
+    async def test_update_shop_name_empty_rejected(
+        self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription
+    ):
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.put(
+                "/api/admin/settings/shop",
+                cookies=admin_cookie,
+                json={"name": "   "},
+            )
+
+        assert resp.status_code == 400
+
+    async def test_update_shop_name_too_long_rejected(
+        self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription
+    ):
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.put(
+                "/api/admin/settings/shop",
+                cookies=admin_cookie,
+                json={"name": "А" * 101},
+            )
+
+        assert resp.status_code == 400
+
+    async def test_update_shop_name_requires_auth(self, db_session, seed_data):
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.put(
+                "/api/admin/settings/shop",
+                json={"name": "Хакер"},
+            )
+
+        assert resp.status_code == 401

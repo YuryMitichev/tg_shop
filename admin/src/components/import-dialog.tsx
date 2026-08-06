@@ -45,6 +45,7 @@ interface PreviewResponse {
   recognized_rows: number;
   rows: ImportRow[];
   unmapped_columns: string[];
+  truncated?: boolean;
 }
 
 interface ConfirmResponse {
@@ -93,6 +94,7 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
       const data = await api.post<PreviewResponse>(
         `/catalog/import/preview?source=${source}`,
         formData,
+        120000,
       );
       setPreview(data);
       const initSelected = new Set<number>();
@@ -215,6 +217,11 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
               <span className="text-sm text-muted-foreground">
                 Распознано: {preview.recognized_rows} из {preview.total_rows}
               </span>
+              {preview.truncated && (
+                <Badge variant="outline" className="text-amber-600">
+                  Показаны первые {preview.rows.length} строк
+                </Badge>
+              )}
             </div>
 
             <div className="max-h-[300px] overflow-auto rounded-md border">

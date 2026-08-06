@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { fetcher } from "@/lib/swr";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -29,19 +29,26 @@ export default function CategoriesPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("");
-
-  function openCreate() {
-    setEditId(null);
-    setName("");
-    setEmoji("");
-    setDialogOpen(true);
-  }
+  const editModeRef = useRef(false);
 
   function openEdit(cat: Category) {
+    editModeRef.current = true;
     setEditId(cat.id);
     setName(cat.name);
     setEmoji(cat.emoji || "");
     setDialogOpen(true);
+  }
+
+  function handleOpenChange(open: boolean) {
+    setDialogOpen(open);
+    if (open && !editModeRef.current) {
+      setEditId(null);
+      setName("");
+      setEmoji("");
+    }
+    if (!open) {
+      editModeRef.current = false;
+    }
   }
 
   async function handleSave() {
@@ -66,8 +73,8 @@ export default function CategoriesPage() {
       }
       mutate();
       setDialogOpen(false);
-    } catch {
-      toast.error("Ошибка");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка");
     }
   }
 
@@ -80,8 +87,8 @@ export default function CategoriesPage() {
       }
       mutate();
       toast.success("Категория удалена");
-    } catch {
-      toast.error("Ошибка");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка");
     }
   }
 
@@ -89,8 +96,8 @@ export default function CategoriesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Категории</h1>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger render={<Button onClick={openCreate} />}>
+        <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+          <DialogTrigger render={<Button />}>
             <Plus className="mr-2 h-4 w-4" />
             Добавить
           </DialogTrigger>

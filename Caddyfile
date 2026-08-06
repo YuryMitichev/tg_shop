@@ -1,5 +1,9 @@
 {$DOMAIN}, www.{$DOMAIN} {
 	reverse_proxy bot:8000
+	handle_errors 502 503 504 {
+		header Access-Control-Allow-Origin "*"
+		respond "Сервер недоступен. Попробуйте позже." 502
+	}
 }
 
 admin.{$DOMAIN} {
