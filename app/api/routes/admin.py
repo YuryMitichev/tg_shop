@@ -445,9 +445,7 @@ async def _read_upload_with_limit(
 
 class ConfirmImportRow(BaseModel):
     name: str
-    price: int = 0
-    stock: int = 0
-    attributes: dict = {}
+    description: str = ""
 
 
 class ConfirmImportBody(BaseModel):

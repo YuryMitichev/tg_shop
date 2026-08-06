@@ -1,8 +1,8 @@
 """Импорт каталога из выгрузок маркетплейсов (Ozon / Wildberries / Яндекс.Маркет).
 
-Парсит .xlsx-файлы, сопоставляет колонки по alias + keyword-матчингу
-(шаблоны выгрузок периодически меняются, поэтому matcher резистентный),
-и создаёт товары + варианты в БД.
+Парсит .xlsx-файлы и извлекает только название и описание товара.
+Цену, остаток, характеристики и фото пользователь добавляет вручную
+после импорта.
 """
 from io import BytesIO
 from typing import Any, Literal
@@ -20,38 +20,28 @@ MarketplaceSource = Literal["ozon", "wb", "ym"]
 DEFAULT_CATEGORY_NAME = "Импортировано"
 
 # Точные alias'ы названий колонок для каждого источника.
-# Список неполный — дополняется keyword-матчингом ниже.
 _COLUMN_ALIASES: dict[str, dict[str, list[str]]] = {
     "ozon": {
         "name": ["Название товара", "Название", "Product name", "Наименование"],
-        "price": ["Цена, руб.", "Цена", "Цена с учетом скидок и промокодов, руб.", "Цена до скидок, руб."],
-        "stock": ["Остаток на складе", "Доступно к продаже", "Остатки", "Свободные остатки"],
-        "sku": ["Артикул", "Артикул Ozon", "SKU"],
+        "description": ["Описание", "Description", "Описание товара"],
     },
     "wb": {
         "name": ["Наименование", "Название", "Коммерческое наименование"],
-        "price": ["Цена продавца", "Розничная цена", "Цена", "price"],
-        "stock": ["Количество", "Остаток", "Кол-во", "К свободной продаже"],
-        "sku": ["Артикул продавца", "Артикул цвета", "Артикул", "Баркод"],
+        "description": ["Описание", "Описание товара", "Composition", "Состав"],
     },
     "ym": {
         "name": ["Название", "Наименование товара", "name", "Название товара"],
-        "price": ["Цена", "price", "Текущая цена"],
-        "stock": ["Остатки", "Количество на складе", "stock", "Кол-во"],
-        "sku": ["Артикул", "SKU", "shopSku"],
+        "description": ["Описание", "Описание товара", "description"],
     },
 }
 
 # Keyword-матчинг: если точный alias не найден, ищем подстроку (case-insensitive).
-# Порядок важен — "артикул" проверяется до "назв" и т.д.
 _COLUMN_KEYWORDS: dict[str, list[str]] = {
-    "name": ["назван", "наименован", "product name"],
-    "price": ["цен", "price"],
-    "stock": ["остат", "количеств", "stock", "кол-во", "склад"],
-    "sku": ["артикул", "sku", "баркод"],
+    "name": ["назван", "наименован", "product name", "коммерческое наименован"],
+    "description": ["описан", "description"],
 }
 
-_ALL_FIELDS = list(_COLUMN_ALIASES["ozon"].keys())
+_MATCHED_FIELDS = list(_COLUMN_KEYWORDS.keys())
 
 # Сколько первых строк проверять в поисках строки заголовков.
 # Выгрузки WB имеют двухуровневый заголовок (группы колонок → имена полей),
@@ -60,14 +50,14 @@ HEADER_SCAN_ROWS = 5
 
 
 def _match_column(header: str, source: MarketplaceSource) -> str | None:
-    """Сопоставляет заголовок колонки с полем (name/price/stock/sku).
+    """Сопоставляет заголовок колонки с полем (name/description).
 
     Сначала точное совпадение по alias, потом keyword-подстрока.
     Возвращает имя поля или None.
     """
     header_norm = header.strip().lower()
 
-    for field in _ALL_FIELDS:
+    for field in _MATCHED_FIELDS:
         for alias in _COLUMN_ALIASES[source].get(field, []):
             if header.strip() == alias:
                 return field
@@ -80,32 +70,6 @@ def _match_column(header: str, source: MarketplaceSource) -> str | None:
     return None
 
 
-def _parse_price(value: Any) -> int | None:
-    """Парсит цену из ячейки — может быть int, float или строкой '1500.00'."""
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return int(round(float(value)))
-    s = str(value).strip().replace(" ", "").replace("\xa0", "").replace("₽", "")
-    s = s.replace("руб.", "").replace(",", ".")
-    try:
-        return int(round(float(s)))
-    except (ValueError, TypeError):
-        return None
-
-
-def _parse_stock(value: Any) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return int(value)
-    s = str(value).strip().replace(" ", "").replace("\xa0", "")
-    try:
-        return int(float(s))
-    except (ValueError, TypeError):
-        return None
-
-
 class CatalogImportService:
     """Парсинг и импорт каталога из выгрузок маркетплейсов."""
 
@@ -113,19 +77,17 @@ class CatalogImportService:
     def parse_marketplace_file(file_bytes: bytes, source: MarketplaceSource) -> dict:
         """Парсит .xlsx файл и возвращает превью без записи в БД.
 
+        Извлекает только название и описание.
+        Строка считается распознанной, если найдено название.
+
         Возвращает dict:
             source, total_rows, recognized_rows,
-            rows: [{row_number, name, price, stock, category_guess, warnings, recognized}],
+            rows: [{row_number, name, description, recognized}],
             unmapped_columns: [str]
         """
         wb = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
         ws = wb.active
 
-        # Выгрузки маркетплейсов (особенно Wildberries) могут иметь
-        # многоуровневые заголовки: первая строка — названия групп колонок
-        # («Основная информация», «Габариты» …), вторая — реальные имена полей.
-        # Сканируем первые несколько строк и выбираем ту, где больше всего
-        # сопоставленных полей — это и есть строка заголовков.
         candidate_rows = list(
             ws.iter_rows(min_row=1, max_row=HEADER_SCAN_ROWS, values_only=True)
         )
@@ -163,16 +125,8 @@ class CatalogImportService:
 
         header_row_num = best_header_idx + 1  # 1-based
 
-        unmapped_columns: list[str] = []
-        for header in raw_headers:
-            if not header:
-                continue
-            if not _match_column(header, source):
-                unmapped_columns.append(header)
-
         name_idx = column_map.get("name")
-        price_idx = column_map.get("price")
-        stock_idx = column_map.get("stock")
+        desc_idx = column_map.get("description")
 
         rows: list[dict] = []
 
@@ -184,28 +138,17 @@ class CatalogImportService:
                 continue
 
             name = str(row[name_idx]).strip() if name_idx is not None and name_idx < len(row) and row[name_idx] else ""
-            price = _parse_price(row[price_idx]) if price_idx is not None and price_idx < len(row) else None
-            stock = _parse_stock(row[stock_idx]) if stock_idx is not None and stock_idx < len(row) else None
 
-            warnings: list[str] = []
-            recognized = True
+            description = ""
+            if desc_idx is not None and desc_idx < len(row) and row[desc_idx]:
+                description = str(row[desc_idx]).strip()
 
-            if not name:
-                recognized = False
-                warnings.append("Не распознано название товара")
-            if price is None:
-                warnings.append("Не распознана цена")
-                recognized = False
-            if stock is None:
-                warnings.append("Не распознан остаток")
+            recognized = bool(name)
 
             rows.append({
                 "row_number": row_num,
                 "name": name,
-                "price": price,
-                "stock": stock,
-                "category_guess": DEFAULT_CATEGORY_NAME,
-                "warnings": warnings,
+                "description": description,
                 "recognized": recognized,
             })
 
@@ -218,7 +161,7 @@ class CatalogImportService:
             "total_rows": len(rows),
             "recognized_rows": recognized_count,
             "rows": rows,
-            "unmapped_columns": unmapped_columns,
+            "unmapped_columns": [],
         }
 
     @staticmethod
@@ -227,7 +170,10 @@ class CatalogImportService:
         rows: list[dict],
         category_id: int | None = None,
     ) -> dict:
-        """Создаёт Product + ProductVariant для каждой подтверждённой строки.
+        """Создаёт Product + плейсхолдер ProductVariant для каждой строки.
+
+        Товары создаются скрытыми (is_active=False) — пользователь
+        заполнит цену, характеристики и фото вручную перед публикацией.
 
         Если category_id не указан — создаёт (или находит) категорию
         с именем «Импортировано».
@@ -255,16 +201,16 @@ class CatalogImportService:
                     shop_id=shop_id,
                     category_id=category_id,
                     name=row["name"],
-                    description="",
-                    is_active=True,
+                    description=row.get("description") or "",
+                    is_active=False,
                 )
                 product.variants = [
                     ProductVariant(
                         shop_id=shop_id,
                         volume="Стандарт",
-                        price=row.get("price") or 0,
-                        stock=row.get("stock") or 0,
-                        attributes=row.get("attributes") or {},
+                        price=0,
+                        stock=0,
+                        attributes={},
                     )
                 ]
                 session.add(product)

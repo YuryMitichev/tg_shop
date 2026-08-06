@@ -28,46 +28,46 @@ def _make_xlsx(headers: list[str], rows: list[list]) -> bytes:
 
 
 # ==========================
-# Парсинг
+# Сопоставление колонок
 # ==========================
 
 class TestColumnMatching:
 
-    def test_match_ozon_columns(self):
+    def test_match_name_ozon(self):
         assert _match_column("Название товара", "ozon") == "name"
-        assert _match_column("Цена, руб.", "ozon") == "price"
-        assert _match_column("Остаток на складе", "ozon") == "stock"
-        assert _match_column("Артикул", "ozon") == "sku"
 
-    def test_match_wb_columns(self):
+    def test_match_name_wb(self):
         assert _match_column("Наименование", "wb") == "name"
-        assert _match_column("Цена продавца", "wb") == "price"
-        assert _match_column("Количество", "wb") == "stock"
-        assert _match_column("Артикул продавца", "wb") == "sku"
 
-    def test_match_ym_columns(self):
+    def test_match_name_ym(self):
         assert _match_column("Название", "ym") == "name"
-        assert _match_column("Цена", "ym") == "price"
-        assert _match_column("Остатки", "ym") == "stock"
 
-    def test_keyword_fuzzy_match(self):
+    def test_match_description(self):
+        assert _match_column("Описание", "ozon") == "description"
+        assert _match_column("Описание товара", "wb") == "description"
+
+    def test_keyword_fuzzy_match_name(self):
         assert _match_column("Полное название продукта", "ozon") == "name"
-        assert _match_column("Цена с учётом скидки", "wb") == "price"
-        assert _match_column("Доступный остаток", "ym") == "stock"
+        assert _match_column("Коммерческое наименование", "wb") == "name"
 
     def test_unrecognized_column_returns_none(self):
         assert _match_column("Вес брутто", "ozon") is None
         assert _match_column("Ссылка на фото", "wb") is None
+        assert _match_column("Цена продавца", "wb") is None
 
+
+# ==========================
+# Парсинг
+# ==========================
 
 class TestParseMarketplaceFile:
 
     def test_parse_ozon_file(self):
         data = _make_xlsx(
-            ["Название товара", "Цена, руб.", "Остаток на складе", "Артикул"],
+            ["Название товара", "Описание"],
             [
-                ["Свеча «Лаванда»", 450, 10, "SV-001"],
-                ["Свеча «Мята»", 550, 5, "SV-002"],
+                ["Свеча «Лаванда»", "Натуральная соевая свеча"],
+                ["Свеча «Мята»", "Свежий аромат"],
             ],
         )
 
@@ -77,17 +77,14 @@ class TestParseMarketplaceFile:
         assert result["total_rows"] == 2
         assert result["recognized_rows"] == 2
         assert result["rows"][0]["name"] == "Свеча «Лаванда»"
-        assert result["rows"][0]["price"] == 450
-        assert result["rows"][0]["stock"] == 10
+        assert result["rows"][0]["description"] == "Натуральная соевая свеча"
         assert result["rows"][0]["recognized"] is True
-        assert result["rows"][0]["warnings"] == []
-        assert result["unmapped_columns"] == []
 
     def test_parse_wb_file(self):
         data = _make_xlsx(
-            ["Наименование", "Цена продавца", "Количество"],
+            ["Наименование", "Описание"],
             [
-                ["Диффузор «Цитрус»", 1290, 3],
+                ["Диффузор «Цитрус»", "Цитрусовый аромат"],
             ],
         )
 
@@ -95,22 +92,18 @@ class TestParseMarketplaceFile:
 
         assert result["recognized_rows"] == 1
         assert result["rows"][0]["name"] == "Диффузор «Цитрус»"
-        assert result["rows"][0]["price"] == 1290
-        assert result["rows"][0]["stock"] == 3
+        assert result["rows"][0]["description"] == "Цитрусовый аромат"
 
     def test_parse_wb_multirow_header(self):
-        """Выгрузка WB: первая строка — названия групп колонок (объединённые
-        ячейки дают None в продолжениях), вторая — реальные имена полей.
+        """Выгрузка WB: первая строка — названия групп колонок,
+        вторая — реальные имена полей.
         Парсер должен найти строку заголовков и распознать данные."""
         wb = Workbook()
         ws = wb.active
-        # Row 1 — группы (как из объединённых ячеек: значение только в первой)
-        ws.append(["Основная информация", None, None, "Габариты", "Дополнительная информация"])
-        # Row 2 — реальные заголовки
-        ws.append(["Наименование", "Цена продавца", "Количество", "Вес брутто", "Ссылка на фото"])
-        # Row 3+ — данные
-        ws.append(["Свеча «Лаванда»", 450, 10, 0.5, "https://..."])
-        ws.append(["Диффузор «Цитрус»", 1290, 3, 0.3, "https://..."])
+        ws.append(["Основная информация", None, "Габариты", "Дополнительная информация"])
+        ws.append(["Наименование", "Описание", "Вес брутто", "Ссылка на фото"])
+        ws.append(["Свеча «Лаванда»", "Лавандовый аромат", 0.5, "https://..."])
+        ws.append(["Диффузор «Цитрус»", "Цитрусовый аромат", 0.3, "https://..."])
         buf = BytesIO()
         wb.save(buf)
         data = buf.getvalue()
@@ -120,87 +113,57 @@ class TestParseMarketplaceFile:
         assert result["recognized_rows"] == 2
         assert result["total_rows"] == 2
         assert result["rows"][0]["name"] == "Свеча «Лаванда»"
-        assert result["rows"][0]["price"] == 450
-        assert result["rows"][0]["stock"] == 10
+        assert result["rows"][0]["description"] == "Лавандовый аромат"
         assert result["rows"][1]["name"] == "Диффузор «Цитрус»"
-        assert result["rows"][1]["price"] == 1290
-        assert result["rows"][1]["stock"] == 3
-        # Группы колонок из строки 1 не должны попадать в unmapped
-        assert "Основная информация" not in result["unmapped_columns"]
-        # А нераспознанные поля из строки-заголовка — должны
-        assert "Вес брутто" in result["unmapped_columns"]
-        assert "Ссылка на фото" in result["unmapped_columns"]
+        assert result["rows"][1]["description"] == "Цитрусовый аромат"
 
     def test_parse_ym_file(self):
         data = _make_xlsx(
-            ["Название", "Цена", "Остатки"],
+            ["Название", "Описание"],
             [
-                ["Набор свечей", 990, 7],
+                ["Набор свечей", "Подарочный набор"],
             ],
         )
 
         result = CatalogImportService.parse_marketplace_file(data, "ym")
 
         assert result["rows"][0]["name"] == "Набор свечей"
-        assert result["rows"][0]["price"] == 990
-        assert result["rows"][0]["stock"] == 7
+        assert result["rows"][0]["description"] == "Подарочный набор"
 
-    def test_price_as_float_string(self):
+    def test_parse_without_description_column(self):
+        """Если нет колонки описания — description пустой, строка всё равно распознана."""
         data = _make_xlsx(
-            ["Название", "Цена", "Остатки"],
-            [["Товар", "1500.00", "2"]],
+            ["Название товара", "Вес брутто"],
+            [["Товар", 0.5]],
         )
 
-        result = CatalogImportService.parse_marketplace_file(data, "ym")
+        result = CatalogImportService.parse_marketplace_file(data, "ozon")
 
-        assert result["rows"][0]["price"] == 1500
-        assert result["rows"][0]["stock"] == 2
-
-    def test_unmapped_columns_collected(self):
-        data = _make_xlsx(
-            ["Название", "Цена", "Остатки", "Вес брутто", "Ссылка на фото"],
-            [["Товар", 100, 1, 0.5, "https://..."]],
-        )
-
-        result = CatalogImportService.parse_marketplace_file(data, "ym")
-
-        assert "Вес брутто" in result["unmapped_columns"]
-        assert "Ссылка на фото" in result["unmapped_columns"]
+        assert result["rows"][0]["name"] == "Товар"
+        assert result["rows"][0]["description"] == ""
         assert result["rows"][0]["recognized"] is True
 
     def test_unrecognized_row_when_name_missing(self):
         data = _make_xlsx(
-            ["Название", "Цена", "Остатки"],
+            ["Название", "Описание"],
             [
-                [None, 100, 5],
-                ["Нормальный товар", 200, 3],
+                [None, "Описание без названия"],
+                ["Нормальный товар", "Описание"],
             ],
         )
 
         result = CatalogImportService.parse_marketplace_file(data, "ym")
 
         assert result["rows"][0]["recognized"] is False
-        assert "Не распознано название товара" in result["rows"][0]["warnings"]
         assert result["rows"][1]["recognized"] is True
-
-    def test_warning_when_stock_missing(self):
-        data = _make_xlsx(
-            ["Название", "Цена", "Остатки"],
-            [["Товар", 100, None]],
-        )
-
-        result = CatalogImportService.parse_marketplace_file(data, "ym")
-
-        assert result["rows"][0]["recognized"] is True
-        assert "Не распознан остаток" in result["rows"][0]["warnings"]
 
     def test_skips_empty_rows(self):
         data = _make_xlsx(
-            ["Название", "Цена", "Остатки"],
+            ["Название", "Описание"],
             [
-                ["Товар 1", 100, 1],
-                [None, None, None],
-                ["Товар 2", 200, 2],
+                ["Товар 1", "Описание 1"],
+                [None, None],
+                ["Товар 2", "Описание 2"],
             ],
         )
 
@@ -215,10 +178,10 @@ class TestParseMarketplaceFile:
 
 class TestImportRows:
 
-    async def test_import_creates_products_and_variants(self, db_session, seed_data):
+    async def test_import_creates_products(self, db_session, seed_data):
         rows = [
-            {"name": "Свеча", "price": 450, "stock": 10},
-            {"name": "Диффузор", "price": 1290, "stock": 3},
+            {"name": "Свеча", "description": "Лаванда"},
+            {"name": "Диффузор", "description": "Цитрус"},
         ]
 
         result = await CatalogImportService.import_rows(shop_id=1, rows=rows)
@@ -227,7 +190,6 @@ class TestImportRows:
 
         from app.models.category import Category
         from app.models.product import Product
-        from app.models.product_variant import ProductVariant
         from sqlalchemy import select
 
         async with db_session() as session:
@@ -242,17 +204,11 @@ class TestImportRows:
             prods = products.scalars().all()
             assert len(prods) >= 2
             assert prods[0].name == "Диффузор"
-            assert prods[1].name == "Свеча"
-
-            variants = await session.execute(
-                select(ProductVariant).where(ProductVariant.shop_id == 1)
-            )
-            vars = variants.scalars().all()
-            assert any(v.price == 450 and v.stock == 10 for v in vars)
-            assert any(v.price == 1290 and v.stock == 3 for v in vars)
+            assert prods[0].description == "Цитрус"
+            assert prods[0].is_active is False
 
     async def test_import_uses_existing_category(self, db_session, seed_data):
-        rows = [{"name": "Товар", "price": 100, "stock": 1}]
+        rows = [{"name": "Товар", "description": "Описание"}]
 
         result = await CatalogImportService.import_rows(
             shop_id=1, rows=rows, category_id=1
@@ -270,8 +226,8 @@ class TestImportEndpoints:
 
     async def test_preview_endpoint(self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription):
         file_bytes = _make_xlsx(
-            ["Название", "Цена", "Остатки"],
-            [["Тестовый товар", 500, 5]],
+            ["Название", "Описание"],
+            [["Тестовый товар", "Описание товара"]],
         )
 
         app = create_app()
@@ -287,7 +243,7 @@ class TestImportEndpoints:
         data = resp.json()
         assert data["total_rows"] == 1
         assert data["rows"][0]["name"] == "Тестовый товар"
-        assert data["rows"][0]["price"] == 500
+        assert data["rows"][0]["description"] == "Описание товара"
 
     async def test_preview_invalid_source(self, db_session, seed_data, admin_cookie, mock_admin_auth, active_subscription):
         app = create_app()
@@ -325,8 +281,8 @@ class TestImportEndpoints:
                 "/api/admin/catalog/import/confirm",
                 json={
                     "rows": [
-                        {"name": "Импорт-1", "price": 300, "stock": 2},
-                        {"name": "Импорт-2", "price": 600, "stock": 4},
+                        {"name": "Импорт-1", "description": ""},
+                        {"name": "Импорт-2", "description": "Описание"},
                     ],
                 },
                 cookies=admin_cookie,

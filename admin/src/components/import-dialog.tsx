@@ -34,9 +34,7 @@ import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2 } from "l
 interface ImportRow {
   row_number: number;
   name: string;
-  price: number | null;
-  stock: number | null;
-  warnings: string[];
+  description: string;
   recognized: boolean;
 }
 
@@ -66,7 +64,7 @@ interface ImportDialogProps {
 }
 
 export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogProps) {
-  const [source, setSource] = useState("ozon");
+  const [source, setSource] = useState("wb");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -118,14 +116,13 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
       .filter((r) => selected.has(r.row_number))
       .map((r) => ({
         name: r.name,
-        price: r.price ?? 0,
-        stock: r.stock ?? 0,
+        description: r.description,
       }));
 
     setImporting(true);
     try {
       const result = await api.post<ConfirmResponse>("/catalog/import/confirm", { rows });
-      toast.success(`Импортировано товаров: ${result.created}`);
+      toast.success(`Импортировано товаров: ${result.created}. Заполните цену и характеристики перед публикацией.`);
       onImported();
       reset();
       onOpenChange(false);
@@ -166,10 +163,11 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            Импорт каталога
+            Импорт товаров
           </DialogTitle>
           <DialogDescription>
-            Загрузите выгрузку товаров из маркетплейса (.xlsx)
+            Загрузите выгрузку из маркетплейса (.xlsx). Будут импортированы только названия и описания.
+            Цену, характеристики и фото нужно будет заполнить вручную.
           </DialogDescription>
         </DialogHeader>
 
@@ -177,7 +175,7 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Маркетплейс</Label>
-              <Select value={source} onValueChange={(v) => setSource(v || "ozon")}>
+              <Select value={source} onValueChange={(v) => setSource(v || "wb")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -213,13 +211,8 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
                 {SOURCE_LABELS[preview.source] ?? preview.source}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                Всего строк: {preview.total_rows}, распознано: {preview.recognized_rows}
+                Распознано: {preview.recognized_rows} из {preview.total_rows}
               </span>
-              {preview.unmapped_columns.length > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  Нераспознанные колонки: {preview.unmapped_columns.join(", ")}
-                </span>
-              )}
             </div>
 
             <div className="max-h-[300px] overflow-auto rounded-md border">
@@ -237,11 +230,9 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
                         className="h-4 w-4"
                       />
                     </TableHead>
-                    <TableHead className="w-8">№</TableHead>
                     <TableHead>Название</TableHead>
-                    <TableHead className="text-right">Цена</TableHead>
-                    <TableHead className="text-right">Остаток</TableHead>
-                    <TableHead>Статус</TableHead>
+                    <TableHead className="max-w-[200px]">Описание</TableHead>
+                    <TableHead className="w-8"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -256,14 +247,12 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
                           className="h-4 w-4"
                         />
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {row.row_number - 1}
-                      </TableCell>
                       <TableCell className="max-w-[200px] truncate" title={row.name}>
                         {row.name || "—"}
                       </TableCell>
-                      <TableCell className="text-right">{row.price ?? "—"}</TableCell>
-                      <TableCell className="text-right">{row.stock ?? "—"}</TableCell>
+                      <TableCell className="max-w-[200px] truncate text-muted-foreground" title={row.description}>
+                        {row.description || "—"}
+                      </TableCell>
                       <TableCell>
                         {row.recognized ? (
                           <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -317,7 +306,7 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
                 ) : (
                   <>
                     <Upload className="mr-2 h-4 w-4" />
-                    Загрузить превью
+                    Загрузить
                   </>
                 )}
               </Button>
