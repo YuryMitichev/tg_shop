@@ -453,16 +453,12 @@ async def _show_subscription_for_shop(message: Message | CallbackQuery, shop: di
         else:
             text += f"🔸 <b>{plan['name']}</b> — {int(plan['price']):,} ₽\n\n"
 
-        if settings.yookassa_enabled:
-            kb_rows.append([
-                InlineKeyboardButton(
-                    text=f"💳 {plan['name']} — {int(plan['price']):,} ₽".replace(",", " "),
-                    callback_data=f"pay:{shop_id}:{plan['id']}",
-                )
-            ])
-
-    if not settings.yookassa_enabled:
-        text += "⚠️ Оплата временно недоступна. Обратитесь к администратору."
+        kb_rows.append([
+            InlineKeyboardButton(
+                text=f"💳 {plan['name']} — {int(plan['price']):,} ₽".replace(",", " "),
+                callback_data=f"pay:{shop_id}:{plan['id']}",
+            )
+        ])
 
     kb = InlineKeyboardMarkup(inline_keyboard=kb_rows) if kb_rows else None
 
@@ -477,7 +473,7 @@ async def on_pay(callback: CallbackQuery) -> None:
     plan_id = int(plan_id_str)
 
     if not settings.yookassa_enabled:
-        await callback.answer("Оплата не настроена", show_alert=True)
+        await callback.answer("Оплата скоро будет доступна", show_alert=True)
         return
 
     await callback.answer("Создаю платёж...")
