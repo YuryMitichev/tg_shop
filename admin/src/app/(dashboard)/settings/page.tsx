@@ -19,8 +19,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { RotateCcw, Save } from "lucide-react";
-import type { SystemMessage, DeliverySettings, ProductAttrsSettings, ProductAttrDef, CompanyInfo, ShopInfo } from "@/lib/types";
+import { RotateCcw, Save, FileText } from "lucide-react";
+import type { SystemMessage, DeliverySettings, ProductAttrsSettings, ProductAttrDef, CompanyInfo, LegalDocs, ShopInfo } from "@/lib/types";
 
 export default function SettingsPage() {
   const { data: messages, isLoading, mutate } = useSWR<SystemMessage[]>("/settings/messages", fetcher);
@@ -82,6 +82,7 @@ export default function SettingsPage() {
           <TabsTrigger value="attrs">Характеристики</TabsTrigger>
           <TabsTrigger value="company">Реквизиты</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
+          <TabsTrigger value="legal">Документы</TabsTrigger>
         </TabsList>
 
         <TabsContent value="shop">
@@ -163,6 +164,10 @@ export default function SettingsPage() {
 
         <TabsContent value="payment">
           <PaymentSettings />
+        </TabsContent>
+
+        <TabsContent value="legal">
+          <LegalDocsSettings />
         </TabsContent>
       </Tabs>
     </div>
@@ -672,5 +677,110 @@ function CompanyInfoSettings() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function LegalDocsSettings() {
+  const { data, isLoading, mutate } = useSWR<LegalDocs>("/settings/legal", fetcher);
+
+  const [offerText, setOfferText] = useState("");
+  const [privacyText, setPrivacyText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setOfferText(data.offer_text || "");
+      setPrivacyText(data.privacy_policy_text || "");
+    }
+  }, [data]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.put("/settings/legal", {
+        offer_text: offerText || null,
+        privacy_policy_text: privacyText || null,
+      });
+      mutate();
+      toast.success("Сохранено");
+    } catch {
+      toast.error("Ошибка");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      const template = await api.post<LegalDocs>("/settings/legal/generate", {});
+      setOfferText(template.offer_text || "");
+      setPrivacyText(template.privacy_policy_text || "");
+      toast.success("Шаблон сгенерирован");
+    } catch {
+      toast.error("Ошибка генерации");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Юридические документы</CardTitle>
+          <CardDescription>
+            Оферта и политика конфиденциальности магазина. Покупатель должен принять
+            оферту перед первым заказом. Текст подставляется из реквизитов
+            (вкладка «Реквизиты»).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex justify-start">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              <FileText className="mr-2 h-3 w-3" />
+              {generating ? "Генерация..." : "Сгенерировать шаблон"}
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Публичная оферта</Label>
+            <Textarea
+              value={offerText}
+              onChange={(e) => setOfferText(e.target.value)}
+              rows={10}
+              className="font-mono text-sm"
+              placeholder="Текст оферты..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Политика конфиденциальности</Label>
+            <Textarea
+              value={privacyText}
+              onChange={(e) => setPrivacyText(e.target.value)}
+              rows={10}
+              className="font-mono text-sm"
+              placeholder="Текст политики конфиденциальности..."
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="mr-2 h-4 w-4" />
+              Сохранить
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

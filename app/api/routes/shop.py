@@ -386,3 +386,21 @@ async def get_order_detail(order_id: int, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Order not found")
 
     return order
+
+
+@router.get("/legal/{shop_id}/offer")
+async def get_public_offer(shop_id: int):
+    """Публичная оферта магазина — доступна без авторизации."""
+    shop = await ShopService.get(shop_id)
+    if shop is None or not shop.get("offer_text"):
+        raise HTTPException(status_code=404, detail="Оферта не найдена")
+    return {"text": shop["offer_text"]}
+
+
+@router.get("/legal/{shop_id}/privacy")
+async def get_public_privacy(shop_id: int):
+    """Политика конфиденциальности магазина — доступна без авторизации."""
+    shop = await ShopService.get(shop_id)
+    if shop is None or not shop.get("privacy_policy_text"):
+        raise HTTPException(status_code=404, detail="Политика не найдена")
+    return {"text": shop["privacy_policy_text"]}

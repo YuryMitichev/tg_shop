@@ -138,6 +138,11 @@ class UpdatePaymentSettingsBody(BaseModel):
     manual_payment_enabled: bool | None = None
 
 
+class UpdateLegalDocsBody(BaseModel):
+    offer_text: str | None = None
+    privacy_policy_text: str | None = None
+
+
 class CreateAdminBody(BaseModel):
     telegram_user_id: int
     display_name: str | None = None
@@ -828,6 +833,46 @@ async def update_shop_payment_settings(
     if result is None:
         raise HTTPException(status_code=404, detail="Shop not found")
     return {"ok": True}
+
+
+# ==========================
+# Настройки (юридические документы магазина)
+# ==========================
+
+@router.get("/settings/legal")
+async def get_legal_docs(admin: dict = Depends(require_active_subscription)):
+    shop = await ShopService.get(admin["shop_id"])
+    if shop is None:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return {
+        "offer_text": shop.get("offer_text"),
+        "privacy_policy_text": shop.get("privacy_policy_text"),
+    }
+
+
+@router.put("/settings/legal")
+async def update_legal_docs(
+    body: UpdateLegalDocsBody,
+    admin: dict = Depends(require_active_subscription),
+):
+    result = await ShopService.update_legal_docs(
+        admin["shop_id"],
+        offer_text=body.offer_text,
+        privacy_policy_text=body.privacy_policy_text,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    logger.info(
+        "Legal docs updated: shop_id=%s",
+        admin["shop_id"],
+    )
+    return {"ok": True}
+
+
+@router.post("/settings/legal/generate")
+async def generate_legal_template(admin: dict = Depends(require_active_subscription)):
+    template = await ShopService.generate_offer_template(admin["shop_id"])
+    return template
 
 
 # ==========================

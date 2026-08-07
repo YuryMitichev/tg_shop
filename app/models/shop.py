@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import sqlalchemy as sa
 from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -63,5 +64,9 @@ class Shop(Base):
     yookassa_enabled: Mapped[bool] = mapped_column(default=False)
 
     manual_payment_enabled: Mapped[bool] = mapped_column(default=True)
+
+    offer_text: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+
+    privacy_policy_text: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

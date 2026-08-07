@@ -18,6 +18,7 @@ from app.models.product_variant import ProductVariant
 from app.models.promo_code import PromoCode
 from app.models.review import Review
 from app.models.shop import Shop
+from app.models.shop_offer_acceptance import ShopOfferAcceptance
 from app.models.subscription import Subscription
 from app.models.system_message import SystemMessage
 from app.models.user_offer import UserOffer
@@ -52,6 +53,8 @@ def _shop_to_dict(shop: Shop) -> dict:
         "yookassa_secret_key_masked": _mask_secret_key(decrypt(shop.yookassa_secret_key) if shop.yookassa_secret_key else None),
         "yookassa_enabled": shop.yookassa_enabled,
         "manual_payment_enabled": shop.manual_payment_enabled,
+        "offer_text": shop.offer_text,
+        "privacy_policy_text": shop.privacy_policy_text,
         "created_at": shop.created_at.isoformat() if shop.created_at else None,
     }
 
@@ -238,6 +241,9 @@ class ShopService:
             await session.execute(
                 delete(Category).where(Category.shop_id == shop_id)
             )
+            await session.execute(
+                delete(ShopOfferAcceptance).where(ShopOfferAcceptance.shop_id == shop_id)
+            )
 
             await session.delete(shop)
             await session.commit()
@@ -362,3 +368,125 @@ class ShopService:
                 return None
 
             return (shop.yookassa_shop_id, secret)
+
+    @staticmethod
+    async def update_legal_docs(
+        shop_id: int,
+        offer_text: str | None,
+        privacy_policy_text: str | None,
+    ) -> dict | None:
+        """Обновляет текст оферты и политики конфиденциальности магазина."""
+        async with async_session() as session:
+            shop = await session.get(Shop, shop_id)
+            if shop is None:
+                return None
+
+            shop.offer_text = offer_text or None
+            shop.privacy_policy_text = privacy_policy_text or None
+
+            await session.commit()
+            await session.refresh(shop)
+
+            return _shop_to_dict(shop)
+
+    @staticmethod
+    async def generate_offer_template(shop_id: int) -> dict:
+        """Генерирует шаблон оферты и политики из реквизитов магазина."""
+        shop = await ShopService.get(shop_id)
+        if shop is None:
+            return {"offer_text": "", "privacy_policy_text": ""}
+
+        company_name = shop.get("company_name") or shop.get("name") or "Продавец"
+        company_inn = shop.get("company_inn") or "—"
+        company_address = shop.get("company_address") or "—"
+
+        offer_text = (
+            f"ПУБЛИЧНАЯ ОФЕРТА\n\n"
+            f"Настоящий документ является публичной офертой (предложением к заключению договора)\n"
+            f"в лице: {company_name}\n"
+            f"ИНН: {company_inn}\n"
+            f"Адрес: {company_address}\n\n"
+            f"1. ОБЩИЕ ПОЛОЖЕНИЯ\n"
+            f"1.1. Настоящая оферта адресована неопределённому кругу лиц и является публичным договором.\n"
+            f"1.2. Совершая заказ, покупатель полностью принимает условия настоящей оферты.\n\n"
+            f"2. ПРЕДМЕТ ДОГОВОРА\n"
+            f"2.1. Продавец обязуется передать покупателю выбранные товары,\n"
+            f"    а покупатель обязуется оплатить и принять товары.\n\n"
+            f"3. ЦЕНА И ОПЛАТА\n"
+            f"3.1. Цена товара указывается в каталоге на момент оформления заказа.\n"
+            f"3.2. Оплата производится способами, указанными при оформлении заказа.\n\n"
+            f"4. ДОСТАВКА\n"
+            f"4.1. Способы и сроки доставки указываются при оформлении заказа.\n\n"
+            f"5. ВОЗВРАТ И ОБМЕН\n"
+            f"5.1. Возврат и обмен осуществляются в соответствии с действующим законодательством.\n\n"
+            f"6. РЕКВИЗИТЫ ПРОДАВЦА\n"
+            f"Наименование: {company_name}\n"
+            f"ИНН: {company_inn}\n"
+            f"Адрес: {company_address}\n"
+        )
+
+        privacy_text = (
+            f"ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ\n\n"
+            f"Оператор персональных данных: {company_name}\n"
+            f"ИНН: {company_inn}\n"
+            f"Адрес: {company_address}\n\n"
+            f"1. ОБЩИЕ ПОЛОЖЕНИЯ\n"
+            f"1.1. Настоящая Политика определяет порядок обработки персональных данных\n"
+            f"    и меры по их защите.\n\n"
+            f"2. КАКИЕ ДАННЫЕ МЫ СОБИРАЕМ\n"
+            f"2.1. Имя, фамилия, номер телефона, имя пользователя в Telegram.\n"
+            f"2.2. Данные о заказах: состав, стоимость, адрес доставки.\n\n"
+            f"3. ЦЕЛИ ОБРАБОТКИ\n"
+            f"3.1. Обработка и исполнение заказов.\n"
+            f"3.2. Информирование о статусе заказа.\n\n"
+            f"4. ХРАНЕНИЕ И ЗАЩИТА\n"
+            f"4.1. Мы принимаем необходимые меры для защиты персональных данных\n"
+            f"    от несанкционированного доступа.\n\n"
+            f"5. КОНТАКТЫ\n"
+            f"По вопросам обработки персональных данных обращайтесь к оператору:\n"
+            f"{company_name}, ИНН {company_inn}, адрес: {company_address}\n"
+        )
+
+        return {"offer_text": offer_text, "privacy_policy_text": privacy_text}
+
+    @staticmethod
+    async def has_accepted_offer(shop_id: int, telegram_user_id: int) -> bool:
+        """Проверяет, принял ли покупатель оферту магазина."""
+        async with async_session() as session:
+            result = await session.execute(
+                select(ShopOfferAcceptance).where(
+                    ShopOfferAcceptance.shop_id == shop_id,
+                    ShopOfferAcceptance.telegram_user_id == telegram_user_id,
+                )
+            )
+            return result.scalar_one_or_none() is not None
+
+    @staticmethod
+    async def accept_offer(
+        shop_id: int,
+        telegram_user_id: int,
+        full_name: str | None = None,
+        username: str | None = None,
+    ) -> ShopOfferAcceptance:
+        """Записывает факт принятия оферты магазина покупателем."""
+        async with async_session() as session:
+            existing = await session.execute(
+                select(ShopOfferAcceptance).where(
+                    ShopOfferAcceptance.shop_id == shop_id,
+                    ShopOfferAcceptance.telegram_user_id == telegram_user_id,
+                )
+            )
+            record = existing.scalar_one_or_none()
+            if record:
+                return record
+
+            record = ShopOfferAcceptance(
+                shop_id=shop_id,
+                telegram_user_id=telegram_user_id,
+                full_name=full_name,
+                username=username,
+            )
+            session.add(record)
+            await session.commit()
+            await session.refresh(record)
+            return record

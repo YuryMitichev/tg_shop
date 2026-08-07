@@ -170,6 +170,11 @@ export interface CompanyInfo {
   company_address: string | null;
 }
 
+export interface LegalDocs {
+  offer_text: string | null;
+  privacy_policy_text: string | null;
+}
+
 export interface ShopInfo {
   name: string | null;
 }

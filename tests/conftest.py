@@ -50,6 +50,7 @@ from app.models import (  # noqa: F401 — импорт регистрирует
     Product,
     ProductAttributeDef,
     OfferAcceptance,
+    ShopOfferAcceptance,
     ProductPhoto,
     ProductVariant,
     Review,

@@ -98,7 +98,7 @@ class TestShopService:
             Category, Product, ProductVariant, ProductPhoto,
             Order, OrderItem, CartItem, Review, PromoCode,
             UserProfile, AdminUser, CommunicationLog, SystemMessage,
-            LoginToken, Broadcast, UserOffer,
+            LoginToken, Broadcast, UserOffer, ShopOfferAcceptance,
         )
         from app.models.subscription import Subscription, SubscriptionPlan
 
@@ -129,6 +129,7 @@ class TestShopService:
                 LoginToken(id=100, token="tok-2", shop_id=2, telegram_user_id=55, expires_at=now),
                 Broadcast(id=100, shop_id=2, product_id=100, product_name="P", original_price=10, discounted_price=5),
                 UserOffer(id=100, shop_id=2, telegram_user_id=55, product_id=100, discount_percent=10),
+                ShopOfferAcceptance(shop_id=2, telegram_user_id=55),
                 Subscription(shop_id=2, plan_id=10, status="active", started_at=now, expires_at=now),
             ])
             await session.commit()
@@ -142,7 +143,7 @@ class TestShopService:
                 Category, Product, ProductVariant, ProductPhoto,
                 Order, OrderItem, CartItem, Review, PromoCode,
                 UserProfile, AdminUser, CommunicationLog, SystemMessage,
-                LoginToken, Broadcast, UserOffer, Subscription,
+                LoginToken, Broadcast, UserOffer, ShopOfferAcceptance, Subscription,
             ]:
                 rows = (await session.execute(
                     select(model).where(model.shop_id == 2)

@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from app.bot.shop_context import get_shop_id
-from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, WebAppInfo
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 
@@ -9,10 +9,15 @@ from app.bot.utils.messages import show_screen, replace_with_text
 from app.core.config import settings
 from app.services.cart_service import CartService
 from app.services.message_service import MessageService
+from app.services.shop_service import ShopService
 
 
 def setup_router() -> Router:
     router = Router()
+
+    def _split_text(text: str, max_length: int = 4000) -> list[str]:
+        """Разбивает длинный текст на части для отправки в Telegram."""
+        return [text[i:i + max_length] for i in range(0, len(text), max_length)]
 
     async def _render_cart_text(items: list[dict]) -> str:
         if not items:
@@ -135,6 +140,27 @@ def setup_router() -> Router:
             await callback.answer()
             return
 
+        shop = await ShopService.get(shop_id)
+
+        if shop and shop.get("offer_text"):
+            accepted = await ShopService.has_accepted_offer(shop_id, callback.from_user.id)
+            if not accepted:
+                builder = InlineKeyboardBuilder()
+                builder.button(text="✅ Принять условия", callback_data="accept_shop_offer")
+                builder.button(text="📄 Читать оферту", callback_data="show_shop_offer")
+                builder.adjust(1)
+
+                await callback.message.edit_text(
+                    "📋 Перед оформлением заказа необходимо принять условия оферты магазина.",
+                    reply_markup=builder.as_markup(),
+                )
+                await callback.answer()
+                return
+
+        await _show_checkout_webapp(callback, shop_id)
+
+    async def _show_checkout_webapp(callback: CallbackQuery, shop_id: int):
+        """Показывает кнопку мини-приложения для оформления заказа."""
         if settings.webapp_enabled:
             webapp_url = f"{settings.webapp_url}?shop={shop_id}"
             builder = InlineKeyboardBuilder()
@@ -152,5 +178,55 @@ def setup_router() -> Router:
             )
 
         await callback.answer()
+
+    @router.callback_query(F.data == "show_shop_offer")
+    async def show_shop_offer(callback: CallbackQuery):
+        """Показывает текст оферты магазина."""
+        shop_id = get_shop_id()
+        shop = await ShopService.get(shop_id)
+        text = shop.get("offer_text", "") if shop else ""
+
+        if not text:
+            await callback.answer("Текст оферты недоступен", show_alert=True)
+            return
+
+        accepted = await ShopService.has_accepted_offer(shop_id, callback.from_user.id)
+
+        chunks = _split_text(text)
+        for chunk in chunks[:-1]:
+            await callback.message.answer(chunk)
+
+        last_chunk = chunks[-1]
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [] if accepted else [
+                    InlineKeyboardButton(text="✅ Принять условия", callback_data="accept_shop_offer"),
+                ],
+                [InlineKeyboardButton(text="⬅ Назад", callback_data="checkout")],
+            ]
+        )
+        if accepted:
+            last_chunk += "\n\n✅ <b>Вы уже приняли условия оферты.</b>"
+
+        await callback.message.answer(last_chunk, reply_markup=kb)
+        await callback.answer()
+
+    @router.callback_query(F.data == "accept_shop_offer")
+    async def accept_shop_offer(callback: CallbackQuery):
+        """Записывает принятие оферты магазина и показывает кнопку оформления."""
+        shop_id = get_shop_id()
+
+        await ShopService.accept_offer(
+            shop_id=shop_id,
+            telegram_user_id=callback.from_user.id,
+            full_name=callback.from_user.full_name,
+            username=callback.from_user.username,
+        )
+
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer("✅ <b>Условия оферты приняты.</b>")
+        await callback.answer("Оферта принята")
+
+        await _show_checkout_webapp(callback, shop_id)
 
     return router
