@@ -7,6 +7,10 @@ from app.models.product import Product
 from app.models.product_variant import ProductVariant
 from app.models.product_photo import ProductPhoto
 
+from io import BytesIO
+
+from openpyxl import Workbook, load_workbook
+
 
 def _category_to_dict(category: Category) -> dict:
     return {
@@ -450,3 +454,148 @@ class CatalogAdminService:
                 }
                 for p in products
             ]
+
+    # ==========================
+    # Массовое обновление остатков
+    # ==========================
+
+    @staticmethod
+    async def get_stock_template_data(shop_id: int) -> list[dict]:
+        """Возвращает данные всех вариантов для шаблона остатков."""
+        async with async_session() as session:
+            result = await session.execute(
+                select(Product, ProductVariant)
+                .join(ProductVariant, ProductVariant.product_id == Product.id)
+                .where(Product.shop_id == shop_id)
+                .order_by(Product.id, ProductVariant.id)
+            )
+            rows = result.all()
+            return [
+                {
+                    "variant_id": v.id,
+                    "product_name": p.name,
+                    "variant_volume": v.volume,
+                    "current_stock": v.stock,
+                }
+                for p, v in rows
+            ]
+
+    @staticmethod
+    def generate_stock_template_xlsx(data: list[dict]) -> bytes:
+        """Генерирует .xlsx-шаблон для массового обновления остатков.
+
+        Колонки: id (скрытый), Название, Вариант, Текущий остаток, Остаток.
+        """
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Остатки"
+        ws.append(["id", "Название", "Вариант", "Текущий остаток", "Остаток"])
+
+        ws.column_dimensions["A"].hidden = True
+
+        for row in data:
+            ws.append([
+                row["variant_id"],
+                row["product_name"],
+                row["variant_volume"],
+                row["current_stock"],
+                None,
+            ])
+
+        buf = BytesIO()
+        wb.save(buf)
+        wb.close()
+        return buf.getvalue()
+
+    @staticmethod
+    def parse_stock_file(file_bytes: bytes) -> dict:
+        """Парсит заполненный шаблон остатков.
+
+        Возвращает {updates: [{variant_id, stock}], errors: [str]}.
+        """
+        wb = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
+        ws = wb.active
+
+        rows = list(ws.iter_rows(min_row=1, values_only=True))
+        wb.close()
+
+        if not rows:
+            return {"updates": [], "errors": ["Файл пустой"]}
+
+        header = [str(c).strip().lower() if c is not None else "" for c in rows[0]]
+
+        id_idx = None
+        stock_idx = None
+        for i, h in enumerate(header):
+            if h == "id":
+                id_idx = i
+            elif h in ("остаток", "новый остаток"):
+                stock_idx = i
+
+        if id_idx is None:
+            return {"updates": [], "errors": ["Колонка «id» не найдена. Используйте шаблон, скачанный из админ-панели."]}
+        if stock_idx is None:
+            return {"updates": [], "errors": ["Колонка «Остаток» не найдена. Используйте шаблон, скачанный из админ-панели."]}
+
+        updates: list[dict] = []
+        errors: list[str] = []
+
+        for row_num, row in enumerate(rows[1:], start=2):
+            if row is None or all(c is None or str(c).strip() == "" for c in row):
+                continue
+
+            raw_id = row[id_idx] if id_idx < len(row) else None
+            raw_stock = row[stock_idx] if stock_idx < len(row) else None
+
+            if raw_id is None or str(raw_id).strip() == "":
+                continue
+
+            try:
+                variant_id = int(float(str(raw_id).strip()))
+            except (ValueError, TypeError):
+                errors.append(f"Строка {row_num}: id «{raw_id}» не является числом")
+                continue
+
+            if raw_stock is None or str(raw_stock).strip() == "":
+                continue
+
+            try:
+                stock = int(float(str(raw_stock).strip()))
+            except (ValueError, TypeError):
+                errors.append(f"Строка {row_num}: остаток «{raw_stock}» не является числом")
+                continue
+
+            updates.append({"variant_id": variant_id, "stock": max(0, stock)})
+
+        return {"updates": updates, "errors": errors}
+
+    @staticmethod
+    async def apply_stock_updates(shop_id: int, updates: list[dict]) -> dict:
+        """Применяет массовое обновление остатков одним batch-запросом.
+
+        Возвращает {updated, not_found}.
+        """
+        if not updates:
+            return {"updated": 0, "not_found": 0}
+
+        variant_ids = [u["variant_id"] for u in updates]
+        stock_map = {u["variant_id"]: u["stock"] for u in updates}
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(ProductVariant).where(
+                    ProductVariant.shop_id == shop_id,
+                    ProductVariant.id.in_(variant_ids),
+                )
+            )
+            variants = result.scalars().all()
+
+            found_ids = set()
+            for v in variants:
+                v.stock = stock_map[v.id]
+                found_ids.add(v.id)
+
+            await session.commit()
+
+        not_found = len(variant_ids) - len(found_ids)
+        return {"updated": len(found_ids), "not_found": not_found}

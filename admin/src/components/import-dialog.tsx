@@ -51,6 +51,7 @@ interface PreviewResponse {
 interface ConfirmResponse {
   created: number;
   category_id: number;
+  stock_template_url?: string;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -126,7 +127,12 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
     setImporting(true);
     try {
       const result = await api.post<ConfirmResponse>("/catalog/import/confirm", { rows });
-      toast.success(`Импортировано товаров: ${result.created}. Заполните цену и характеристики перед публикацией.`);
+      toast.success(
+        `Импортировано товаров: ${result.created}. Заполните цену и характеристики перед публикацией.`,
+      );
+      if (result.stock_template_url) {
+        toast.info("Скачайте шаблон остатков на странице товаров (кнопка «Остатки»)");
+      }
       onImported();
       reset();
       onOpenChange(false);

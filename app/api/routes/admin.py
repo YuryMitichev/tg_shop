@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from aiogram.types import BufferedInputFile
 from datetime import datetime
@@ -543,6 +543,52 @@ async def confirm_catalog_import(
         rows=[r.model_dump() for r in body.rows],
         category_id=body.category_id,
     )
+    result["stock_template_url"] = "/catalog/stock-template"
+    return result
+
+
+# ==========================
+# Массовое обновление остатков
+# ==========================
+
+@router.get("/catalog/stock-template")
+async def download_stock_template(admin: dict = Depends(require_active_subscription)):
+    """Скачивает .xlsx-шаблон с остатками всех товаров магазина."""
+    data = await CatalogAdminService.get_stock_template_data(admin["shop_id"])
+    xlsx_bytes = await asyncio.to_thread(
+        CatalogAdminService.generate_stock_template_xlsx, data
+    )
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=stock_template.xlsx"},
+    )
+
+
+@router.post("/catalog/stock/bulk-update")
+async def bulk_update_stock(
+    file: UploadFile = File(...),
+    admin: dict = Depends(require_active_subscription),
+):
+    """Загружает заполненный шаблон остатков и обновляет stock одним batch-запросом."""
+    file_bytes = await _read_upload_with_limit(file, MAX_IMPORT_FILE_SIZE)
+
+    parsed = await asyncio.to_thread(
+        CatalogAdminService.parse_stock_file, file_bytes
+    )
+
+    if parsed["errors"]:
+        raise HTTPException(status_code=400, detail=(parsed["errors"][:10]))
+
+    result = await CatalogAdminService.apply_stock_updates(
+        admin["shop_id"], parsed["updates"]
+    )
+
+    logger.info(
+        "Bulk stock update: shop_id=%s, updated=%s, not_found=%s",
+        admin["shop_id"], result["updated"], result["not_found"],
+    )
+
     return result
 
 
