@@ -23,7 +23,12 @@ const App = {
         this.initData = this.tg.initData || "";
 
         const params = new URLSearchParams(window.location.search);
-        this.shopId = parseInt(params.get("shop")) || 1;
+        const startParam = this.tg.initDataUnsafe?.start_param || "";
+        if (startParam.startsWith("shop_")) {
+            this.shopId = parseInt(startParam.replace("shop_", ""));
+        } else {
+            this.shopId = parseInt(params.get("shop")) || 1;
+        }
 
         const theme = this.tg.themeParams;
         if (theme.bg_color) {

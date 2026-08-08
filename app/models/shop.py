@@ -41,6 +41,8 @@ class Shop(Base):
 
     bot_token_hash: Mapped[str | None] = mapped_column(unique=True, nullable=True)
 
+    bot_username: Mapped[str | None] = mapped_column(nullable=True)
+
     owner_telegram_id: Mapped[int] = mapped_column(nullable=False)
 
     is_active: Mapped[bool] = mapped_column(default=True)

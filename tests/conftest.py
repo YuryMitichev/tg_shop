@@ -66,10 +66,23 @@ from app.models import (  # noqa: F401 — импорт регистрирует
 from app.models.shop import Shop
 from app.models.subscription import Subscription, SubscriptionPlan  # noqa: F401
 from app.utils.crypto import encrypt, token_hash
+from app.services.stats_service import StatsService
+from app.services.subscription_service import SubscriptionService
 
 
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+
+@pytest.fixture(autouse=True)
+def _clear_service_caches():
+    """Очищает TTL-кэши сервисов перед каждым тестом."""
+    AdminAuthService._token_cache.clear()
+    SubscriptionService._active_cache.clear()
+    StatsService._stats_cache.clear()
+    StatsService._chart_cache.clear()
+    StatsService._analytics_cache.clear()
+
 
 _PATCH_TARGETS = [
     db_module,

@@ -18,6 +18,7 @@ def _make_message(user_id=111, text="123:ABCtoken"):
     msg.chat = Chat(id=1, type="private")
     msg.message_id = 1
     msg.answer = AsyncMock(return_value=MagicMock(message_id=2))
+    msg.answer_document = AsyncMock(return_value=MagicMock(message_id=2))
     return msg
 
 
@@ -29,6 +30,7 @@ def _make_callback(data="accept_offer_trial:1", user_id=111):
     cb.message.chat = Chat(id=1, type="private")
     cb.message.message_id = 1
     cb.message.answer = AsyncMock(return_value=MagicMock(message_id=2))
+    cb.message.answer_document = AsyncMock(return_value=MagicMock(message_id=2))
     cb.message.edit_reply_markup = AsyncMock()
     cb.answer = AsyncMock()
     return cb
@@ -387,18 +389,18 @@ class TestAcceptOfferAndTrial:
 # ---------------------------------------------------------------------------
 
 class TestShowPrivacy:
-    """Отображение политики конфиденциальности."""
+    """Присылание политики конфиденциальности как файла."""
 
-    async def test_shows_privacy_text(self):
+    async def test_sends_privacy_document(self):
         from app.bot.platform.bot import on_show_privacy
 
         cb = _make_callback(data="show_privacy", user_id=700)
 
         await on_show_privacy(cb)
 
-        assert cb.message.answer.call_count >= 1
-        first_text = str(cb.message.answer.call_args_list[0].args[0])
-        assert "КОНФИДЕНЦИАЛЬНОСТИ" in first_text.upper()
+        cb.message.answer_document.assert_called_once()
+        caption = cb.message.answer_document.call_args.kwargs.get("caption", "")
+        assert "КОНФИДЕНЦИАЛЬНОСТИ" in caption.upper()
         cb.answer.assert_called_once()
 
     async def test_returns_text_from_file(self):
@@ -407,3 +409,105 @@ class TestShowPrivacy:
         text = get_privacy_policy_text()
         assert len(text) > 100
         assert "персональных данных" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# on_show_offer
+# ---------------------------------------------------------------------------
+
+class TestShowOffer:
+    """Присылание оферты как файла."""
+
+    async def test_sends_offer_document(self):
+        from app.bot.platform.bot import on_show_offer
+
+        cb = _make_callback(data="show_offer", user_id=710)
+
+        with patch.object(
+            OfferAgreementService, "has_accepted", new_callable=AsyncMock, return_value=False
+        ):
+            await on_show_offer(cb)
+
+        cb.message.answer_document.assert_called_once()
+        caption = cb.message.answer_document.call_args.kwargs.get("caption", "")
+        assert "ОФЕРТА" in caption.upper()
+        cb.answer.assert_called_once()
+
+    async def test_show_offer_followed_by_accept_button_when_not_accepted(self):
+        from app.bot.platform.bot import on_show_offer
+
+        cb = _make_callback(data="show_offer", user_id=711)
+
+        with patch.object(
+            OfferAgreementService, "has_accepted", new_callable=AsyncMock, return_value=False
+        ):
+            await on_show_offer(cb)
+
+        # Document sent + follow-up message with accept button
+        assert cb.message.answer.call_count >= 1
+        reply_markup = cb.message.answer.call_args.kwargs.get("reply_markup")
+        assert reply_markup is not None
+        callbacks = [
+            btn.callback_data
+            for row in reply_markup.inline_keyboard
+            for btn in row
+        ]
+        assert "accept_offer" in callbacks
+
+    async def test_show_offer_shows_already_accepted_when_accepted(self):
+        from app.bot.platform.bot import on_show_offer
+
+        cb = _make_callback(data="show_offer", user_id=712)
+
+        with patch.object(
+            OfferAgreementService, "has_accepted", new_callable=AsyncMock, return_value=True
+        ):
+            await on_show_offer(cb)
+
+        cb.message.answer_document.assert_called_once()
+        follow_up = " ".join(
+            str(c.args[0]) if c.args else str(c)
+            for c in cb.message.answer.call_args_list
+        )
+        assert "приняли" in follow_up.lower()
+
+
+# ---------------------------------------------------------------------------
+# on_offer (command handler)
+# ---------------------------------------------------------------------------
+
+class TestOfferCommand:
+    """Команда /offer — присылает файл оферты."""
+
+    async def test_sends_offer_document(self):
+        from app.bot.platform.bot import on_offer
+
+        msg = _make_message()
+
+        with patch.object(
+            OfferAgreementService, "has_accepted", new_callable=AsyncMock, return_value=False
+        ):
+            await on_offer(msg)
+
+        msg.answer_document.assert_called_once()
+        caption = msg.answer_document.call_args.kwargs.get("caption", "")
+        assert "ОФЕРТА" in caption.upper()
+
+    async def test_followed_by_accept_button_when_not_accepted(self):
+        from app.bot.platform.bot import on_offer
+
+        msg = _make_message()
+
+        with patch.object(
+            OfferAgreementService, "has_accepted", new_callable=AsyncMock, return_value=False
+        ):
+            await on_offer(msg)
+
+        reply_markup = msg.answer.call_args.kwargs.get("reply_markup")
+        assert reply_markup is not None
+        callbacks = [
+            btn.callback_data
+            for row in reply_markup.inline_keyboard
+            for btn in row
+        ]
+        assert "accept_offer" in callbacks

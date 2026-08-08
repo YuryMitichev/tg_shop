@@ -22,12 +22,13 @@ def _make_callback(data="delete_shop:2", user_id=111):
     return cb
 
 
-def _shop_dict(shop_id=2, owner_id=111, name="Мой магазин"):
+def _shop_dict(shop_id=2, owner_id=111, name="Мой магазин", bot_username=None):
     return {
         "id": shop_id,
         "name": name,
         "owner_telegram_id": owner_id,
         "is_active": True,
+        "bot_username": bot_username,
     }
 
 
@@ -42,29 +43,29 @@ class TestShopActionsKeyboard:
         assert "sub_shop:2" in callbacks
         assert "delete_shop:2" in callbacks
 
-    def test_includes_admin_url_when_configured(self):
+    def test_includes_shop_bot_link_when_username_set(self):
         from app.bot.platform.bot import _shop_actions_kb
 
         with patch("app.bot.platform.bot.settings") as mock_settings:
             mock_settings.admin_panel_url = "https://admin.example.com"
-            mock_settings.webapp_enabled = False
-            kb = _shop_actions_kb(_shop_dict())
+            mock_settings.webapp_enabled = True
+            mock_settings.webapp_url = "https://shop.example.com/app/"
+            kb = _shop_actions_kb(_shop_dict(bot_username="my_shop_bot"))
 
         urls = [btn.url for row in kb.inline_keyboard for btn in row if btn.url]
-        assert "https://admin.example.com" in urls
+        assert "https://t.me/my_shop_bot?startapp=shop" in urls
 
-    def test_includes_webapp_when_configured(self):
+    def test_no_shop_link_when_username_missing(self):
         from app.bot.platform.bot import _shop_actions_kb
 
         with patch("app.bot.platform.bot.settings") as mock_settings:
             mock_settings.admin_panel_url = None
             mock_settings.webapp_enabled = True
             mock_settings.webapp_url = "https://shop.example.com/app/"
-            kb = _shop_actions_kb(_shop_dict())
+            kb = _shop_actions_kb(_shop_dict(bot_username=None))
 
-        web_apps = [btn.web_app for row in kb.inline_keyboard for btn in row if btn.web_app]
-        assert len(web_apps) == 1
-        assert "shop=2" in web_apps[0].url
+        urls = [btn.url for row in kb.inline_keyboard for btn in row if btn.url]
+        assert urls == []
 
 
 class TestDeleteShopConfirmation:

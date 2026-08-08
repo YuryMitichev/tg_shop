@@ -41,6 +41,7 @@ def _shop_to_dict(shop: Shop) -> dict:
         "id": shop.id,
         "name": shop.name,
         "bot_token_masked": mask_token(decrypt(shop.bot_token) or ""),
+        "bot_username": shop.bot_username,
         "owner_telegram_id": shop.owner_telegram_id,
         "is_active": shop.is_active,
         "delivery_enabled": shop.delivery_enabled,
@@ -101,12 +102,14 @@ class ShopService:
         name: str,
         bot_token: str,
         owner_telegram_id: int,
+        bot_username: str | None = None,
     ) -> dict:
         async with async_session() as session:
             shop = Shop(
                 name=name,
                 bot_token=encrypt(bot_token),
                 bot_token_hash=token_hash(bot_token),
+                bot_username=bot_username,
                 owner_telegram_id=owner_telegram_id,
                 is_active=True,
             )
@@ -266,6 +269,17 @@ class ShopService:
             shop = result.scalar_one_or_none()
             if shop is None:
                 return None
+            return _shop_to_dict(shop)
+
+    @staticmethod
+    async def update_bot_username(shop_id: int, bot_username: str) -> dict | None:
+        async with async_session() as session:
+            shop = await session.get(Shop, shop_id)
+            if shop is None:
+                return None
+            shop.bot_username = bot_username
+            await session.commit()
+            await session.refresh(shop)
             return _shop_to_dict(shop)
 
     @staticmethod

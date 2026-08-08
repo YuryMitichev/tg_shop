@@ -5,6 +5,7 @@ import jwt
 from sqlalchemy import delete, select
 
 from app.bot.bot import get_bot
+from app.core.cache import TTLCache
 from app.core.config import settings
 from app.database.db import async_session
 from app.models.admin_user import AdminUser
@@ -32,6 +33,8 @@ class AdminAuthService:
     LINK_TTL = 300
     JWT_ALGORITHM = "HS256"
     JWT_EXPIRES = timedelta(hours=24)
+
+    _token_cache: TTLCache = TTLCache(ttl=30)
 
     @staticmethod
     async def _resolve_shop_ids(telegram_user_id: int) -> list[tuple[int, bool]]:
@@ -158,6 +161,10 @@ class AdminAuthService:
     @staticmethod
     async def verify_token(token: str) -> dict | None:
         """Возвращает {'admin_id': int, 'shop_id': int, 'is_super_admin': bool} или None."""
+        hit, cached = AdminAuthService._token_cache.get(token)
+        if hit:
+            return cached
+
         try:
             payload = jwt.decode(
                 token,
@@ -173,6 +180,8 @@ class AdminAuthService:
                 if not await AdminUserService.is_admin(shop_id, admin_id):
                     return None
 
-            return {"admin_id": admin_id, "shop_id": shop_id, "is_super_admin": is_super}
+            result = {"admin_id": admin_id, "shop_id": shop_id, "is_super_admin": is_super}
+            AdminAuthService._token_cache.set(token, result)
+            return result
         except Exception:
             return None

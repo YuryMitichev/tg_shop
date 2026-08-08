@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from app.bot.shop_context import get_shop_id
-from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, BufferedInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 
@@ -19,6 +19,10 @@ def setup_router() -> Router:
     def _split_text(text: str, max_length: int = 4000) -> list[str]:
         """Разбивает длинный текст на части для отправки в Telegram."""
         return [text[i:i + max_length] for i in range(0, len(text), max_length)]
+
+    def _make_text_document(text: str, filename: str) -> BufferedInputFile:
+        """Создаёт BufferedInputFile из текста для отправки файлом."""
+        return BufferedInputFile(text.encode("utf-8"), filename=filename)
 
     async def _render_cart_text(items: list[dict]) -> str:
         if not items:
@@ -148,7 +152,7 @@ def setup_router() -> Router:
             if not accepted:
                 builder = InlineKeyboardBuilder()
                 builder.button(text="✅ Принять условия", callback_data="accept_shop_offer")
-                builder.button(text="📄 Читать оферту", callback_data="show_shop_offer")
+                builder.button(text="📄 Скачать оферту", callback_data="show_shop_offer")
                 builder.adjust(1)
 
                 await callback.message.edit_text(
@@ -174,7 +178,7 @@ def setup_router() -> Router:
 
         builder = InlineKeyboardBuilder()
         builder.button(text="✅ Согласен и продолжить", callback_data="accept_customer_consent")
-        builder.button(text="📄 Читать полностью", callback_data="show_customer_consent")
+        builder.button(text="📄 Скачать документ", callback_data="show_customer_consent")
         builder.button(text="⬅ Назад", callback_data="cart")
         builder.adjust(1)
 
@@ -189,7 +193,7 @@ def setup_router() -> Router:
 
     @router.callback_query(F.data == "show_customer_consent")
     async def show_customer_consent(callback: CallbackQuery):
-        """Показывает полный текст согласия на обработку ПДн."""
+        """Присылает файл согласия на обработку ПДн."""
         shop_id = get_shop_id()
         text = await LegalDocumentService.get_customer_consent_text(shop_id)
 
@@ -197,11 +201,11 @@ def setup_router() -> Router:
             await callback.answer("Текст согласия недоступен", show_alert=True)
             return
 
-        chunks = _split_text(text)
-        for chunk in chunks[:-1]:
-            await callback.message.answer(chunk)
-
-        last_chunk = chunks[-1]
+        await callback.message.answer_document(
+            document=_make_text_document(text, "Согласие_на_обработку_ПДн.txt"),
+            caption="📋 <b>Согласие на обработку персональных данных</b>\n\n"
+                    "Скачайте файл, чтобы ознакомиться с полным текстом.",
+        )
 
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -209,8 +213,10 @@ def setup_router() -> Router:
                 [InlineKeyboardButton(text="⬅ Назад", callback_data="accept_customer_consent")],
             ]
         )
-
-        await callback.message.answer(last_chunk, reply_markup=kb)
+        await callback.message.answer(
+            "Ознакомившись с документом, нажмите кнопку ниже.",
+            reply_markup=kb,
+        )
         await callback.answer()
 
     @router.callback_query(F.data == "accept_customer_consent")
@@ -241,7 +247,7 @@ def setup_router() -> Router:
 
     @router.callback_query(F.data == "show_shop_offer")
     async def show_shop_offer(callback: CallbackQuery):
-        """Показывает текст оферты магазина."""
+        """Присылает файл оферты магазина."""
         shop_id = get_shop_id()
         shop = await ShopService.get(shop_id)
         text = shop.get("offer_text", "") if shop else ""
@@ -252,23 +258,31 @@ def setup_router() -> Router:
 
         accepted = await ShopService.has_accepted_offer(shop_id, callback.from_user.id)
 
-        chunks = _split_text(text)
-        for chunk in chunks[:-1]:
-            await callback.message.answer(chunk)
-
-        last_chunk = chunks[-1]
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [] if accepted else [
-                    InlineKeyboardButton(text="✅ Принять условия", callback_data="accept_shop_offer"),
-                ],
-                [InlineKeyboardButton(text="⬅ Назад", callback_data="checkout")],
-            ]
+        await callback.message.answer_document(
+            document=_make_text_document(text, "Оферта_магазина.txt"),
+            caption="📄 <b>Оферта магазина</b>\n\nСкачайте файл, чтобы ознакомиться с полным текстом.",
         )
-        if accepted:
-            last_chunk += "\n\n✅ <b>Вы уже приняли условия оферты.</b>"
 
-        await callback.message.answer(last_chunk, reply_markup=kb)
+        if accepted:
+            await callback.message.answer(
+                "✅ <b>Вы уже приняли условия оферты.</b>",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="⬅ Назад", callback_data="checkout")],
+                    ]
+                ),
+            )
+        else:
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Принять условия", callback_data="accept_shop_offer")],
+                    [InlineKeyboardButton(text="⬅ Назад", callback_data="checkout")],
+                ]
+            )
+            await callback.message.answer(
+                "Ознакомившись с офертой, нажмите кнопку ниже, чтобы принять условия.",
+                reply_markup=kb,
+            )
         await callback.answer()
 
     @router.callback_query(F.data == "accept_shop_offer")

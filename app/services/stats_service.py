@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta
 
+import asyncio
+
 from sqlalchemy import select, func, extract
 
+from app.core.cache import TTLCache
 from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.category import Category
@@ -14,6 +17,10 @@ from app.models.review import Review
 class StatsService:
     """Статистика и аналитика по магазину."""
 
+    _stats_cache: TTLCache = TTLCache(ttl=60)
+    _chart_cache: TTLCache = TTLCache(ttl=60)
+    _analytics_cache: TTLCache = TTLCache(ttl=60)
+
     # ==========================
     # Сводная статистика
     # ==========================
@@ -24,6 +31,10 @@ class StatsService:
         Сводная статистика по магазину.
         Выручка считается по заказам, не отменённым (status != 'cancelled').
         """
+        hit, cached = StatsService._stats_cache.get(shop_id)
+        if hit:
+            return cached
+
         async with async_session() as session:
             result = await session.execute(
                 select(Order.status, func.count())
@@ -82,7 +93,7 @@ class StatsService:
                 for row in top_result.all()
             ]
 
-            return {
+            result = {
                 "total_orders": total_orders,
                 "new_orders": new_orders,
                 "cancelled_orders": cancelled_orders,
@@ -91,12 +102,20 @@ class StatsService:
                 "top_products": top_products,
             }
 
+        StatsService._stats_cache.set(shop_id, result)
+        return result
+
     # ==========================
     # График выручки
     # ==========================
 
     @staticmethod
     async def get_revenue_chart(shop_id: int, days: int = 30) -> list[dict]:
+        cache_key = (shop_id, days)
+        hit, cached = StatsService._chart_cache.get(cache_key)
+        if hit:
+            return cached
+
         async with async_session() as session:
             now = datetime.now()
             start = now - timedelta(days=days)
@@ -116,7 +135,7 @@ class StatsService:
                 .order_by(func.date(Order.created_at))
             )
 
-            return [
+            data = [
                 {
                     "date": str(row[0]),
                     "revenue": row[1] or 0,
@@ -125,130 +144,155 @@ class StatsService:
                 for row in result.all()
             ]
 
+        StatsService._chart_cache.set(cache_key, data)
+        return data
+
     # ==========================
     # Расширенная аналитика
     # ==========================
 
     @staticmethod
     async def get_analytics_overview(shop_id: int, days: int = 30) -> dict:
+        cache_key = (shop_id, days)
+        hit, cached = StatsService._analytics_cache.get(cache_key)
+        if hit:
+            return cached
+
         now = datetime.now()
         cur_start = now - timedelta(days=days)
         prev_start = cur_start - timedelta(days=days)
 
+        (
+            cur_rev,
+            prev_rev,
+            cur_orders,
+            prev_orders,
+            cur_customers,
+            prev_customers,
+            cur_repeat,
+            cur_items,
+            completed,
+        ) = await asyncio.gather(
+            StatsService._period_revenue(shop_id, cur_start, now),
+            StatsService._period_revenue(shop_id, prev_start, cur_start),
+            StatsService._period_orders(shop_id, cur_start, now),
+            StatsService._period_orders(shop_id, prev_start, cur_start),
+            StatsService._period_unique_customers(shop_id, cur_start, now),
+            StatsService._period_unique_customers(shop_id, prev_start, cur_start),
+            StatsService._period_repeat_customers(shop_id, cur_start, now),
+            StatsService._period_total_items(shop_id, cur_start, now),
+            StatsService._period_completed(shop_id, cur_start),
+        )
+
+        cur_aov = cur_rev / cur_orders if cur_orders else 0
+        prev_aov = prev_rev / prev_orders if prev_orders else 0
+        avg_items = cur_items / cur_orders if cur_orders else 0
+        completion_rate = completed / cur_orders * 100 if cur_orders else 0
+
+        result = {
+            "revenue": cur_rev,
+            "revenue_growth": StatsService._growth_pct(cur_rev, prev_rev),
+            "orders": cur_orders,
+            "orders_growth": StatsService._growth_pct(cur_orders, prev_orders),
+            "avg_order_value": cur_aov,
+            "aov_growth": StatsService._growth_pct(cur_aov, prev_aov),
+            "unique_customers": cur_customers,
+            "customers_growth": StatsService._growth_pct(cur_customers, prev_customers),
+            "completed_orders": completed,
+            "completion_rate": round(completion_rate, 1),
+            "repeat_customers": cur_repeat,
+            "repeat_rate": round(cur_repeat / cur_customers * 100, 1) if cur_customers else 0,
+            "avg_items_per_order": round(avg_items, 1),
+        }
+        StatsService._analytics_cache.set(cache_key, result)
+        return result
+
+    @staticmethod
+    async def _period_revenue(shop_id: int, start, end) -> int:
         async with async_session() as session:
-            cur_rev = await StatsService._period_revenue(session, shop_id, cur_start, now)
-            prev_rev = await StatsService._period_revenue(session, shop_id, prev_start, cur_start)
+            result = await session.execute(
+                select(func.coalesce(func.sum(Order.total_amount), 0))
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != OrderStatus.CANCELLED,
+                    Order.created_at >= start,
+                    Order.created_at < end,
+                )
+            )
+            return result.scalar() or 0
 
-            cur_orders = await StatsService._period_orders(session, shop_id, cur_start, now)
-            prev_orders = await StatsService._period_orders(session, shop_id, prev_start, cur_start)
+    @staticmethod
+    async def _period_orders(shop_id: int, start, end) -> int:
+        async with async_session() as session:
+            result = await session.execute(
+                select(func.count())
+                .select_from(Order)
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != OrderStatus.CANCELLED,
+                    Order.created_at >= start,
+                    Order.created_at < end,
+                )
+            )
+            return result.scalar() or 0
 
-            cur_aov = cur_rev / cur_orders if cur_orders else 0
-            prev_aov = prev_rev / prev_orders if prev_orders else 0
+    @staticmethod
+    async def _period_unique_customers(shop_id: int, start, end) -> int:
+        async with async_session() as session:
+            result = await session.execute(
+                select(func.count(func.distinct(Order.telegram_user_id)))
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != OrderStatus.CANCELLED,
+                    Order.created_at >= start,
+                    Order.created_at < end,
+                )
+            )
+            return result.scalar() or 0
 
-            cur_customers = await StatsService._period_unique_customers(session, shop_id, cur_start, now)
-            prev_customers = await StatsService._period_unique_customers(session, shop_id, prev_start, cur_start)
+    @staticmethod
+    async def _period_repeat_customers(shop_id: int, start, end) -> int:
+        async with async_session() as session:
+            result = await session.execute(
+                select(Order.telegram_user_id, func.count(Order.id).label("cnt"))
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != OrderStatus.CANCELLED,
+                    Order.created_at >= start,
+                    Order.created_at < end,
+                )
+                .group_by(Order.telegram_user_id)
+            )
+            return sum(1 for row in result.all() if row[1] > 1)
 
-            cur_repeat = await StatsService._period_repeat_customers(session, shop_id, cur_start, now)
+    @staticmethod
+    async def _period_total_items(shop_id: int, start, end) -> int:
+        async with async_session() as session:
+            result = await session.execute(
+                select(func.coalesce(func.sum(OrderItem.quantity), 0))
+                .join(Order, OrderItem.order_id == Order.id)
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status != OrderStatus.CANCELLED,
+                    Order.created_at >= start,
+                    Order.created_at < end,
+                )
+            )
+            return result.scalar() or 0
 
-            cur_items = await StatsService._period_total_items(session, shop_id, cur_start, now)
-            avg_items = cur_items / cur_orders if cur_orders else 0
-
-            completed_result = await session.execute(
+    @staticmethod
+    async def _period_completed(shop_id: int, start) -> int:
+        async with async_session() as session:
+            result = await session.execute(
                 select(func.count())
                 .select_from(Order)
                 .where(
                     Order.shop_id == shop_id,
                     Order.status == OrderStatus.DONE,
-                    Order.created_at >= cur_start,
+                    Order.created_at >= start,
                 )
             )
-            completed = completed_result.scalar() or 0
-
-            completion_rate = completed / cur_orders * 100 if cur_orders else 0
-
-            return {
-                "revenue": cur_rev,
-                "revenue_growth": StatsService._growth_pct(cur_rev, prev_rev),
-                "orders": cur_orders,
-                "orders_growth": StatsService._growth_pct(cur_orders, prev_orders),
-                "avg_order_value": cur_aov,
-                "aov_growth": StatsService._growth_pct(cur_aov, prev_aov),
-                "unique_customers": cur_customers,
-                "customers_growth": StatsService._growth_pct(cur_customers, prev_customers),
-                "completed_orders": completed,
-                "completion_rate": round(completion_rate, 1),
-                "repeat_customers": cur_repeat,
-                "repeat_rate": round(cur_repeat / cur_customers * 100, 1) if cur_customers else 0,
-                "avg_items_per_order": round(avg_items, 1),
-            }
-
-    @staticmethod
-    async def _period_revenue(session, shop_id: int, start, end) -> int:
-        result = await session.execute(
-            select(func.coalesce(func.sum(Order.total_amount), 0))
-            .where(
-                Order.shop_id == shop_id,
-                Order.status != OrderStatus.CANCELLED,
-                Order.created_at >= start,
-                Order.created_at < end,
-            )
-        )
-        return result.scalar() or 0
-
-    @staticmethod
-    async def _period_orders(session, shop_id: int, start, end) -> int:
-        result = await session.execute(
-            select(func.count())
-            .select_from(Order)
-            .where(
-                Order.shop_id == shop_id,
-                Order.status != OrderStatus.CANCELLED,
-                Order.created_at >= start,
-                Order.created_at < end,
-            )
-        )
-        return result.scalar() or 0
-
-    @staticmethod
-    async def _period_unique_customers(session, shop_id: int, start, end) -> int:
-        result = await session.execute(
-            select(func.count(func.distinct(Order.telegram_user_id)))
-            .where(
-                Order.shop_id == shop_id,
-                Order.status != OrderStatus.CANCELLED,
-                Order.created_at >= start,
-                Order.created_at < end,
-            )
-        )
-        return result.scalar() or 0
-
-    @staticmethod
-    async def _period_repeat_customers(session, shop_id: int, start, end) -> int:
-        result = await session.execute(
-            select(Order.telegram_user_id, func.count(Order.id).label("cnt"))
-            .where(
-                Order.shop_id == shop_id,
-                Order.status != OrderStatus.CANCELLED,
-                Order.created_at >= start,
-                Order.created_at < end,
-            )
-            .group_by(Order.telegram_user_id)
-        )
-        return sum(1 for row in result.all() if row[1] > 1)
-
-    @staticmethod
-    async def _period_total_items(session, shop_id: int, start, end) -> int:
-        result = await session.execute(
-            select(func.coalesce(func.sum(OrderItem.quantity), 0))
-            .join(Order, OrderItem.order_id == Order.id)
-            .where(
-                Order.shop_id == shop_id,
-                Order.status != OrderStatus.CANCELLED,
-                Order.created_at >= start,
-                Order.created_at < end,
-            )
-        )
-        return result.scalar() or 0
+            return result.scalar() or 0
 
     @staticmethod
     def _growth_pct(current: float | int, previous: float | int) -> float:

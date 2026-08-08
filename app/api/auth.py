@@ -1,11 +1,14 @@
 import hashlib
 import hmac
 import json
+import logging
 from urllib.parse import parse_qsl
 
 from fastapi import Header, HTTPException
 
 from app.services.shop_service import ShopService
+
+logger = logging.getLogger(__name__)
 
 
 async def validate_init_data(init_data: str, bot_token: str) -> dict | None:
@@ -14,10 +17,19 @@ async def validate_init_data(init_data: str, bot_token: str) -> dict | None:
     Возвращает словарь пользователя (id, first_name, ...) или None.
     """
     try:
+        if not init_data:
+            logger.warning("validate_init_data: empty init_data")
+            return None
+
         params = dict(parse_qsl(init_data, keep_blank_values=True))
         hash_value = params.pop("hash", None)
 
         if not hash_value:
+            logger.warning(
+                "validate_init_data: no hash — keys=%s, len=%d",
+                list(params.keys()),
+                len(init_data),
+            )
             return None
 
         data_check_string = "\n".join(
@@ -37,12 +49,14 @@ async def validate_init_data(init_data: str, bot_token: str) -> dict | None:
         ).hexdigest()
 
         if calculated_hash != hash_value:
+            logger.warning("validate_init_data: HMAC mismatch (wrong bot_token?)")
             return None
 
         user_data = json.loads(params.get("user", "{}"))
         return user_data
 
-    except Exception:
+    except Exception as e:
+        logger.warning("validate_init_data: exception %s", e)
         return None
 
 
@@ -67,11 +81,20 @@ async def get_current_user(
 
     bot_token = await _resolve_bot_token(x_shop_id)
     if bot_token is None:
+        logger.warning("get_current_user: bot_token not found for shop_id=%s", x_shop_id)
         raise HTTPException(status_code=404, detail="Shop not found")
 
     user = await validate_init_data(init_data, bot_token)
 
     if not user:
+        logger.warning(
+            "get_current_user: auth failed — shop_id=%s, init_data_empty=%s, "
+            "header_prefix_ok=%s, auth_preview=[%s]",
+            x_shop_id,
+            not init_data,
+            authorization.startswith("tma "),
+            authorization[:300],
+        )
         raise HTTPException(status_code=401, detail="Invalid auth")
 
     user["shop_id"] = x_shop_id

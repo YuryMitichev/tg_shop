@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
+from app.core.cache import TTLCache
 from app.database.db import async_session
 from app.models.subscription import Subscription, SubscriptionPlan
 
@@ -16,6 +17,8 @@ class SubscriptionService:
     """Управление подписками магазинов."""
 
     TRIAL_DURATION_DAYS = 7
+
+    _active_cache: TTLCache = TTLCache(ttl=30)
 
     PLANS_SEED = [
         {
@@ -158,6 +161,7 @@ class SubscriptionService:
                 session.add(sub)
 
             await session.commit()
+            SubscriptionService._active_cache.invalidate(shop_id)
             return {
                 "shop_id": shop_id,
                 "status": "trial",
@@ -193,8 +197,14 @@ class SubscriptionService:
     @staticmethod
     async def is_shop_active(shop_id: int) -> bool:
         """True если у магазина активная (не истекшая) подписка."""
+        hit, cached = SubscriptionService._active_cache.get(shop_id)
+        if hit:
+            return cached
+
         sub = await SubscriptionService.get_active_subscription(shop_id)
-        return sub is not None and sub["is_active"]
+        result = sub is not None and sub["is_active"]
+        SubscriptionService._active_cache.set(shop_id, result)
+        return result
 
     @staticmethod
     async def get_expired_shops() -> list[int]:
@@ -292,6 +302,7 @@ class SubscriptionService:
                 session.add(sub)
 
             await session.commit()
+            SubscriptionService._active_cache.invalidate(shop_id)
             return {
                 "shop_id": shop_id,
                 "status": "active",
@@ -336,3 +347,4 @@ class SubscriptionService:
             if sub is not None and sub.status != "expired":
                 sub.status = "expired"
                 await session.commit()
+                SubscriptionService._active_cache.invalidate(shop_id)

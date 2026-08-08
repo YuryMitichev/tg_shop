@@ -117,6 +117,31 @@ async def _run_shop_bot(shop_id: int, token: str) -> None:
             retry_delay = min(int(retry_delay * 1.5), max_delay)
 
 
+async def _backfill_bot_username(shop_id: int, shop: dict | None = None) -> None:
+    """Заполняет bot_username для магазина, если его ещё нет в БД."""
+    if shop is None:
+        shop = await ShopService.get(shop_id)
+    if shop is None or shop.get("bot_username"):
+        return
+
+    token = await ShopService.get_bot_token(shop_id)
+    if token is None:
+        return
+
+    try:
+        tmp_bot = Bot(
+            token=token,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+        me = await tmp_bot.get_me()
+        await tmp_bot.session.close()
+        if me.username:
+            await ShopService.update_bot_username(shop_id, me.username)
+            logger.info("Магазин %d: bot_username обновлён — @%s", shop_id, me.username)
+    except Exception:
+        logger.exception("Магазин %d: не удалось получить bot_username", shop_id)
+
+
 async def start_shop_bot(shop_id: int) -> bool:
     """Динамически запускает бот для магазина."""
     if shop_id in _bot_registry:
@@ -129,6 +154,8 @@ async def start_shop_bot(shop_id: int) -> bool:
     token = await ShopService.get_bot_token(shop_id)
     if token is None:
         return False
+
+    await _backfill_bot_username(shop_id, shop)
 
     asyncio.create_task(_run_shop_bot(shop_id, token))
     return True
@@ -177,6 +204,8 @@ async def start_all_bots() -> None:
 
     for shop in shops:
         sid = shop["id"]
+        await _backfill_bot_username(sid, shop)
+
         try:
             backfilled = await CrmService.backfill_from_orders(sid)
             if backfilled:

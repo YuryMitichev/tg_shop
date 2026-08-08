@@ -211,12 +211,46 @@ class CrmService:
             )
             profiles = result.scalars().all()
 
-            users = []
-            for p in profiles:
-                stats = await CrmService._quick_stats(session, shop_id, p.telegram_user_id)
-                users.append(CrmService._profile_to_dict(p, stats))
+            tg_ids = [p.telegram_user_id for p in profiles]
+            batch_stats = await CrmService._batch_quick_stats(session, shop_id, tg_ids)
+
+            users = [
+                CrmService._profile_to_dict(p, batch_stats.get(p.telegram_user_id))
+                for p in profiles
+            ]
 
             return {"users": users, "total": total, "page": page, "per_page": per_page}
+
+    @staticmethod
+    async def _batch_quick_stats(
+        session, shop_id: int, telegram_user_ids: list[int]
+    ) -> dict[int, dict]:
+        if not telegram_user_ids:
+            return {}
+
+        result = await session.execute(
+            select(
+                Order.telegram_user_id.label("tg_id"),
+                func.count(Order.id).label("orders"),
+                func.coalesce(func.sum(Order.total_amount), 0).label("spent"),
+                func.max(Order.created_at).label("last_order"),
+            )
+            .where(
+                Order.shop_id == shop_id,
+                Order.telegram_user_id.in_(telegram_user_ids),
+                Order.status != OrderStatus.CANCELLED,
+            )
+            .group_by(Order.telegram_user_id)
+        )
+
+        stats: dict[int, dict] = {}
+        for row in result.all():
+            stats[row[0]] = {
+                "orders_count": row[1],
+                "total_spent": row[2],
+                "last_order": row[3].isoformat() if row[3] else None,
+            }
+        return stats
 
     @staticmethod
     async def _quick_stats(session, shop_id: int, telegram_user_id: int) -> dict:

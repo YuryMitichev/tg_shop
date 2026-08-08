@@ -324,6 +324,7 @@ def _make_callback_query(data, user_id=111):
     cb.message.message_id = 1
     cb.message.edit_text = AsyncMock()
     cb.message.answer = AsyncMock()
+    cb.message.answer_document = AsyncMock()
     cb.message.edit_reply_markup = AsyncMock()
     cb.bot = MagicMock()
     cb.answer = AsyncMock()
@@ -424,6 +425,75 @@ class TestCheckoutConsentGate:
 
         accepted = await ShopService.has_accepted_offer(1, 111)
         assert accepted is True
+
+
+class TestShopOfferAndConsentSendDocument:
+    """Проверка, что оферта и согласие отправляются файлом, а не текстом в чат."""
+
+    async def test_show_shop_offer_sends_document(self, db_session, seed_data):
+        from app.bot.handlers.cart import setup_router
+
+        await ShopService.update_legal_docs(
+            shop_id=1, offer_text="Текст оферты магазина", privacy_policy_text=None
+        )
+
+        router = setup_router()
+        show_offer_handler = router.callback_query.handlers[7].callback
+
+        cb = _make_callback_query(data="show_shop_offer", user_id=111)
+
+        with patch("app.bot.handlers.cart.settings") as mock_settings:
+            mock_settings.webapp_enabled = True
+            mock_settings.webapp_url = "https://app.test"
+            await show_offer_handler(cb)
+
+        cb.message.answer_document.assert_called_once()
+        caption = cb.message.answer_document.call_args.kwargs.get("caption", "")
+        assert "ОФЕРТА" in caption.upper()
+
+    async def test_show_shop_offer_followed_by_accept_button(self, db_session, seed_data):
+        from app.bot.handlers.cart import setup_router
+
+        await ShopService.update_legal_docs(
+            shop_id=1, offer_text="Текст оферты", privacy_policy_text=None
+        )
+
+        router = setup_router()
+        show_offer_handler = router.callback_query.handlers[7].callback
+
+        cb = _make_callback_query(data="show_shop_offer", user_id=120)
+
+        with patch("app.bot.handlers.cart.settings") as mock_settings:
+            mock_settings.webapp_enabled = True
+            mock_settings.webapp_url = "https://app.test"
+            await show_offer_handler(cb)
+
+        assert cb.message.answer.call_count >= 1
+        reply_markup = cb.message.answer.call_args.kwargs.get("reply_markup")
+        assert reply_markup is not None
+        callbacks = [
+            btn.callback_data
+            for row in reply_markup.inline_keyboard
+            for btn in row
+        ]
+        assert "accept_shop_offer" in callbacks
+
+    async def test_show_customer_consent_sends_document(self, db_session, seed_data):
+        from app.bot.handlers.cart import setup_router
+
+        router = setup_router()
+        show_consent_handler = router.callback_query.handlers[5].callback
+
+        cb = _make_callback_query(data="show_customer_consent", user_id=111)
+
+        with patch("app.bot.handlers.cart.settings") as mock_settings:
+            mock_settings.webapp_enabled = True
+            mock_settings.webapp_url = "https://app.test"
+            await show_consent_handler(cb)
+
+        cb.message.answer_document.assert_called_once()
+        caption = cb.message.answer_document.call_args.kwargs.get("caption", "")
+        assert "СОГЛАСИЕ" in caption.upper() or "ПЕРСОНАЛЬНЫХ" in caption.upper()
 
 
 # ==========================

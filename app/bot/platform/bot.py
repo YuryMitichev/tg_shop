@@ -7,6 +7,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
+    BufferedInputFile,
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -14,7 +15,6 @@ from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
-    WebAppInfo,
 )
 
 from app.core.config import settings
@@ -98,15 +98,10 @@ def _shop_actions_kb(shop: dict) -> InlineKeyboardMarkup:
     shop_id = shop["id"]
     rows: list[list[InlineKeyboardButton]] = []
 
-    admin_url = settings.admin_panel_url
-    if admin_url:
-        rows.append([InlineKeyboardButton(text="📊 Админ-панель", url=admin_url)])
-
-    if settings.webapp_enabled and settings.webapp_url:
-        webapp_url = f"{settings.webapp_url}?shop={shop_id}"
-        rows.append(
-            [InlineKeyboardButton(text="📱 Мини-приложение", web_app=WebAppInfo(url=webapp_url))]
-        )
+    bot_username = shop.get("bot_username")
+    if bot_username:
+        shop_url = f"https://t.me/{bot_username}?startapp=shop_{shop_id}"
+        rows.append([InlineKeyboardButton(text="📱 Мини-приложение", url=shop_url)])
 
     rows.append(
         [
@@ -124,12 +119,23 @@ async def _send_shop_card(message: Message, shop: dict) -> None:
     status = "✅ Активна" if sub and sub["is_active"] else "❌ Истекла"
     expires = sub["expires_at"][:10] if sub else "—"
 
-    await message.answer(
-        f"🏪 <b>{shop['name']}</b>\n"
-        f"   ID: {shop['id']}\n"
-        f"   Статус: {'🟢 активен' if shop['is_active'] else '🔴 отключён'}\n"
-        f"   Подписка: {status}\n"
+    bot_username = shop.get("bot_username")
+    admin_url = settings.admin_panel_url
+
+    lines = [
+        f"🏪 <b>{shop['name']}</b>",
+        f"   ID: {shop['id']}",
+        f"   Статус: {'🟢 активен' if shop['is_active'] else '🔴 отключён'}",
+        f"   Подписка: {status}",
         f"   До: {expires}",
+    ]
+    if bot_username:
+        lines.append(f"   Бот: @{bot_username}")
+    if admin_url:
+        lines.append(f"\n📊 <b>Админ-панель:</b> {admin_url}/login")
+
+    await message.answer(
+        "\n".join(lines),
         reply_markup=_shop_actions_kb(shop),
     )
 
@@ -241,6 +247,7 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
         name=shop_name,
         bot_token=token,
         owner_telegram_id=message.from_user.id,
+        bot_username=bot_info.get("username"),
     )
 
     await AdminUserService.add(
@@ -273,11 +280,11 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
                 ],
                 [
                     InlineKeyboardButton(
-                        text="📄 Читать оферту",
+                        text="📄 Скачать оферту",
                         callback_data="show_offer",
                     ),
                     InlineKeyboardButton(
-                        text="🔒 Читать политику",
+                        text="🔒 Скачать политику",
                         callback_data="show_privacy",
                     ),
                 ],
@@ -310,9 +317,6 @@ async def _finalize_shop_creation(
         return
 
     admin_url = settings.admin_panel_url
-    webapp_url = None
-    if settings.app_base_url:
-        webapp_url = f"{settings.app_base_url.rstrip('/')}/app/"
 
     text = f"🎉 <b>Готово! Ваш магазин работает!</b>\n\n"
 
@@ -321,9 +325,7 @@ async def _finalize_shop_creation(
     text += f"🎁 Подписка: 7 дней бесплатно\n\n"
 
     if admin_url:
-        text += f"📊 <b>Админ-панель:</b>\n{admin_url}\n\n"
-    if webapp_url:
-        text += f"📱 <b>Мини-приложение:</b>\n{webapp_url}\n\n"
+        text += f"📊 <b>Админ-панель:</b>\n{admin_url}/login\n\n"
 
     text += "Что нужно сделать:\n"
     text += "1. Узнайте свой Telegram ID у @userinfobot — он понадобится для входа в админку\n"
@@ -337,7 +339,7 @@ async def _finalize_shop_creation(
 
     kb_rows = []
     if admin_url:
-        kb_rows.append([InlineKeyboardButton(text="📊 Открыть админ-панель", url=admin_url)])
+        kb_rows.append([InlineKeyboardButton(text="📊 Открыть админ-панель", url=f"{admin_url}/login")])
     kb = InlineKeyboardMarkup(inline_keyboard=kb_rows) if kb_rows else None
 
     await message.answer(text, reply_markup=kb, disable_web_page_preview=True)
@@ -364,8 +366,13 @@ def _split_text(text: str, max_length: int = 4000) -> list[str]:
     return chunks
 
 
+def _make_text_document(text: str, filename: str) -> BufferedInputFile:
+    """Создаёт BufferedInputFile из текста для отправки файлом."""
+    return BufferedInputFile(text.encode("utf-8"), filename=filename)
+
+
 async def on_offer(message: Message) -> None:
-    """Показывает текст публичной оферты и кнопку принятия."""
+    """Присылает файл оферты и кнопку принятия."""
     offer_text = get_offer_text()
 
     if not offer_text:
@@ -374,20 +381,23 @@ async def on_offer(message: Message) -> None:
 
     accepted = await OfferAgreementService.has_accepted(message.from_user.id)
 
-    for chunk in _split_text(offer_text)[:-1]:
-        await message.answer(chunk)
-
-    last_chunk = _split_text(offer_text)[-1]
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [] if accepted else [InlineKeyboardButton(text="✅ Принять условия оферты", callback_data="accept_offer")]
-        ]
+    await message.answer_document(
+        document=_make_text_document(offer_text, "Публичная_оферта.txt"),
+        caption="📄 <b>Публичная оферта</b>\n\nСкачайте файл, чтобы ознакомиться с полным текстом.",
     )
 
     if accepted:
-        last_chunk += "\n\n✅ <b>Вы уже приняли условия оферты.</b>"
-
-    await message.answer(last_chunk, reply_markup=kb)
+        await message.answer("✅ <b>Вы уже приняли условия оферты.</b>")
+    else:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Принять условия оферты", callback_data="accept_offer")]
+            ]
+        )
+        await message.answer(
+            "Ознакомившись с офертой, нажмите кнопку ниже, чтобы принять условия.",
+            reply_markup=kb,
+        )
 
 
 async def on_accept_offer(callback: CallbackQuery) -> None:
@@ -420,7 +430,7 @@ async def _show_offer_before_payment(callback: CallbackQuery, shop_id: int, plan
                         callback_data=f"accept_offer_pay:{shop_id}:{plan_id}",
                     ),
                     InlineKeyboardButton(
-                        text="📄 Читать оферту",
+                        text="📄 Скачать оферту",
                         callback_data="show_offer",
                     ),
                 ],
@@ -430,43 +440,45 @@ async def _show_offer_before_payment(callback: CallbackQuery, shop_id: int, plan
 
 
 async def on_show_offer(callback: CallbackQuery) -> None:
-    """Показывает текст оферты (inline-кнопка)."""
+    """Присылает файл оферты (inline-кнопка)."""
     offer_text = get_offer_text()
     if not offer_text:
-        await callback.message.answer("Текст оферты временно недоступен.")
-        await callback.answer()
+        await callback.answer("Текст оферты временно недоступен.", show_alert=True)
         return
 
     accepted = await OfferAgreementService.has_accepted(callback.from_user.id)
-    chunks = _split_text(offer_text)
 
-    for chunk in chunks[:-1]:
-        await callback.message.answer(chunk)
-
-    last_chunk = chunks[-1]
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [] if accepted else [InlineKeyboardButton(text="✅ Принять условия оферты", callback_data="accept_offer")]
-        ]
+    await callback.message.answer_document(
+        document=_make_text_document(offer_text, "Публичная_оферта.txt"),
+        caption="📄 <b>Публичная оферта</b>\n\nСкачайте файл, чтобы ознакомиться с полным текстом.",
     )
-    if accepted:
-        last_chunk += "\n\n✅ <b>Вы уже приняли условия оферты.</b>"
 
-    await callback.message.answer(last_chunk, reply_markup=kb)
+    if accepted:
+        await callback.message.answer("✅ <b>Вы уже приняли условия оферты.</b>")
+    else:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Принять условия оферты", callback_data="accept_offer")]
+            ]
+        )
+        await callback.message.answer(
+            "Ознакомившись с офертой, нажмите кнопку ниже, чтобы принять условия.",
+            reply_markup=kb,
+        )
     await callback.answer()
 
 
 async def on_show_privacy(callback: CallbackQuery) -> None:
-    """Показывает текст политики конфиденциальности (inline-кнопка)."""
+    """Присылает файл политики конфиденциальности (inline-кнопка)."""
     privacy_text = get_privacy_policy_text()
     if not privacy_text:
-        await callback.message.answer("Текст политики конфиденциальности временно недоступен.")
-        await callback.answer()
+        await callback.answer("Текст политики конфиденциальности временно недоступен.", show_alert=True)
         return
 
-    for chunk in _split_text(privacy_text):
-        await callback.message.answer(chunk)
-
+    await callback.message.answer_document(
+        document=_make_text_document(privacy_text, "Политика_конфиденциальности.txt"),
+        caption="🔒 <b>Политика конфиденциальности</b>\n\nСкачайте файл, чтобы ознакомиться с полным текстом.",
+    )
     await callback.answer()
 
 
