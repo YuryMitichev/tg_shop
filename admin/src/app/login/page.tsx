@@ -27,18 +27,16 @@ function LoginForm() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .get("/auth/me")
-      .then(() => router.replace("/dashboard"))
-      .catch(() => {});
-  }, [router]);
-
-  useEffect(() => {
     if (tokenFromUrl) {
       setStep("verifying");
       verifyToken(tokenFromUrl);
+    } else {
+      api
+        .get("/auth/me")
+        .then(() => router.replace("/dashboard"))
+        .catch(() => {});
     }
-  }, [tokenFromUrl]);
+  }, [tokenFromUrl, router]);
 
   async function verifyToken(t: string) {
     try {
