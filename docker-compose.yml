@@ -1,0 +1,131 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tg_shop_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tg_shop
+      POSTGRES_USER: tg_shop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - shopnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tg_shop -d tg_shop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "0.7"
+
+  backup:
+    image: postgres:16-alpine
+    container_name: tg_shop_backup
+    restart: unless-stopped
+    environment:
+      - PGPASSWORD=${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - ./scripts/backup.sh:/scripts/backup.sh:ro
+      - backup_data:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+          echo "0 3 * * * /bin/sh /scripts/backup.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root
+          crond -f -l 8
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - shopnet
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+
+  bot:
+    build: .
+    container_name: tg_shop_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://tg_shop:${POSTGRES_PASSWORD:-changeme}@postgres:5432/tg_shop
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - shopnet
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1"
+
+  admin:
+    build:
+      context: ./admin
+      args:
+        - NEXT_PUBLIC_API_BASE=${APP_BASE_URL:-https://svechevarov-family.ru}
+    container_name: tg_shop_admin
+    restart: unless-stopped
+    networks:
+      - shopnet
+    depends_on:
+      bot:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: tg_shop_caddy
+    restart: unless-stopped
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - shopnet
+    depends_on:
+      - bot
+      - admin
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+
+volumes:
+  pg_data:
+  backup_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  shopnet:
