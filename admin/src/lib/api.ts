@@ -73,47 +73,6 @@ async function request<T>(
     throw new Error("Не авторизован");
   }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-  base: string = ADMIN_API,
-  timeoutMs: number = 30000,
-): Promise<T> {
-  const headers: Record<string, string> = {
-    ...((options.headers as Record<string, string>) || {}),
-  };
-
-  if (!(options.body instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  let res: Response;
-  try {
-    res = await fetch(`${base}${path}`, {
-      ...options,
-      headers,
-      credentials: "include",
-      signal: controller.signal,
-    });
-  } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") {
-      throw new Error("Превышено время ожидания сервера. Попробуйте файл поменьше.");
-    }
-    throw new Error("Сервер недоступен. Проверьте подключение и попробуйте позже.");
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (res.status === 401) {
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.href = "/login";
-    }
-    throw new Error("Не авторизован");
-  }
-
   const data = await res.json();
 
   if (!res.ok) {
