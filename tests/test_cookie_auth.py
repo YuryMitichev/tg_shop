@@ -51,7 +51,7 @@ class TestVerifyTokenCookie:
         cookies = resp.headers.get_list("set-cookie")
         assert any("admin_token=" in c for c in cookies)
         assert any("httponly" in c.lower() for c in cookies)
-        assert any("samesite=lax" in c.lower() for c in cookies)
+        assert any("samesite=none" in c.lower() for c in cookies)
 
     async def test_verify_token_invalid(self, db_session, seed_data):
         app = create_app()
@@ -65,8 +65,8 @@ class TestVerifyTokenCookie:
         assert resp.status_code == 200
         assert resp.json()["ok"] is False
 
-    async def test_verify_token_no_token_in_json(self, db_session, seed_data):
-        """Cookie-based: токен не возвращается в JSON."""
+    async def test_verify_token_returns_token_in_json(self, db_session, seed_data):
+        """Bearer mode: токен возвращается в JSON для localStorage."""
         token = "test-no-json-token"
         async with db_session() as session:
             session.add(LoginToken(
@@ -87,8 +87,9 @@ class TestVerifyTokenCookie:
             )
 
         body = resp.json()
-        assert "token" not in body
         assert body["ok"] is True
+        assert "token" in body
+        assert isinstance(body["token"], str)
 
 
 class TestCookieAuth:

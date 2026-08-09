@@ -43,17 +43,12 @@ class TestShopActionsKeyboard:
         assert "sub_shop:2" in callbacks
         assert "delete_shop:2" in callbacks
 
-    def test_includes_shop_bot_link_when_username_set(self):
+    def test_no_mini_app_link_in_keyboard(self):
         from app.bot.platform.bot import _shop_actions_kb
 
-        with patch("app.bot.platform.bot.settings") as mock_settings:
-            mock_settings.admin_panel_url = "https://admin.example.com"
-            mock_settings.webapp_enabled = True
-            mock_settings.webapp_url = "https://shop.example.com/app/"
-            kb = _shop_actions_kb(_shop_dict(bot_username="my_shop_bot"))
-
+        kb = _shop_actions_kb(_shop_dict(bot_username="my_shop_bot"))
         urls = [btn.url for row in kb.inline_keyboard for btn in row if btn.url]
-        assert "https://t.me/my_shop_bot?startapp=shop" in urls
+        assert urls == []
 
     def test_no_shop_link_when_username_missing(self):
         from app.bot.platform.bot import _shop_actions_kb

@@ -27,7 +27,7 @@ from app.services.offer_agreement_service import (
     get_offer_text,
     get_privacy_policy_text,
 )
-from app.bot.bot import start_shop_bot, stop_shop_bot
+from app.bot.bot import get_bot, start_shop_bot, stop_shop_bot
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +98,6 @@ def _shop_actions_kb(shop: dict) -> InlineKeyboardMarkup:
     shop_id = shop["id"]
     rows: list[list[InlineKeyboardButton]] = []
 
-    bot_username = shop.get("bot_username")
-    if bot_username:
-        shop_url = f"https://t.me/{bot_username}?startapp=shop_{shop_id}"
-        rows.append([InlineKeyboardButton(text="📱 Мини-приложение", url=shop_url)])
-
     rows.append(
         [
             InlineKeyboardButton(text="💳 Подписка", callback_data=f"sub_shop:{shop_id}"),
@@ -120,7 +115,6 @@ async def _send_shop_card(message: Message, shop: dict) -> None:
     expires = sub["expires_at"][:10] if sub else "—"
 
     bot_username = shop.get("bot_username")
-    admin_url = settings.admin_panel_url
 
     lines = [
         f"🏪 <b>{shop['name']}</b>",
@@ -131,8 +125,6 @@ async def _send_shop_card(message: Message, shop: dict) -> None:
     ]
     if bot_username:
         lines.append(f"   Бот: @{bot_username}")
-    if admin_url:
-        lines.append(f"\n📊 <b>Админ-панель:</b> {admin_url}/login")
 
     await message.answer(
         "\n".join(lines),
@@ -293,6 +285,43 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
     )
 
 
+async def _send_shop_links_via_shop_bot(
+    shop_id: int, owner_telegram_id: int, bot_username: str | None
+) -> None:
+    """Отправляет ссылки на админ-панель и мини-приложение через бота магазина."""
+    shop_bot = get_bot(shop_id)
+    if shop_bot is None:
+        logger.warning("Магазин %d: бот не найден — ссылки не отправлены", shop_id)
+        return
+
+    admin_url = settings.admin_panel_url
+
+    kb_rows = []
+    if admin_url:
+        kb_rows.append([InlineKeyboardButton(text="📊 Открыть админ-панель", url=f"{admin_url}/login")])
+    if bot_username:
+        shop_url = f"https://t.me/{bot_username}?startapp=shop_{shop_id}"
+        kb_rows.append([InlineKeyboardButton(text="📱 Мини-приложение", url=shop_url)])
+    kb = InlineKeyboardMarkup(inline_keyboard=kb_rows) if kb_rows else None
+
+    text = "👋 <b>Добро пожаловать в магазин!</b>\n\n"
+    if admin_url:
+        text += f"📊 <b>Админ-панель:</b>\n{admin_url}/login\n\n"
+        text += "Для входа введите свой Telegram ID.\nКод подтверждения придёт в этот бот.\n\n"
+    if bot_username:
+        text += "📱 <b>Мини-приложение:</b> нажмите кнопку ниже"
+
+    try:
+        await shop_bot.send_message(
+            chat_id=owner_telegram_id,
+            text=text,
+            reply_markup=kb,
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        logger.exception("Магазин %d: не удалось отправить ссылки через бота магазина", shop_id)
+
+
 async def _finalize_shop_creation(
     message: Message, shop: dict, bot_username: str | None, state: FSMContext
 ) -> None:
@@ -316,33 +345,24 @@ async def _finalize_shop_creation(
         await state.clear()
         return
 
-    admin_url = settings.admin_panel_url
+    await _send_shop_links_via_shop_bot(
+        shop["id"], shop.get("owner_telegram_id"), bot_username
+    )
 
-    text = f"🎉 <b>Готово! Ваш магазин работает!</b>\n\n"
-
+    text = (
+        f"🎉 <b>Готово! Ваш магазин работает!</b>\n\n"
+        f"🎁 Подписка: 7 дней бесплатно\n\n"
+    )
     if bot_username:
-        text += f"🤖 Бот: @{bot_username}\n"
-    text += f"🎁 Подписка: 7 дней бесплатно\n\n"
-
-    if admin_url:
-        text += f"📊 <b>Админ-панель:</b>\n{admin_url}/login\n\n"
-
-    text += "Что нужно сделать:\n"
-    text += "1. Узнайте свой Telegram ID у @userinfobot — он понадобится для входа в админку\n"
-    if bot_username:
-        text += f"2. Зайдите в админ-панель — код входа придёт от бота @{bot_username}\n"
-        text += "3. Добавьте товары, настройте каталог\n"
-        text += f"4. Откройте бота @{bot_username} — нажмите /start\n"
+        text += (
+            f"📊 Ссылки на админ-панель и мини-приложение "
+            f"отправлены в боте @{bot_username}.\n\n"
+            f"Если не получили — откройте бота @{bot_username} и нажмите /start"
+        )
     else:
-        text += "2. Добавьте товары, настройте каталог\n"
-        text += "3. Откройте своего бота — нажмите /start\n"
+        text += "📊 Ссылки на админ-панель отправлены в вашем боте."
 
-    kb_rows = []
-    if admin_url:
-        kb_rows.append([InlineKeyboardButton(text="📊 Открыть админ-панель", url=f"{admin_url}/login")])
-    kb = InlineKeyboardMarkup(inline_keyboard=kb_rows) if kb_rows else None
-
-    await message.answer(text, reply_markup=kb, disable_web_page_preview=True)
+    await message.answer(text, disable_web_page_preview=True)
 
     await state.clear()
 
