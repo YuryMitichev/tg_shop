@@ -206,7 +206,7 @@ async def verify_login_token(request: Request, body: VerifyTokenBody):
     if token is None:
         return {"ok": False, "error": "Неверная или истекшая ссылка"}
 
-    response = JSONResponse(content={"ok": True})
+    response = JSONResponse(content={"ok": True, "token": token})
     response.set_cookie(
         key="admin_token",
         value=token,

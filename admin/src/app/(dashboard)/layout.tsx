@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { SubscriptionBanner } from "@/components/layout/subscription-banner";
 import { SubscriptionProvider, isRouteBlocked } from "@/lib/subscription-context";
-import { api } from "@/lib/api";
+import { api, clearToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -35,6 +35,7 @@ export default function DashboardLayout({
   }, [router]);
 
   async function handleLogout() {
+    clearToken();
     try {
       await api.post("/auth/logout");
     } catch {

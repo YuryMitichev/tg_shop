@@ -7,6 +7,72 @@ export function photoUrl(photoId: number): string {
   return `${SHOP_API}/photo/${photoId}`;
 }
 
+const TOKEN_KEY = "admin_token";
+
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(TOKEN_KEY, token);
+  }
+}
+
+export function clearToken(): void {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  base: string = ADMIN_API,
+  timeoutMs: number = 30000,
+): Promise<T> {
+  const headers: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {}),
+  };
+
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const token = getToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("Превышено время ожидания сервера. Попробуйте файл поменьше.");
+    }
+    throw new Error("Сервер недоступен. Проверьте подключение и попробуйте позже.");
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (res.status === 401) {
+    clearToken();
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login";
+    }
+    throw new Error("Не авторизован");
+  }
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -42,7 +108,7 @@ async function request<T>(
   }
 
   if (res.status === 401) {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.href = "/login";
     }
     throw new Error("Не авторизован");
