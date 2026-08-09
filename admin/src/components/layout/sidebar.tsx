@@ -34,7 +34,15 @@ const navItems = [
   { href: "/settings", label: "Настройки", icon: Settings },
 ];
 
-export function Sidebar({ isSuper = false, shopName }: { isSuper?: boolean; shopName?: string }) {
+export function Sidebar({
+  isSuper = false,
+  shopName,
+  onNavigate,
+}: {
+  isSuper?: boolean;
+  shopName?: string;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const { subscriptionActive } = useSubscription();
 
@@ -43,8 +51,8 @@ export function Sidebar({ isSuper = false, shopName }: { isSuper?: boolean; shop
     : navItems;
 
   return (
-    <aside className="flex h-screen w-60 flex-col border-r bg-card">
-      <div className="flex h-14 items-center gap-2 border-b px-5">
+    <aside className="flex h-full w-full flex-col border-r bg-card">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b px-5">
         <span className="text-lg font-semibold">{shopName || "Магазин"}</span>
       </div>
 
@@ -57,6 +65,7 @@ export function Sidebar({ isSuper = false, shopName }: { isSuper?: boolean; shop
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 blocked && "pointer-events-none cursor-not-allowed opacity-40",

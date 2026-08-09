@@ -7,7 +7,8 @@ import { SubscriptionBanner } from "@/components/layout/subscription-banner";
 import { SubscriptionProvider, isRouteBlocked } from "@/lib/subscription-context";
 import { api, clearToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { LogOut, Menu } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 export default function DashboardLayout({
@@ -21,6 +22,7 @@ export default function DashboardLayout({
   const [subscriptionActive, setSubscriptionActive] = useState(true);
   const [isSuper, setIsSuper] = useState(false);
   const [shopName, setShopName] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     api
@@ -57,20 +59,41 @@ export default function DashboardLayout({
   return (
     <SubscriptionProvider subscriptionActive={subscriptionActive}>
       <div className="flex min-h-screen">
-        <div className="hidden md:block">
+        <div className="hidden w-64 shrink-0 md:block">
           <Sidebar isSuper={isSuper} shopName={shopName} />
         </div>
 
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetContent side="left" className="p-0" showCloseButton>
+            <Sidebar
+              isSuper={isSuper}
+              shopName={shopName}
+              onNavigate={() => setMobileNavOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
+
         <div className="flex flex-1 flex-col">
-          <header className="flex h-14 items-center justify-between border-b bg-card px-6">
-            <div className="flex-1" />
+          <header className="flex h-14 items-center justify-between border-b bg-card px-4 md:px-6">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            <span className="truncate pl-2 text-sm font-medium text-muted-foreground md:hidden">
+              {shopName || "Магазин"}
+            </span>
+            <div className="hidden flex-1 md:block" />
             <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Выйти
+              <LogOut className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Выйти</span>
             </Button>
           </header>
 
-          <main className="flex-1 overflow-y-auto p-6">
+          <main className="flex-1 overflow-y-auto p-4 md:p-6">
             {showBanner && <SubscriptionBanner />}
             {children}
           </main>
