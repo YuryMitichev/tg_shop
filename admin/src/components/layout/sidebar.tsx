@@ -14,6 +14,7 @@ import {
   Settings,
   Shield,
   Megaphone,
+  Store,
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -46,7 +47,7 @@ export function Sidebar({
   const { subscriptionActive } = useSubscription();
 
   const items = isSuper
-    ? [...navItems, { href: "/offer", label: "Оферта", icon: FileText }]
+    ? [...navItems, { href: "/shops", label: "Магазины", icon: Store }, { href: "/offer", label: "Оферта", icon: FileText }]
     : navItems;
 
   return (
