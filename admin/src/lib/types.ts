@@ -168,11 +168,24 @@ export interface CompanyInfo {
   company_name: string | null;
   company_inn: string | null;
   company_address: string | null;
+  legal_type: string;
 }
 
-export interface LegalDocs {
-  offer_text: string | null;
-  privacy_policy_text: string | null;
+export interface LegalDocument {
+  document_type: string;
+  title: string;
+  system_template: string;
+  seller_addendum: string | null;
+  text: string;
+  is_read_only: boolean;
+}
+
+export interface RoskomnadzorInfo {
+  legal_type: string;
+  company_name: string | null;
+  company_inn: string | null;
+  info: string;
+  official_url: string;
 }
 
 export interface ShopInfo {

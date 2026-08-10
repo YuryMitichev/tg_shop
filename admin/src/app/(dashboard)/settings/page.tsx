@@ -6,7 +6,7 @@ import { fetcher } from "@/lib/swr";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,8 +19,21 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { RotateCcw, Save, FileText } from "lucide-react";
-import type { SystemMessage, DeliverySettings, ProductAttrsSettings, ProductAttrDef, CompanyInfo, LegalDocs, ShopInfo } from "@/lib/types";
+import { RotateCcw, Save, Download, Lock, ExternalLink, Info } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { SystemMessage, DeliverySettings, ProductAttrsSettings, ProductAttrDef, CompanyInfo, LegalDocument, RoskomnadzorInfo, ShopInfo } from "@/lib/types";
+
+const LEGAL_TYPE_LABELS: Record<string, string> = {
+  individual: "Физическое лицо",
+  ip: "Индивидуальный предприниматель",
+  ooo: "Общество с ограниченной ответственностью",
+};
 
 export default function SettingsPage() {
   const { data: messages, isLoading, mutate } = useSWR<SystemMessage[]>("/settings/messages", fetcher);
@@ -605,6 +618,7 @@ function CompanyInfoSettings() {
   const [name, setName] = useState("");
   const [inn, setInn] = useState("");
   const [address, setAddress] = useState("");
+  const [legalType, setLegalType] = useState("individual");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -612,6 +626,7 @@ function CompanyInfoSettings() {
       setName(data.company_name || "");
       setInn(data.company_inn || "");
       setAddress(data.company_address || "");
+      setLegalType(data.legal_type || "individual");
     }
   }, [data]);
 
@@ -622,6 +637,7 @@ function CompanyInfoSettings() {
         company_name: name || null,
         company_inn: inn || null,
         company_address: address || null,
+        legal_type: legalType,
       });
       mutate();
       toast.success("Сохранено");
@@ -639,12 +655,26 @@ function CompanyInfoSettings() {
       <CardHeader>
         <CardTitle className="text-base">Реквизиты</CardTitle>
         <CardDescription>
-          Используются в политике конфиденциальности и на странице оформления заказа
+          Подставляются в документы: политику конфиденциальности, согласие,
+          условия заказа, поручение на обработку ПДн и уведомление Роскомнадзора
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label>Название (ИП / ООО)</Label>
+          <Label>Правовая форма</Label>
+          <Select value={legalType} onValueChange={setLegalType}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Выберите правовую форму" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="individual">Физическое лицо</SelectItem>
+              <SelectItem value="ip">Индивидуальный предприниматель</SelectItem>
+              <SelectItem value="ooo">Общество с ограниченной ответственностью</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Наименование (ИП / ООО / ФИО)</Label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -681,7 +711,195 @@ function CompanyInfoSettings() {
 }
 
 function LegalDocsSettings() {
-  const { data, isLoading, mutate } = useSWR<LegalDocs>("/settings/legal", fetcher);
+  const { data: docs, isLoading, mutate } = useSWR<LegalDocument[]>("/settings/legal-documents", fetcher);
+  const { data: rknInfo } = useSWR<RoskomnadzorInfo>("/settings/roskomnadzor", fetcher);
+
+  const [addendums, setAddendums] = useState<Record<string, string>>({});
+  const [savingType, setSavingType] = useState<string | null>(null);
+  const [downloadingRkn, setDownloadingRkn] = useState(false);
+
+  useEffect(() => {
+    if (docs) {
+      const map: Record<string, string> = {};
+      for (const doc of docs) {
+        map[doc.document_type] = doc.seller_addendum || "";
+      }
+      setAddendums(map);
+    }
+  }, [docs]);
+
+  async function handleSaveAddendum(docType: string) {
+    setSavingType(docType);
+    try {
+      await api.put(`/settings/legal-documents/${docType}`, {
+        seller_addendum: addendums[docType] || null,
+      });
+      mutate();
+      toast.success("Сохранено");
+    } catch {
+      toast.error("Ошибка");
+    } finally {
+      setSavingType(null);
+    }
+  }
+
+  async function handleDownloadRkn() {
+    setDownloadingRkn(true);
+    try {
+      const { blob, filename } = await api.download("/settings/roskomnadzor/draft");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Черновик скачан");
+    } catch {
+      toast.error("Ошибка загрузки");
+    } finally {
+      setDownloadingRkn(false);
+    }
+  }
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Правовые документы</CardTitle>
+          <CardDescription>
+            Системный шаблон формируется из реквизитов автоматически (вкладка «Реквизиты»).
+            Ниже каждого шаблона можно добавить дополнительные условия продавца.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      {docs?.map((doc) => (
+        <Card key={doc.document_type}>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">{doc.title}</CardTitle>
+              {doc.is_read_only ? (
+                <Badge variant="secondary" className="gap-1">
+                  <Lock className="h-3 w-3" />
+                  формируется автоматически
+                </Badge>
+              ) : (
+                <Badge variant="outline">редактируемое дополнение</Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Системный шаблон</Label>
+              <Textarea
+                value={doc.system_template}
+                readOnly
+                rows={8}
+                className="mt-1 bg-muted font-mono text-xs"
+              />
+            </div>
+
+            {!doc.is_read_only && (
+              <div>
+                <Label className="text-xs text-muted-foreground">
+                  Дополнительные условия продавца
+                </Label>
+                <Textarea
+                  value={addendums[doc.document_type] ?? ""}
+                  onChange={(e) =>
+                    setAddendums((prev) => ({
+                      ...prev,
+                      [doc.document_type]: e.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className="mt-1 font-mono text-sm"
+                  placeholder="Необязательно. Текст будет добавлен после системного шаблона."
+                />
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveAddendum(doc.document_type)}
+                    disabled={savingType === doc.document_type}
+                  >
+                    <Save className="mr-2 h-3 w-3" />
+                    {savingType === doc.document_type ? "Сохранение..." : "Сохранить"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+
+      <OfferTextSettings />
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Info className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">
+              Обработка персональных данных — уведомление в Роскомнадзор
+            </CardTitle>
+          </div>
+          <CardDescription className="whitespace-pre-line">
+            {rknInfo?.info}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {rknInfo && (
+            <div className="rounded-md bg-muted p-3 text-xs leading-relaxed">
+              <p>
+                <span className="text-muted-foreground">Оператор:</span>{" "}
+                {LEGAL_TYPE_LABELS[rknInfo.legal_type] || rknInfo.legal_type}
+                {rknInfo.company_name ? ` ${rknInfo.company_name}` : ""}
+              </p>
+              {rknInfo.company_inn && (
+                <p>
+                  <span className="text-muted-foreground">ИНН:</span>{" "}
+                  {rknInfo.company_inn}
+                </p>
+              )}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadRkn}
+              disabled={downloadingRkn}
+            >
+              <Download className="mr-2 h-3 w-3" />
+              {downloadingRkn ? "Загрузка..." : "Скачать черновик уведомления"}
+            </Button>
+            {rknInfo && (
+              <a
+                href={rknInfo.official_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
+              >
+                <ExternalLink className="mr-2 h-3 w-3" />
+                Подать в Роскомнадзор
+              </a>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Черновик формируется из реквизитов. Заполните реквизиты и скачайте
+            готовый текст для подачи через портал Роскомнадзора.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function OfferTextSettings() {
+  const { data, isLoading, mutate } = useSWR<{ offer_text: string | null; privacy_policy_text: string | null }>("/settings/legal", fetcher);
 
   const [offerText, setOfferText] = useState("");
   const [privacyText, setPrivacyText] = useState("");
@@ -714,10 +932,10 @@ function LegalDocsSettings() {
   async function handleGenerate() {
     setGenerating(true);
     try {
-      const template = await api.post<LegalDocs>("/settings/legal/generate", {});
+      const template = await api.post<{ offer_text: string; privacy_policy_text: string }>("/settings/legal/generate", {});
       setOfferText(template.offer_text || "");
       setPrivacyText(template.privacy_policy_text || "");
-      toast.success("Шаблон сгенерирован");
+      toast.success("Шаблон сгенерирован из реквизитов");
     } catch {
       toast.error("Ошибка генерации");
     } finally {
@@ -725,62 +943,59 @@ function LegalDocsSettings() {
     }
   }
 
-  if (isLoading) return <Skeleton className="h-48 w-full" />;
+  if (isLoading) return null;
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Юридические документы</CardTitle>
-          <CardDescription>
-            Оферта и политика конфиденциальности магазина. Покупатель должен принять
-            оферту перед первым заказом. Текст подставляется из реквизитов
-            (вкладка «Реквизиты»).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex justify-start">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGenerate}
-              disabled={generating}
-            >
-              <FileText className="mr-2 h-3 w-3" />
-              {generating ? "Генерация..." : "Сгенерировать шаблон"}
-            </Button>
-          </div>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Оферта и политика (для бота)</CardTitle>
+        <CardDescription>
+          Эти тексты показываются покупателю при оформлении заказа.
+          Текст подставляется из реквизитов (вкладка «Реквизиты»).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex justify-start">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGenerate}
+            disabled={generating}
+          >
+            <RotateCcw className="mr-2 h-3 w-3" />
+            {generating ? "Генерация..." : "Сгенерировать из реквизитов"}
+          </Button>
+        </div>
 
-          <div className="space-y-2">
-            <Label>Публичная оферта</Label>
-            <Textarea
-              value={offerText}
-              onChange={(e) => setOfferText(e.target.value)}
-              rows={10}
-              className="font-mono text-sm"
-              placeholder="Текст оферты..."
-            />
-          </div>
+        <div className="space-y-2">
+          <Label>Публичная оферта</Label>
+          <Textarea
+            value={offerText}
+            onChange={(e) => setOfferText(e.target.value)}
+            rows={8}
+            className="font-mono text-sm"
+            placeholder="Текст оферты..."
+          />
+        </div>
 
-          <div className="space-y-2">
-            <Label>Политика конфиденциальности</Label>
-            <Textarea
-              value={privacyText}
-              onChange={(e) => setPrivacyText(e.target.value)}
-              rows={10}
-              className="font-mono text-sm"
-              placeholder="Текст политики конфиденциальности..."
-            />
-          </div>
+        <div className="space-y-2">
+          <Label>Политика конфиденциальности</Label>
+          <Textarea
+            value={privacyText}
+            onChange={(e) => setPrivacyText(e.target.value)}
+            rows={8}
+            className="font-mono text-sm"
+            placeholder="Текст политики конфиденциальности..."
+          />
+        </div>
 
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={saving}>
-              <Save className="mr-2 h-4 w-4" />
-              Сохранить
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+        <div className="flex justify-end">
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />
+            Сохранить
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -86,6 +86,40 @@ async function request<T>(
   return data as T;
 }
 
+async function downloadFile(
+  path: string,
+  base: string = ADMIN_API,
+): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${base}${path}`, {
+    headers,
+    credentials: "include",
+  });
+
+  if (res.status === 401) {
+    clearToken();
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login";
+    }
+    throw new Error("Не авторизован");
+  }
+
+  if (!res.ok) {
+    throw new Error("Ошибка загрузки файла");
+  }
+
+  const disposition = res.headers.get("content-disposition") || "";
+  const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+  const filename = filenameMatch ? filenameMatch[1] : "download.txt";
+
+  return { blob: await res.blob(), filename };
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown, timeoutMs?: number) =>
@@ -117,6 +151,7 @@ export const api = {
       body: formData,
     });
   },
+  download: (path: string) => downloadFile(path),
 };
 
 export const superAdminApi = {
