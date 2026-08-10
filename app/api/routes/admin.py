@@ -43,6 +43,7 @@ router = APIRouter()
 
 class RequestLoginBody(BaseModel):
     telegram_user_id: int
+    panel_url: str | None = None
 
 
 class VerifyTokenBody(BaseModel):
@@ -190,7 +191,7 @@ class PreviewRecipientsBody(BaseModel):
 @router.post("/auth/request-login")
 @limiter.limit("5/5minutes")
 async def request_login(request: Request, body: RequestLoginBody):
-    ok = await AdminAuthService.request_login(body.telegram_user_id)
+    ok = await AdminAuthService.request_login(body.telegram_user_id, panel_url=body.panel_url)
 
     if not ok:
         return {"ok": False, "error": "Пользователь не является администратором"}

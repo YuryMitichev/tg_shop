@@ -75,7 +75,7 @@ function LoginForm() {
     try {
       const res = await api.post<{ ok: boolean; error?: string }>(
         "/auth/request-login",
-        { telegram_user_id: Number(telegramId) },
+        { telegram_user_id: Number(telegramId), panel_url: window.location.origin },
       );
 
       if (!res.ok) {

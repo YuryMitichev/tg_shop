@@ -65,14 +65,14 @@ class AdminAuthService:
         return []
 
     @staticmethod
-    async def request_login(telegram_user_id: int) -> bool:
+    async def request_login(telegram_user_id: int, panel_url: str | None = None) -> bool:
         from app.services.shop_service import ShopService
 
         shops = await AdminAuthService._resolve_shop_ids(telegram_user_id)
         if not shops:
             return False
 
-        base_url = settings.admin_panel_url or "https://t.me"
+        base_url = panel_url or settings.admin_panel_url or "https://t.me"
 
         async with async_session() as session:
             await session.execute(
