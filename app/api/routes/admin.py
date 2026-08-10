@@ -189,7 +189,7 @@ class PreviewRecipientsBody(BaseModel):
 # ==========================
 
 @router.post("/auth/request-login")
-@limiter.limit("5/5minutes")
+@limiter.limit("20/hour")
 async def request_login(request: Request, body: RequestLoginBody):
     ok = await AdminAuthService.request_login(body.telegram_user_id, panel_url=body.panel_url)
 
