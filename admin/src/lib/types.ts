@@ -332,3 +332,36 @@ export interface ShopManagement {
   manual_payment_enabled: boolean;
   created_at: string | null;
 }
+
+export interface PlatformStats {
+  total_shops: number;
+  active_shops: number;
+  trial_shops: number;
+  expired_shops: number;
+  new_shops_30d: number;
+  total_revenue: number;
+}
+
+export interface PlatformSubscription {
+  id: number;
+  shop_id: number;
+  shop_name: string;
+  plan_name: string;
+  plan_price: number;
+  is_trial: boolean;
+  status: string;
+  started_at: string | null;
+  expires_at: string;
+  external_payment_id: string | null;
+}
+
+export interface SubscriptionPlanAdmin {
+  id: number;
+  name: string;
+  description: string | null;
+  price: number;
+  duration_days: number;
+  is_trial: boolean;
+  is_active: boolean;
+  features: string[];
+}

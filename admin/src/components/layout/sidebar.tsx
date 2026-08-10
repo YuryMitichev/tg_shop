@@ -16,6 +16,9 @@ import {
   Megaphone,
   Store,
   FileText,
+  Globe,
+  CreditCard,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription, isRouteBlocked } from "@/lib/subscription-context";
@@ -34,6 +37,14 @@ const navItems = [
   { href: "/settings", label: "Настройки", icon: Settings },
 ];
 
+const superItems = [
+  { href: "/shops", label: "Магазины", icon: Store },
+  { href: "/platform", label: "Платформа", icon: Globe },
+  { href: "/platform/subscriptions", label: "Подписки", icon: CreditCard },
+  { href: "/platform/plans", label: "Тарифы", icon: Layers },
+  { href: "/offer", label: "Оферта", icon: FileText },
+];
+
 export function Sidebar({
   isSuper = false,
   shopName,
@@ -47,7 +58,7 @@ export function Sidebar({
   const { subscriptionActive } = useSubscription();
 
   const items = isSuper
-    ? [...navItems, { href: "/shops", label: "Магазины", icon: Store }, { href: "/offer", label: "Оферта", icon: FileText }]
+    ? [...navItems, ...superItems]
     : navItems;
 
   return (
@@ -57,26 +68,35 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {items.map((item) => {
+        {items.map((item, idx) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           const blocked = !subscriptionActive && isRouteBlocked(item.href);
+          const isSectionStart = isSuper && idx === navItems.length;
 
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                blocked && "pointer-events-none cursor-not-allowed opacity-40",
-                active && !blocked
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+            <div key={item.href}>
+              {isSectionStart && (
+                <div className="mb-1 mt-3 border-t px-3 pt-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Платформа
+                  </span>
+                </div>
               )}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {item.label}
-            </Link>
+              <Link
+                href={item.href}
+                onClick={onNavigate}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  blocked && "pointer-events-none cursor-not-allowed opacity-40",
+                  active && !blocked
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                )}
+              >
+                <item.icon className="h-4 w-4 shrink-0" />
+                {item.label}
+              </Link>
+            </div>
           );
         })}
       </nav>
