@@ -161,6 +161,11 @@ export const superAdminApi = {
       method: "POST",
       body: body ? JSON.stringify(body) : undefined,
     }, SUPER_ADMIN_API),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    }, SUPER_ADMIN_API),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: "PATCH",
