@@ -12,7 +12,6 @@ import {
   Ticket,
   Star,
   Settings,
-  Settings,
   Shield,
   Megaphone,
   Store,
