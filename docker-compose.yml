@@ -96,6 +96,30 @@ services:
           memory: 512m
           cpus: "1"
 
+  platform-admin:
+    build:
+      context: ./platform-admin
+      args:
+        - NEXT_PUBLIC_API_BASE=${APP_BASE_URL:-https://svechevarov-family.ru}
+    container_name: tg_shop_platform_admin
+    restart: unless-stopped
+    networks:
+      - shopnet
+    depends_on:
+      bot:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1"
+
   caddy:
     image: caddy:2-alpine
     container_name: tg_shop_caddy
@@ -115,6 +139,7 @@ services:
     depends_on:
       - bot
       - admin
+      - platform-admin
     deploy:
       resources:
         limits:
