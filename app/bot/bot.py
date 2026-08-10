@@ -155,6 +155,13 @@ async def start_shop_bot(shop_id: int) -> bool:
     if token is None:
         return False
 
+    if settings.platform_bot_token and token == settings.platform_bot_token:
+        logger.info(
+            "Магазин %d: токен совпадает с платформенным ботом — пропускаем shop polling",
+            shop_id,
+        )
+        return False
+
     await _backfill_bot_username(shop_id, shop)
 
     asyncio.create_task(_run_shop_bot(shop_id, token))
@@ -235,8 +242,15 @@ async def start_all_bots() -> None:
     tasks = []
     for shop in shops:
         token = await ShopService.get_bot_token(shop["id"])
-        if token:
-            tasks.append(_run_shop_bot(shop["id"], token))
+        if not token:
+            continue
+        if settings.platform_bot_token and token == settings.platform_bot_token:
+            logger.info(
+                "Магазин %d: токен совпадает с платформенным ботом — пропускаем shop polling",
+                shop["id"],
+            )
+            continue
+        tasks.append(_run_shop_bot(shop["id"], token))
 
     await asyncio.gather(*tasks) if tasks else None
 
