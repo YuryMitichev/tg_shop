@@ -128,6 +128,18 @@ class ShopService:
             return [_shop_to_dict(s) for s in result.scalars().all()]
 
     @staticmethod
+    async def get_by_owner(telegram_id: int) -> list[dict]:
+        """Возвращает все магазины, принадлежащие владельцу по telegram_id (SQL-фильтр)."""
+        async with async_session() as session:
+            stmt = (
+                select(Shop)
+                .where(Shop.owner_telegram_id == telegram_id)
+                .order_by(Shop.id)
+            )
+            result = await session.execute(stmt)
+            return [_shop_to_dict(s) for s in result.scalars().all()]
+
+    @staticmethod
     async def get(shop_id: int) -> dict | None:
         async with async_session() as session:
             shop = await session.get(Shop, shop_id)

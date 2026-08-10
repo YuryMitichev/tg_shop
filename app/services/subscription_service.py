@@ -281,6 +281,14 @@ class SubscriptionService:
             sub = result.scalar_one_or_none()
 
             if sub is not None:
+                if sub.external_payment_id == payment_id:
+                    return {
+                        "shop_id": shop_id,
+                        "status": sub.status,
+                        "expires_at": sub.expires_at.isoformat(),
+                        "plan_id": sub.plan_id,
+                    }
+
                 base = max(now, sub.expires_at)
                 new_expires = base + duration
 

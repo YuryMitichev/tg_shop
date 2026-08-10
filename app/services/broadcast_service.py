@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Sequence
+import asyncio
 
 from sqlalchemy import select, func, or_
+
+from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
 
 from app.core.enums import OrderStatus
 from app.database.db import async_session
@@ -215,10 +218,17 @@ class BroadcastService:
 
             for tg_id in tg_ids:
                 try:
-                    if photo_file_id:
-                        await bot.send_photo(tg_id, photo_file_id, caption=text)
-                    else:
-                        await bot.send_message(tg_id, text)
+                    try:
+                        if photo_file_id:
+                            await bot.send_photo(tg_id, photo_file_id, caption=text)
+                        else:
+                            await bot.send_message(tg_id, text)
+                    except TelegramRetryAfter as e:
+                        await asyncio.sleep(e.retry_after)
+                        if photo_file_id:
+                            await bot.send_photo(tg_id, photo_file_id, caption=text)
+                        else:
+                            await bot.send_message(tg_id, text)
                     sent += 1
 
                     if broadcast.discount_percent > 0:
@@ -242,6 +252,8 @@ class BroadcastService:
                     )
                 except Exception:
                     failed += 1
+
+                await asyncio.sleep(0.05)
 
             broadcast.sent_count = sent
             broadcast.failed_count = failed

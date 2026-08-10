@@ -1,7 +1,7 @@
 """Импорт каталога из выгрузок маркетплейсов (Ozon / Wildberries / Яндекс.Маркет).
 
-Парсит .xlsx-файлы и извлекает только название и описание товара.
-Цену, остаток, характеристики и фото пользователь добавляет вручную
+Парсит .xlsx-файлы и извлекает название, описание и цену товара.
+Остатки, характеристики и фото пользователь добавляет вручную
 после импорта.
 """
 from io import BytesIO
@@ -25,16 +25,19 @@ _COLUMN_ALIASES: dict[str, dict[str, list[str]]] = {
         "name": ["Название товара", "Название", "Product name", "Наименование"],
         "description": ["Описание", "Description", "Описание товара"],
         "category": ["Категория", "Категория товара", "Категория продавца", "Item category"],
+        "price": ["Цена, руб.", "Цена", "Price", "Цена с учетом скидки, руб."],
     },
     "wb": {
         "name": ["Наименование", "Название", "Коммерческое наименование"],
         "description": ["Описание", "Описание товара", "Composition", "Состав"],
         "category": ["Категория", "Категория продавца", "Предмет", "Категория товара"],
+        "price": ["Цена продавца", "Цена розничная", "Цена", "Розничная цена"],
     },
     "ym": {
         "name": ["Название", "Наименование товара", "name", "Название товара"],
         "description": ["Описание", "Описание товара", "description"],
         "category": ["Категория", "Категория продавца", "category", "Категория товара"],
+        "price": ["Цена", "price", "Цена, руб."],
     },
 }
 
@@ -43,6 +46,7 @@ _COLUMN_KEYWORDS: dict[str, list[str]] = {
     "name": ["назван", "наименован", "product name", "коммерческое наименован"],
     "description": ["описан", "description"],
     "category": ["категори", "предмет"],
+    "price": ["цена", "price", "стоим"],
 }
 
 _MATCHED_FIELDS = list(_COLUMN_KEYWORDS.keys())
@@ -83,7 +87,7 @@ class CatalogImportService:
     def parse_marketplace_file(file_bytes: bytes, source: MarketplaceSource) -> dict:
         """Парсит .xlsx файл и возвращает превью без записи в БД.
 
-        Извлекает только название и описание.
+        Извлекает название, описание и цену.
         Строка считается распознанной, если найдено название.
 
         Возвращает dict:
@@ -134,6 +138,7 @@ class CatalogImportService:
         name_idx = column_map.get("name")
         desc_idx = column_map.get("description")
         cat_idx = column_map.get("category")
+        price_idx = column_map.get("price")
 
         rows: list[dict] = []
         truncated = False
@@ -155,6 +160,13 @@ class CatalogImportService:
             if cat_idx is not None and cat_idx < len(row) and row[cat_idx]:
                 category = str(row[cat_idx]).strip()
 
+            price = 0
+            if price_idx is not None and price_idx < len(row) and row[price_idx]:
+                try:
+                    price = int(round(float(str(row[price_idx]).replace(" ", "").replace("\xa0", "").replace(",", "."))))
+                except (ValueError, TypeError):
+                    price = 0
+
             recognized = bool(name)
 
             rows.append({
@@ -162,6 +174,7 @@ class CatalogImportService:
                 "name": name,
                 "description": description,
                 "category": category,
+                "price": price,
                 "recognized": recognized,
             })
 
@@ -191,7 +204,8 @@ class CatalogImportService:
         """Создаёт Product + плейсхолдер ProductVariant для каждой строки.
 
         Товары создаются скрытыми (is_active=False) — пользователь
-        заполнит цену, характеристики и фото вручную перед публикацией.
+        заполнит остатки, характеристики и фото вручную перед публикацией.
+        Цена переносится из выгрузки.
 
         Если в строке есть поле category — создаётся или находится
         категория с этим именем. Иначе используется category_id или
@@ -252,7 +266,7 @@ class CatalogImportService:
                     ProductVariant(
                         shop_id=shop_id,
                         volume="Стандарт",
-                        price=0,
+                        price=row.get("price", 0),
                         stock=0,
                         attributes={},
                     )

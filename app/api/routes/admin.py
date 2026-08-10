@@ -513,6 +513,7 @@ class ConfirmImportRow(BaseModel):
     name: str
     description: str = ""
     category: str = ""
+    price: int = 0
 
 
 class ConfirmImportBody(BaseModel):

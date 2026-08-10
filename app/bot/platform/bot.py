@@ -136,8 +136,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     tg_id = message.from_user.id
 
-    shops = await ShopService.get_all()
-    user_shops = [s for s in shops if s["owner_telegram_id"] == tg_id]
+    user_shops = await ShopService.get_by_owner(tg_id)
 
     if user_shops:
         await message.answer(
@@ -622,8 +621,7 @@ async def on_about(message: Message) -> None:
 
 async def on_my_shops(message: Message) -> None:
     tg_id = message.from_user.id
-    shops = await ShopService.get_all()
-    user_shops = [s for s in shops if s["owner_telegram_id"] == tg_id]
+    user_shops = await ShopService.get_by_owner(tg_id)
 
     if not user_shops:
         await message.answer("У вас пока нет магазинов.", reply_markup=_main_menu())
@@ -638,8 +636,7 @@ async def on_my_shops(message: Message) -> None:
 async def on_subscription(message: Message) -> None:
     """Показывает статус подписки и доступные тарифы для оплаты."""
     tg_id = message.from_user.id
-    shops = await ShopService.get_all()
-    user_shops = [s for s in shops if s["owner_telegram_id"] == tg_id]
+    user_shops = await ShopService.get_by_owner(tg_id)
 
     if not user_shops:
         await _show_plans_without_shop(message)

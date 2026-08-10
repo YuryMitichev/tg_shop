@@ -36,6 +36,7 @@ interface ImportRow {
   name: string;
   description: string;
   category: string;
+  price: number;
   recognized: boolean;
 }
 
@@ -122,13 +123,14 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
         name: r.name,
         description: r.description,
         category: r.category,
+        price: r.price,
       }));
 
     setImporting(true);
     try {
       const result = await api.post<ConfirmResponse>("/catalog/import/confirm", { rows });
       toast.success(
-        `Импортировано товаров: ${result.created}. Заполните цену и характеристики перед публикацией.`,
+        `Импортировано товаров: ${result.created}. Заполните остатки и характеристики перед публикацией.`,
       );
       if (result.stock_template_url) {
         toast.info("Скачайте шаблон остатков на странице товаров (кнопка «Остатки»)");
@@ -176,8 +178,8 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
             Импорт товаров
           </DialogTitle>
           <DialogDescription>
-            Загрузите выгрузку из маркетплейса (.xlsx). Будут импортированы только названия и описания.
-            Цену, характеристики и фото нужно будет заполнить вручную.
+            Загрузите выгрузку из маркетплейса (.xlsx). Названия, описания и цены импортируются автоматически.
+            Остатки, характеристики и фото нужно заполнить вручную.
           </DialogDescription>
         </DialogHeader>
 
@@ -247,6 +249,7 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
                     </TableHead>
                     <TableHead>Название</TableHead>
                     <TableHead>Категория</TableHead>
+                    <TableHead className="text-right">Цена</TableHead>
                     <TableHead className="max-w-[200px]">Описание</TableHead>
                     <TableHead className="w-8"></TableHead>
                   </TableRow>
@@ -268,6 +271,9 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
                       </TableCell>
                       <TableCell className="max-w-[120px] truncate text-muted-foreground" title={row.category}>
                         {row.category || "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {row.price ? row.price.toLocaleString("ru-RU") + " ₽" : "—"}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground" title={row.description}>
                         {row.description || "—"}
