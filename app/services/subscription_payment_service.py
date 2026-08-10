@@ -1,6 +1,7 @@
 import logging
 
 from app.core.config import settings
+from app.services.platform_settings_service import PlatformSettingsService
 from app.services.shop_service import ShopService
 from app.services.subscription_service import SubscriptionService
 from app.services.yookassa_client import YooKassaClient
@@ -34,6 +35,14 @@ class SubscriptionPaymentService:
         if shop is None:
             return None
 
+        creds = await PlatformSettingsService.get_yookassa_credentials()
+        if creds is None:
+            logger.error(
+                "Не настроены ключи ЮKassa платформы для оплаты подписки магазина %d",
+                shop_id,
+            )
+            return None
+
         return_url = settings.admin_panel_url or settings.app_base_url or "https://t.me"
 
         result = await YooKassaClient.create_payment(
@@ -45,6 +54,8 @@ class SubscriptionPaymentService:
                 "shop_id": str(shop_id),
                 "plan_id": str(plan_id),
             },
+            shop_id=creds[0],
+            secret_key=creds[1],
         )
 
         if result is None:

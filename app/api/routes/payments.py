@@ -3,8 +3,8 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from app.core.config import settings
 from app.api.rate_limit import limiter
+from app.services.platform_settings_service import PlatformSettingsService
 from app.services.order_payment_service import OrderPaymentService
 from app.services.payment_service import PaymentService
 from app.services.shop_service import ShopService
@@ -54,7 +54,7 @@ async def yookassa_webhook(request: Request):
     - "order" → оплата заказа (OrderPaymentService)
     - "subscription" / отсутствует → оплата подписки (SubscriptionPaymentService)
     """
-    if not settings.yookassa_enabled:
+    if not await PlatformSettingsService.is_yookassa_enabled():
         return JSONResponse(
             status_code=403,
             content={"error": "yookassa_not_configured"},
@@ -100,7 +100,17 @@ async def yookassa_webhook(request: Request):
             payment_id, shop_id=creds[0], secret_key=creds[1]
         )
     else:
-        verified = await YooKassaClient.get_payment(payment_id)
+        creds = await PlatformSettingsService.get_yookassa_credentials()
+        if creds is None:
+            logger.error("ЮKassa webhook: не настроены ключи платформы")
+            return JSONResponse(
+                status_code=400,
+                content={"error": "platform_credentials_not_found"},
+            )
+
+        verified = await YooKassaClient.get_payment(
+            payment_id, shop_id=creds[0], secret_key=creds[1]
+        )
 
     if verified is None:
         logger.error("ЮKassa webhook: не удалось верифицировать платёж %s", payment_id)

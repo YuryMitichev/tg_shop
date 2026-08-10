@@ -19,6 +19,7 @@ from app.models.broadcast import Broadcast
 from app.models.user_offer import UserOffer
 from app.models.shop_offer_acceptance import ShopOfferAcceptance
 from app.models.shop_legal_document import ShopLegalDocument
+from app.models.platform_settings import PlatformSettings
 from app.models.subscription import SubscriptionPlan, Subscription
 
 __all__ = [
@@ -43,6 +44,7 @@ __all__ = [
     "UserOffer",
     "ShopOfferAcceptance",
     "ShopLegalDocument",
+    "PlatformSettings",
     "SubscriptionPlan",
     "Subscription",
 ]

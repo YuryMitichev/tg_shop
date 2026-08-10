@@ -13,6 +13,7 @@ from app.database.db import async_session
 from app.models.shop import Shop
 from app.models.subscription import Subscription, SubscriptionPlan
 from app.services.offer_agreement_service import OfferAgreementService
+from app.services.platform_settings_service import PlatformSettingsService
 from app.services.shop_service import ShopService
 from app.services.subscription_service import SubscriptionService
 
@@ -60,6 +61,12 @@ class UpdatePlanBody(BaseModel):
     duration_days: int | None = None
     is_active: bool | None = None
     features: list[str] | None = None
+
+
+class UpdatePlatformPaymentSettingsBody(BaseModel):
+    yookassa_shop_id: str | None = None
+    yookassa_secret_key: str | None = None
+    yookassa_enabled: bool | None = None
 
 
 # ==========================
@@ -407,3 +414,28 @@ async def update_plan(
 
     logger.info("Тариф %d обновлён", plan_id)
     return {"ok": True}
+
+
+# ==========================
+# Платежные настройки платформы
+# ==========================
+
+@router.get("/payment-settings")
+async def get_platform_payment_settings(
+    _admin: dict = Depends(require_super_admin),
+):
+    return await PlatformSettingsService.get_settings()
+
+
+@router.put("/payment-settings")
+async def update_platform_payment_settings(
+    body: UpdatePlatformPaymentSettingsBody,
+    _admin: dict = Depends(require_super_admin),
+):
+    result = await PlatformSettingsService.update_payment_settings(
+        yookassa_shop_id=body.yookassa_shop_id,
+        yookassa_secret_key=body.yookassa_secret_key,
+        yookassa_enabled=body.yookassa_enabled,
+    )
+    logger.info("Обновлены платёжные настройки платформы")
+    return result

@@ -129,6 +129,10 @@ class TestCreatePayment:
             "app.services.subscription_payment_service.YooKassaClient.create_payment",
             new_callable=AsyncMock,
             return_value=mock_response,
+        ), patch(
+            "app.services.subscription_payment_service.PlatformSettingsService.get_yookassa_credentials",
+            new_callable=AsyncMock,
+            return_value=("test_shop_id", "test_secret_key"),
         ):
             result = await SubscriptionPaymentService.create_payment(
                 shop_id=1, plan_id=2

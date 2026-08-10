@@ -12,6 +12,7 @@ import {
   Ticket,
   Star,
   Settings,
+  Settings,
   Shield,
   Megaphone,
   Store,
@@ -42,6 +43,7 @@ const superItems = [
   { href: "/platform", label: "Платформа", icon: Globe },
   { href: "/platform/subscriptions", label: "Подписки", icon: CreditCard },
   { href: "/platform/plans", label: "Тарифы", icon: Layers },
+  { href: "/platform/payment-settings", label: "Оплата", icon: Settings },
   { href: "/offer", label: "Оферта", icon: FileText },
 ];
 

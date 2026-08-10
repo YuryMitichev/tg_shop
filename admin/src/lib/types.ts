@@ -365,3 +365,9 @@ export interface SubscriptionPlanAdmin {
   is_active: boolean;
   features: string[];
 }
+
+export interface PlatformPaymentSettings {
+  yookassa_shop_id: string | null;
+  yookassa_secret_key_masked: string | null;
+  yookassa_enabled: boolean;
+}
