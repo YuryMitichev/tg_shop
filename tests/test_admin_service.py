@@ -1,6 +1,7 @@
 from app.services.catalog_admin_service import CatalogAdminService
 from app.services.order_admin_service import OrderAdminService
 from app.services.stats_service import StatsService
+from app.services.admin_user_service import AdminUserService
 
 
 class TestAdminCategories:
@@ -76,10 +77,10 @@ class TestAdminCategories:
 class TestAdminProducts:
 
     async def test_get_products_includes_hidden(self, db_session, seed_data):
-        products = await CatalogAdminService.get_products(1, 1)
+        result = await CatalogAdminService.get_products(1, 1)
 
-        assert len(products) == 2
-        assert any(p["is_active"] is False for p in products)
+        assert len(result["products"]) == 2
+        assert any(p["is_active"] is False for p in result["products"])
 
     async def test_get_product(self, db_session, seed_data):
         product = await CatalogAdminService.get_product(1, 1)
@@ -336,3 +337,80 @@ class TestAdminStats:
         assert stats["total_orders"] == 1
         assert stats["cancelled_orders"] == 1
         assert stats["total_revenue"] == 0
+
+
+class TestAdminUsers:
+
+    async def test_count_admins_empty(self, db_session, seed_data):
+        count = await AdminUserService.count_admins(1)
+
+        assert count == 0
+
+    async def test_count_admins_with_records(self, db_session, seed_data):
+        await AdminUserService.add(1, 100, "Админ 1")
+        await AdminUserService.add(1, 200, "Админ 2")
+
+        count = await AdminUserService.count_admins(1)
+
+        assert count == 2
+
+    async def test_count_admins_isolated_by_shop(self, db_session, seed_data):
+        from app.models.shop import Shop
+
+        async with db_session() as session:
+            session.add(Shop(id=2, name="Shop 2", bot_token="x" * 64, bot_token_hash="x" * 32, owner_telegram_id=1))
+            await session.commit()
+
+        await AdminUserService.add(1, 100, "Админ 1")
+        await AdminUserService.add(2, 200, "Админ 2")
+
+        assert await AdminUserService.count_admins(1) == 1
+        assert await AdminUserService.count_admins(2) == 1
+
+    async def test_get_admin(self, db_session, seed_data):
+        admin_id = await AdminUserService.add(1, 100, "Админ 1")
+
+        admin = await AdminUserService.get(1, admin_id)
+
+        assert admin is not None
+        assert admin["id"] == admin_id
+        assert admin["telegram_user_id"] == 100
+        assert admin["display_name"] == "Админ 1"
+        assert admin["is_super"] is False
+
+    async def test_get_admin_wrong_shop(self, db_session, seed_data):
+        admin_id = await AdminUserService.add(1, 100, "Админ 1")
+
+        admin = await AdminUserService.get(999, admin_id)
+
+        assert admin is None
+
+    async def test_get_admin_not_found(self, db_session, seed_data):
+        admin = await AdminUserService.get(1, 9999)
+
+        assert admin is None
+
+    async def test_delete_admin(self, db_session, seed_data):
+        admin_id = await AdminUserService.add(1, 100, "Админ 1")
+
+        ok = await AdminUserService.delete(1, admin_id)
+
+        assert ok is True
+        assert await AdminUserService.get(1, admin_id) is None
+        assert await AdminUserService.count_admins(1) == 0
+
+    async def test_delete_admin_wrong_shop(self, db_session, seed_data):
+        admin_id = await AdminUserService.add(1, 100, "Админ 1")
+
+        ok = await AdminUserService.delete(999, admin_id)
+
+        assert ok is False
+
+    async def test_get_all(self, db_session, seed_data):
+        await AdminUserService.add(1, 100, "Админ 1")
+        await AdminUserService.add(1, 200, "Админ 2")
+
+        admins = await AdminUserService.get_all(1)
+
+        assert len(admins) == 2
+        assert all(a["is_super"] is False for a in admins)

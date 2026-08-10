@@ -149,9 +149,11 @@ class CatalogAdminService:
     # ==========================
 
     @staticmethod
-    async def get_products(shop_id: int, category_id: int) -> list[dict]:
+    async def get_products(
+        shop_id: int, category_id: int, page: int = 1, per_page: int = 20
+    ) -> dict:
         async with async_session() as session:
-            result = await session.execute(
+            query = (
                 select(Product)
                 .options(
                     selectinload(Product.variants),
@@ -163,7 +165,16 @@ class CatalogAdminService:
                 )
                 .order_by(Product.id)
             )
-            return [_product_to_dict(p) for p in result.scalars().all()]
+
+            count_query = select(func.count()).select_from(query.subquery())
+            total = (await session.execute(count_query)).scalar() or 0
+
+            result = await session.execute(
+                query.offset((page - 1) * per_page).limit(per_page)
+            )
+            products = [_product_to_dict(p) for p in result.scalars().all()]
+
+            return {"products": products, "total": total, "page": page, "per_page": per_page}
 
     @staticmethod
     async def get_product(shop_id: int, product_id: int) -> dict | None:
@@ -433,9 +444,9 @@ class CatalogAdminService:
     # ==========================
 
     @staticmethod
-    async def get_all_products(shop_id: int) -> list[dict]:
+    async def get_all_products(shop_id: int, page: int = 1, per_page: int = 20) -> dict:
         async with async_session() as session:
-            result = await session.execute(
+            query = (
                 select(Product)
                 .options(
                     selectinload(Product.variants),
@@ -445,15 +456,24 @@ class CatalogAdminService:
                 .where(Product.shop_id == shop_id)
                 .order_by(Product.id.desc())
             )
+
+            count_query = select(func.count()).select_from(query.subquery())
+            total = (await session.execute(count_query)).scalar() or 0
+
+            result = await session.execute(
+                query.offset((page - 1) * per_page).limit(per_page)
+            )
             products = result.scalars().all()
 
-            return [
+            items = [
                 {
                     **_product_to_dict(p),
                     "category_name": p.category.name if p.category else None,
                 }
                 for p in products
             ]
+
+            return {"products": items, "total": total, "page": page, "per_page": per_page}
 
     # ==========================
     # Массовое обновление остатков

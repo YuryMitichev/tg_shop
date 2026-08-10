@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Upload, PackageCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Upload, PackageCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { ImportDialog } from "@/components/import-dialog";
 import { StockUpdateDialog } from "@/components/stock-update-dialog";
-import type { Product, Category } from "@/lib/types";
+import type { Category, ProductsResponse } from "@/lib/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,17 +33,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const PER_PAGE = 20;
+
 export default function ProductsPage() {
   const [filter, setFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [importOpen, setImportOpen] = useState(false);
   const [stockOpen, setStockOpen] = useState(false);
 
-  const { data: products, isLoading, mutate } = useSWR<Product[]>(
-    filter === "all" ? "/products" : `/products?category_id=${filter}`,
-    fetcher,
-  );
+  const productsKey = filter === "all"
+    ? `/products?page=${page}&per_page=${PER_PAGE}`
+    : `/products?category_id=${filter}&page=${page}&per_page=${PER_PAGE}`;
+
+  const { data, isLoading, mutate } = useSWR<ProductsResponse>(productsKey, fetcher);
+  const products = data?.products;
 
   const { data: categories } = useSWR<Category[]>("/categories", fetcher);
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1;
 
   async function toggleActive(id: number) {
     try {
@@ -86,7 +93,7 @@ export default function ProductsPage() {
       </div>
 
       <div className="flex items-center gap-2">
-        <Select value={filter} onValueChange={(v) => setFilter(v || "all")}>
+        <Select value={filter} onValueChange={(v) => { setFilter(v || "all"); setPage(1); }}>
           <SelectTrigger className="w-60">
             <SelectValue placeholder="Все категории" />
           </SelectTrigger>
@@ -99,6 +106,9 @@ export default function ProductsPage() {
             ))}
           </SelectContent>
         </Select>
+        <span className="text-sm text-muted-foreground">
+          Всего: {data?.total ?? 0}
+        </span>
       </div>
 
       {isLoading ? (
@@ -197,6 +207,32 @@ export default function ProductsPage() {
 
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={() => mutate()} />
       <StockUpdateDialog open={stockOpen} onOpenChange={setStockOpen} onUpdated={() => mutate()} />
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Назад
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Страница {page} из {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Вперёд
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

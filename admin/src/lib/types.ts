@@ -29,6 +29,13 @@ export interface Product {
   photos: Photo[];
 }
 
+export interface ProductsResponse {
+  products: Product[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 export interface Order {
   id: number;
   status: string;

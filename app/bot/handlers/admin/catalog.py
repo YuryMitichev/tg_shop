@@ -222,7 +222,8 @@ def setup_catalog_router() -> Router:
         return text
 
     async def _render_products(callback: CallbackQuery, category_id: int) -> None:
-        products = await CatalogAdminService.get_products(get_shop_id(), category_id)
+        result = await CatalogAdminService.get_products(get_shop_id(), category_id, per_page=10000)
+        products = result["products"]
 
         await callback.message.edit_text(
             _render_products_text(products),
@@ -486,7 +487,8 @@ def setup_catalog_router() -> Router:
         await state.clear()
 
         category_id = data["category_id"]
-        products = await CatalogAdminService.get_products(get_shop_id(), category_id)
+        result = await CatalogAdminService.get_products(get_shop_id(), category_id, per_page=10000)
+        products = result["products"]
 
         await callback.message.edit_text(
             f"✅ Товар «{data['name']}» добавлен (ID {product_id}).\n\n"

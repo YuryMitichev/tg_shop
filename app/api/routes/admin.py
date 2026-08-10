@@ -327,10 +327,15 @@ async def delete_category(category_id: int, admin: dict = Depends(require_active
 # ==========================
 
 @router.get("/products")
-async def list_products(category_id: int | None = None, admin: dict = Depends(require_active_subscription)):
+async def list_products(
+    category_id: int | None = None,
+    page: int = 1,
+    per_page: int = 20,
+    admin: dict = Depends(require_active_subscription),
+):
     if category_id is not None:
-        return await CatalogAdminService.get_products(admin["shop_id"], category_id)
-    return await CatalogAdminService.get_all_products(admin["shop_id"])
+        return await CatalogAdminService.get_products(admin["shop_id"], category_id, page, per_page)
+    return await CatalogAdminService.get_all_products(admin["shop_id"], page, per_page)
 
 
 @router.get("/products/{product_id}")
@@ -1019,7 +1024,21 @@ async def create_admin(body: CreateAdminBody, admin: dict = Depends(require_acti
 @router.delete("/admins/{admin_id}")
 async def delete_admin(admin_id: int, admin: dict = Depends(require_active_subscription)):
     if admin_id < 0:
-        return {"ok": False, "error": "Нельзя удалить супер-админа из .env"}
+        raise HTTPException(status_code=400, detail="Нельзя удалить супер-админа из .env")
+
+    admin_to_delete = await AdminUserService.get(admin["shop_id"], admin_id)
+    if admin_to_delete is None:
+        raise HTTPException(status_code=404, detail="Администратор не найден")
+
+    if admin_to_delete["telegram_user_id"] == admin["admin_id"]:
+        raise HTTPException(status_code=400, detail="Нельзя удалить самого себя")
+
+    if await AdminUserService.count_admins(admin["shop_id"]) <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Нельзя удалить последнего администратора магазина",
+        )
+
     ok = await AdminUserService.delete(admin["shop_id"], admin_id)
     return {"ok": ok}
 
