@@ -84,8 +84,8 @@ function LoginForm() {
       }
 
       setStep("waiting");
-    } catch {
-      toast.error("Слишком много попыток. Попробуйте позже.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Ошибка запроса");
     } finally {
       setLoading(false);
     }
