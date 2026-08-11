@@ -13,8 +13,11 @@ LEGAL_DOCUMENT_TITLES = {
     "data_processing_mandate": "Поручение на обработку персональных данных",
 }
 
-_PLATFORM_NAME = "Telegram-магазин (Платформа SaaS)"
-_PLATFORM_ADDRESS = "Адрес оператора Платформы: указывается в учредительных документах"
+_PLATFORM_NAME = "Платформа «Свой канал»"
+_PLATFORM_OPERATOR = "Индивидуальный предприниматель Митичев Юрий Игоревич"
+_PLATFORM_OGRNIP = "326237500197811"
+_PLATFORM_INN = "324301224122"
+_PLATFORM_ADDRESS = "Краснодарский край, г. Тихорецк, ул. Военный городок, д. 72, кв. 2"
 
 _LEGAL_TYPE_LABELS = {
     "individual": "Физическое лицо",
@@ -176,7 +179,7 @@ def _build_data_processing_mandate(shop: dict) -> str:
         "ПОРУЧЕНИЕ НА ОБРАБОТКУ ПЕРСОНАЛЬНЫХ ДАННЫХ\n\n"
         f"{operator} {name} (ИНН: {inn}, адрес: {address}),\n"
         "именуемый в дальнейшем «Оператор», с одной стороны, и\n"
-        f"{_PLATFORM_NAME}, именуемая в дальнейшем «Обработчик», с другой стороны,\n"
+        f"{_PLATFORM_NAME}, {_PLATFORM_OPERATOR} (ОГРНИП: {_PLATFORM_OGRNIP}, ИНН: {_PLATFORM_INN}, адрес: {_PLATFORM_ADDRESS}), именуемая в дальнейшем «Обработчик», с другой стороны,\n"
         "заключили настоящее Поручение о следующем:\n\n"
         "1. ПРЕДМЕТ ПОРУЧЕНИЯ\n"
         "1.1. Оператор поручает, а Обработчик обязуется осуществлять обработку\n"
@@ -206,8 +209,11 @@ def _build_data_processing_mandate(shop: dict) -> str:
         f"ИНН: {inn}\n"
         f"Адрес: {address}\n\n"
         f"6. РЕКВИЗИТЫ ОБРАБОТЧИКА\n"
-        f"{_PLATFORM_NAME}\n"
-        f"{_PLATFORM_ADDRESS}\n\n"
+        f"Платформа: {_PLATFORM_NAME}\n"
+        f"Оператор Платформы (Обработчик): {_PLATFORM_OPERATOR}\n"
+        f"ОГРНИП: {_PLATFORM_OGRNIP}\n"
+        f"ИНН: {_PLATFORM_INN}\n"
+        f"Адрес: {_PLATFORM_ADDRESS}\n\n"
         "Настоящий документ формируется автоматически на основании реквизитов\n"
         "магазина и не подлежит редактированию продавцом (ст. 6 ФЗ-152).\n"
     )
