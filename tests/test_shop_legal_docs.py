@@ -258,13 +258,15 @@ class TestPublicLegalRoutes:
         assert resp.status_code == 200
         assert resp.json()["text"] == "Публичная оферта"
 
-    async def test_get_offer_without_text_404(self, db_session, seed_data):
+    async def test_get_offer_falls_back_to_template(self, db_session, seed_data):
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get("/api/shop/legal/1/offer")
 
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        assert "ПУБЛИЧНАЯ ОФЕРТА" in resp.json()["text"]
+        assert "Test Shop" in resp.json()["text"]
 
     async def test_get_privacy_with_text(self, db_session, seed_data):
         await ShopService.update_legal_docs(
@@ -279,13 +281,15 @@ class TestPublicLegalRoutes:
         assert resp.status_code == 200
         assert resp.json()["text"] == "Политика"
 
-    async def test_get_privacy_without_text_404(self, db_session, seed_data):
+    async def test_get_privacy_falls_back_to_template(self, db_session, seed_data):
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get("/api/shop/legal/1/privacy")
 
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        assert "ПОЛИТИКА" in resp.json()["text"]
+        assert "Test Shop" in resp.json()["text"]
 
     async def test_legal_routes_no_auth_required(self, db_session, seed_data):
         await ShopService.update_legal_docs(
@@ -514,8 +518,9 @@ class TestAdminLegalDocuments:
 
         assert resp.status_code == 200
         docs = resp.json()
-        assert len(docs) == 4
+        assert len(docs) == 5
         types = [d["document_type"] for d in docs]
+        assert "public_offer" in types
         assert "privacy_policy" in types
         assert "customer_consent" in types
         assert "order_terms" in types
@@ -779,8 +784,9 @@ class TestPublicLegalDocumentRoutes:
 
         assert resp.status_code == 200
         docs = resp.json()
-        assert len(docs) == 4
+        assert len(docs) == 5
         titles = {d["title"] for d in docs}
+        assert any("оферта" in t.lower() for t in titles)
         assert any("Политика" in t for t in titles)
         assert any("Согласие" in t for t in titles)
 

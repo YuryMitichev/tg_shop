@@ -940,7 +940,7 @@ async def generate_legal_template(admin: dict = Depends(require_active_subscript
 
 
 # ==========================
-# Правовые документы (4 типа: системный шаблон + дополнение продавца)
+# Правовые документы (системный шаблон + дополнение продавца)
 # ==========================
 
 @router.get("/settings/legal-documents")

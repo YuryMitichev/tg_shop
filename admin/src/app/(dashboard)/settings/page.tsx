@@ -836,8 +836,6 @@ function LegalDocsSettings() {
         </Card>
       ))}
 
-      <OfferTextSettings />
-
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -895,107 +893,5 @@ function LegalDocsSettings() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function OfferTextSettings() {
-  const { data, isLoading, mutate } = useSWR<{ offer_text: string | null; privacy_policy_text: string | null }>("/settings/legal", fetcher);
-
-  const [offerText, setOfferText] = useState("");
-  const [privacyText, setPrivacyText] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
-
-  useEffect(() => {
-    if (data) {
-      setOfferText(data.offer_text || "");
-      setPrivacyText(data.privacy_policy_text || "");
-    }
-  }, [data]);
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await api.put("/settings/legal", {
-        offer_text: offerText || null,
-        privacy_policy_text: privacyText || null,
-      });
-      mutate();
-      toast.success("Сохранено");
-    } catch {
-      toast.error("Ошибка");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleGenerate() {
-    setGenerating(true);
-    try {
-      const template = await api.post<{ offer_text: string; privacy_policy_text: string }>("/settings/legal/generate", {});
-      setOfferText(template.offer_text || "");
-      setPrivacyText(template.privacy_policy_text || "");
-      toast.success("Шаблон сгенерирован из реквизитов");
-    } catch {
-      toast.error("Ошибка генерации");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  if (isLoading) return null;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Оферта и политика (для бота)</CardTitle>
-        <CardDescription>
-          Эти тексты показываются покупателю при оформлении заказа.
-          Текст подставляется из реквизитов (вкладка «Реквизиты»).
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex justify-start">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleGenerate}
-            disabled={generating}
-          >
-            <RotateCcw className="mr-2 h-3 w-3" />
-            {generating ? "Генерация..." : "Сгенерировать из реквизитов"}
-          </Button>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Публичная оферта</Label>
-          <Textarea
-            value={offerText}
-            onChange={(e) => setOfferText(e.target.value)}
-            rows={8}
-            className="font-mono text-sm"
-            placeholder="Текст оферты..."
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Политика конфиденциальности</Label>
-          <Textarea
-            value={privacyText}
-            onChange={(e) => setPrivacyText(e.target.value)}
-            rows={8}
-            className="font-mono text-sm"
-            placeholder="Текст политики конфиденциальности..."
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={saving}>
-            <Save className="mr-2 h-4 w-4" />
-            Сохранить
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

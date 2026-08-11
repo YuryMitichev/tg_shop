@@ -6,6 +6,7 @@ from app.models.shop_legal_document import ShopLegalDocument
 
 
 LEGAL_DOCUMENT_TITLES = {
+    "public_offer": "Публичная оферта",
     "privacy_policy": "Политика конфиденциальности",
     "customer_consent": "Согласие на обработку персональных данных",
     "order_terms": "Условия оформления заказа",
@@ -24,6 +25,37 @@ _LEGAL_TYPE_LABELS = {
 
 def _operator_label(legal_type: str) -> str:
     return _LEGAL_TYPE_LABELS.get(legal_type, _LEGAL_TYPE_LABELS["individual"])
+
+
+def _build_system_public_offer(shop: dict) -> str:
+    name = shop.get("company_name") or shop.get("name") or "Продавец"
+    inn = shop.get("company_inn") or "—"
+    address = shop.get("company_address") or "—"
+
+    return (
+        "ПУБЛИЧНАЯ ОФЕРТА\n\n"
+        "Настоящий документ является публичной офертой (предложением к заключению договора)\n"
+        f"в лице: {name}\n"
+        f"ИНН: {inn}\n"
+        f"Адрес: {address}\n\n"
+        "1. ОБЩИЕ ПОЛОЖЕНИЯ\n"
+        "1.1. Настоящая оферта адресована неопределённому кругу лиц и является публичным договором.\n"
+        "1.2. Совершая заказ, покупатель полностью принимает условия настоящей оферты.\n\n"
+        "2. ПРЕДМЕТ ДОГОВОРА\n"
+        "2.1. Продавец обязуется передать покупателю выбранные товары,\n"
+        "    а покупатель обязуется оплатить и принять товары.\n\n"
+        "3. ЦЕНА И ОПЛАТА\n"
+        "3.1. Цена товара указывается в каталоге на момент оформления заказа.\n"
+        "3.2. Оплата производится способами, указанными при оформлении заказа.\n\n"
+        "4. ДОСТАВКА\n"
+        "4.1. Способы и сроки доставки указываются при оформлении заказа.\n\n"
+        "5. ВОЗВРАТ И ОБМЕН\n"
+        "5.1. Возврат и обмен осуществляются в соответствии с действующим законодательством.\n\n"
+        "6. РЕКВИЗИТЫ ПРОДАВЦА\n"
+        f"Наименование: {name}\n"
+        f"ИНН: {inn}\n"
+        f"Адрес: {address}\n"
+    )
 
 
 def _build_system_privacy_policy(shop: dict) -> str:
@@ -232,6 +264,7 @@ def _build_roskomnadzor_draft(shop: dict) -> str:
 
 
 _SYSTEM_BUILDERS = {
+    "public_offer": _build_system_public_offer,
     "privacy_policy": _build_system_privacy_policy,
     "customer_consent": _build_system_customer_consent,
     "order_terms": _build_system_order_terms,
@@ -334,14 +367,14 @@ class LegalDocumentService:
 
     @staticmethod
     async def get_all_documents(shop_id: int) -> list[dict] | None:
-        """Возвращает все четыре документа магазина (для админки)."""
+        """Возвращает все документы магазина (для админки)."""
         async with async_session() as session:
             shop = await session.get(Shop, shop_id)
             if shop is None:
                 return None
 
         docs = []
-        for doc_type in ["privacy_policy", "customer_consent", "order_terms", "data_processing_mandate"]:
+        for doc_type in ["public_offer", "privacy_policy", "customer_consent", "order_terms", "data_processing_mandate"]:
             rendered = await LegalDocumentService.render_document(shop_id, doc_type)
             if rendered:
                 docs.append(rendered)
