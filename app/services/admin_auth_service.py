@@ -65,43 +65,83 @@ class AdminAuthService:
         return []
 
     @staticmethod
-    async def request_login(telegram_user_id: int, panel_url: str | None = None) -> bool:
-        from app.services.shop_service import ShopService
-
-        shops = await AdminAuthService._resolve_shop_ids(telegram_user_id)
-        if not shops:
-            return False
-
-        base_url = panel_url or settings.admin_panel_url or "https://t.me"
-
+    async def _create_login_token(
+        telegram_user_id: int, shop_id: int, is_super_admin: bool,
+    ) -> str:
+        """Создаёт LoginToken и возвращает сырой токен."""
         async with async_session() as session:
             await session.execute(
                 delete(LoginToken).where(LoginToken.expires_at < _utcnow())
             )
             await session.commit()
 
+        token = secrets.token_urlsafe(48)
+        expires_at = _utcnow() + timedelta(seconds=AdminAuthService.LINK_TTL)
+
+        async with async_session() as session:
+            session.add(LoginToken(
+                token=token,
+                telegram_user_id=telegram_user_id,
+                shop_id=shop_id,
+                is_super_admin=is_super_admin,
+                expires_at=expires_at,
+            ))
+            await session.commit()
+
+        return token
+
+    @staticmethod
+    async def create_login_url(
+        telegram_user_id: int, shop_id: int, panel_url: str | None = None,
+    ) -> str | None:
+        """Создаёт magic link для конкретного магазина без отправки через бот.
+
+        Возвращает готовый URL вида ``{base}/login?token=…`` или ``None``,
+        если пользователь не является админом магазина.
+        """
+        from app.services.admin_user_service import AdminUserService
+
+        if not await AdminUserService.is_admin(shop_id, telegram_user_id):
+            return None
+
+        is_super = telegram_user_id in settings.super_admin_id_list
+        token = await AdminAuthService._create_login_token(
+            telegram_user_id, shop_id, is_super,
+        )
+        base_url = panel_url or settings.admin_panel_url or "https://t.me"
+        return f"{base_url.rstrip('/')}/login?token={token}"
+
+    @staticmethod
+    async def request_login(
+        telegram_user_id: int,
+        panel_url: str | None = None,
+        shop_id: int | None = None,
+    ) -> bool:
+        from app.services.shop_service import ShopService
+
+        shops = await AdminAuthService._resolve_shop_ids(telegram_user_id)
+        if not shops:
+            return False
+
+        if shop_id is not None:
+            shops = [(sid, sup) for sid, sup in shops if sid == shop_id]
+            if not shops:
+                return False
+
+        base_url = panel_url or settings.admin_panel_url or "https://t.me"
+
         sent_any = False
-        for shop_id, is_super in shops:
-            bot = get_bot(shop_id)
+        for sid, is_super in shops:
+            bot = get_bot(sid)
             if bot is None:
                 continue
 
-            token = secrets.token_urlsafe(48)
-            expires_at = _utcnow() + timedelta(seconds=AdminAuthService.LINK_TTL)
-
-            async with async_session() as session:
-                session.add(LoginToken(
-                    token=token,
-                    telegram_user_id=telegram_user_id,
-                    shop_id=shop_id,
-                    is_super_admin=is_super,
-                    expires_at=expires_at,
-                ))
-                await session.commit()
-
+            token = await AdminAuthService._create_login_token(
+                telegram_user_id, sid, is_super,
+            )
             login_url = f"{base_url.rstrip('/')}/login?token={token}"
 
-            shop = await ShopService.get(shop_id)
+            shop = await ShopService.get(sid)
             shop_label = f" — «{shop['name']}»" if shop else ""
 
             await bot.send_message(

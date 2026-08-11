@@ -8,6 +8,7 @@ from app.bot.filters.subscription import SubscriptionActive
 from app.bot.keyboards.admin import get_admin_menu
 from app.bot.shop_context import get_shop_id
 from app.core.config import settings
+from app.services.admin_auth_service import AdminAuthService
 from app.services.stats_service import StatsService
 
 from .catalog import setup_catalog_router
@@ -16,13 +17,24 @@ from .orders import setup_orders_router
 from .promos import setup_promos_router
 
 
-def _admin_panel_link_kb() -> InlineKeyboardMarkup | None:
-    admin_url = settings.admin_panel_url
-    if not admin_url:
-        return None
+async def _admin_panel_link_kb(
+    shop_id: int, telegram_user_id: int,
+) -> InlineKeyboardMarkup | None:
+    """Клавиатура с прямой ссылкой на админ-панель конкретного магазина.
+
+    Генерирует одноразовый magic link с shop_id, чтобы при клике из бота
+    магазина «А» пользователь попадал в админку магазина «А».
+    """
+    login_url = await AdminAuthService.create_login_url(telegram_user_id, shop_id)
+    if login_url is None:
+        admin_url = settings.admin_panel_url
+        if not admin_url:
+            return None
+        login_url = f"{admin_url.rstrip('/')}/login"
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📊 Открыть админ-панель", url=f"{admin_url}/login")]
+            [InlineKeyboardButton(text="📊 Открыть админ-панель", url=login_url)]
         ]
     )
 
@@ -45,7 +57,9 @@ def setup_router() -> Router:
             "⚙️ <b>Панель администратора</b>\n\n"
             "Управляйте товарами, заказами, промокодами и статистикой "
             "в удобной веб-админ-панели 👇",
-            reply_markup=_admin_panel_link_kb(),
+            reply_markup=await _admin_panel_link_kb(
+                get_shop_id(), message.from_user.id,
+            ),
         )
 
     @router.callback_query(F.data == "admin_menu")
@@ -56,7 +70,9 @@ def setup_router() -> Router:
             "⚙️ <b>Панель администратора</b>\n\n"
             "Управляйте товарами, заказами, промокодами и статистикой "
             "в удобной веб-админ-панели 👇",
-            reply_markup=_admin_panel_link_kb(),
+            reply_markup=await _admin_panel_link_kb(
+                get_shop_id(), callback.from_user.id,
+            ),
         )
 
         await callback.answer()

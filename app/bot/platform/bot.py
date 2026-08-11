@@ -288,6 +288,8 @@ async def _send_shop_links_via_shop_bot(
     shop_id: int, owner_telegram_id: int, bot_username: str | None
 ) -> None:
     """Отправляет ссылки на админ-панель и мини-приложение через бота магазина."""
+    from app.services.admin_auth_service import AdminAuthService
+
     shop_bot = get_bot(shop_id)
     if shop_bot is None:
         logger.warning("Магазин %d: бот не найден — ссылки не отправлены", shop_id)
@@ -295,18 +297,23 @@ async def _send_shop_links_via_shop_bot(
 
     admin_url = settings.admin_panel_url
 
+    login_url = await AdminAuthService.create_login_url(owner_telegram_id, shop_id)
+    if login_url is None:
+        login_url = f"{admin_url.rstrip('/')}/login" if admin_url else None
+
     kb_rows = []
-    if admin_url:
-        kb_rows.append([InlineKeyboardButton(text="📊 Открыть админ-панель", url=f"{admin_url}/login")])
+    if login_url:
+        kb_rows.append([InlineKeyboardButton(text="📊 Открыть админ-панель", url=login_url)])
     if bot_username:
         shop_url = f"https://t.me/{bot_username}?startapp=shop_{shop_id}"
         kb_rows.append([InlineKeyboardButton(text="📱 Мини-приложение", url=shop_url)])
     kb = InlineKeyboardMarkup(inline_keyboard=kb_rows) if kb_rows else None
 
     text = "👋 <b>Добро пожаловать в магазин!</b>\n\n"
-    if admin_url:
-        text += f"📊 <b>Админ-панель:</b>\n{admin_url}/login\n\n"
-        text += "Для входа введите свой Telegram ID.\nКод подтверждения придёт в этот бот.\n\n"
+    if login_url:
+        text += "📊 <b>Админ-панель:</b> нажмите кнопку ниже\n\n"
+        text += "Ссылка для входа действует 5 минут. "
+        "Получить новую — команда /admin в этом боте.\n\n"
     if bot_username:
         text += "📱 <b>Мини-приложение:</b> нажмите кнопку ниже"
 

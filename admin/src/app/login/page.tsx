@@ -20,6 +20,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get("token");
+  const shopIdFromUrl = searchParams.get("shop_id");
 
   const [step, setStep] = useState<"id" | "waiting" | "verifying">("id");
   const [telegramId, setTelegramId] = useState("");
@@ -75,7 +76,11 @@ function LoginForm() {
     try {
       const res = await api.post<{ ok: boolean; error?: string }>(
         "/auth/request-login",
-        { telegram_user_id: Number(telegramId), panel_url: window.location.origin },
+        {
+          telegram_user_id: Number(telegramId),
+          panel_url: window.location.origin,
+          ...(shopIdFromUrl ? { shop_id: Number(shopIdFromUrl) } : {}),
+        },
       );
 
       if (!res.ok) {
