@@ -138,6 +138,7 @@ class CartService:
                     "original_price": original_price,
                     "discount_percent": discount_percent,
                     "quantity": cart_item.quantity,
+                    "stock": variant.stock,
                     "subtotal": price * cart_item.quantity,
                 })
 

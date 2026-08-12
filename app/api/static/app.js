@@ -519,17 +519,27 @@ const App = {
                     priceHtml = `${item.subtotal} ₽`;
                 }
 
+                const stock = item.stock;
+                const atMax = stock !== undefined && stock !== null && item.quantity >= stock;
+                const overStock = stock !== undefined && stock !== null && item.quantity > stock;
+                const stockHint = overStock
+                    ? `<div class="ci-stock-warn">В наличии только ${stock} шт.</div>`
+                    : (stock !== undefined && stock !== null && stock <= 5 && stock > 0
+                        ? `<div class="ci-stock-low">Осталось ${stock} шт.</div>`
+                        : "");
+
                 return `
                 <div class="cart-item">
                     <div class="ci-info">
                         <div class="ci-name">${this.esc(item.product_name)}</div>
                         <div class="ci-variant">${this.esc(item.volume)}</div>
                         <div class="ci-price">${priceHtml}</div>
+                        ${stockHint}
                     </div>
                     <div class="ci-controls">
                         <button class="qty-btn" onclick="App.changeQty(${item.cart_item_id}, -1)">−</button>
                         <span class="qty-display">${item.quantity}</span>
-                        <button class="qty-btn" onclick="App.changeQty(${item.cart_item_id}, 1)">+</button>
+                        <button class="qty-btn${atMax ? ' qty-btn-disabled' : ''}" ${atMax ? 'disabled' : ''} onclick="App.changeQty(${item.cart_item_id}, 1)">+</button>
                     </div>
                 </div>
             `}).join("");
@@ -829,8 +839,9 @@ const App = {
         content.innerHTML = `
             <div class="emoji">😔</div>
             <h2>К сожалению, товар закончился</h2>
-            <div class="info">Пока вы оформляли заказ, кто-то успел купить товар раньше. Оформить заказ сейчас невозможно.</div>
+            <div class="info">Пока вы оформляли заказ, кто-то успел купить товар раньше.</div>
             <div class="oos-list">${itemsList}</div>
+            <button class="btn-primary" onclick="App.showCart()">🛒 Перейти в корзину</button>
             ${contactBtn}
             <button class="btn-secondary" onclick="App.showCatalog()">В каталог</button>
         `;
