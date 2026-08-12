@@ -147,6 +147,16 @@ class UpdateLegalDocsBody(BaseModel):
     privacy_policy_text: str | None = None
 
 
+class UpdateThemeBody(BaseModel):
+    primary_color: str | None = None
+    bg_color: str | None = None
+    text_color: str | None = None
+    button_text_color: str | None = None
+    secondary_bg_color: str | None = None
+    radius: str | None = None
+    font_family: str | None = None
+
+
 class UpdateSellerAddendumBody(BaseModel):
     seller_addendum: str | None = None
 
@@ -937,6 +947,38 @@ async def update_legal_docs(
 async def generate_legal_template(admin: dict = Depends(require_active_subscription)):
     template = await ShopService.generate_offer_template(admin["shop_id"])
     return template
+
+
+# ==========================
+# Настройки (тема оформления TMA)
+# ==========================
+
+@router.get("/settings/theme")
+async def get_shop_theme(admin: dict = Depends(require_active_subscription)):
+    shop = await ShopService.get(admin["shop_id"])
+    if shop is None:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return shop["theme"]
+
+
+@router.put("/settings/theme")
+async def update_shop_theme(
+    body: UpdateThemeBody,
+    admin: dict = Depends(require_active_subscription),
+):
+    result = await ShopService.update_theme(
+        admin["shop_id"],
+        primary_color=body.primary_color,
+        bg_color=body.bg_color,
+        text_color=body.text_color,
+        button_text_color=body.button_text_color,
+        secondary_bg_color=body.secondary_bg_color,
+        radius=body.radius,
+        font_family=body.font_family,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return {"ok": True}
 
 
 # ==========================

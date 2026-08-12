@@ -199,6 +199,16 @@ export interface ShopInfo {
   name: string | null;
 }
 
+export interface ThemeSettings {
+  primary_color: string | null;
+  bg_color: string | null;
+  text_color: string | null;
+  button_text_color: string | null;
+  secondary_bg_color: string | null;
+  radius: string | null;
+  font_family: string | null;
+}
+
 export interface Stats {
   total_orders: number;
   new_orders: number;

@@ -20,15 +20,6 @@ AVAILABLE_COURIERS = [
     "Почта России",
 ]
 
-DEFAULT_ATTR_LABELS = {
-    "volume": "Объём",
-    "burn": "Время горения",
-    "size": "Размер",
-    "color": "Цвет",
-    "scent": "Аромат",
-    "dimensions": "Длина/Ширина/Высота",
-}
-
 
 class Shop(Base):
     __tablename__ = "shops"
@@ -75,5 +66,14 @@ class Shop(Base):
     offer_text: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
 
     privacy_policy_text: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+
+    # Per-shop кастомизация дизайна TMA
+    theme_primary_color: Mapped[str | None] = mapped_column(nullable=True)
+    theme_bg_color: Mapped[str | None] = mapped_column(nullable=True)
+    theme_text_color: Mapped[str | None] = mapped_column(nullable=True)
+    theme_button_text_color: Mapped[str | None] = mapped_column(nullable=True)
+    theme_secondary_bg_color: Mapped[str | None] = mapped_column(nullable=True)
+    theme_radius: Mapped[str | None] = mapped_column(nullable=True)
+    theme_font_family: Mapped[str | None] = mapped_column(nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

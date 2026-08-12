@@ -39,10 +39,8 @@ async def get_shop_config(shop_id: int = Depends(get_shop_id)):
 
     attr_defs = await ProductAttrService.list_defs(shop_id) if shop else []
 
-    product_attrs = ["volume"] + [d["key"] for d in attr_defs]
-    attr_labels = {"volume": "Объём"}
-    for d in attr_defs:
-        attr_labels[d["key"]] = d["label"]
+    product_attrs = [d["key"] for d in attr_defs]
+    attr_labels = {d["key"]: d["label"] for d in attr_defs}
 
     bot_username = None
     bot = get_bot(shop_id)
@@ -57,6 +55,7 @@ async def get_shop_config(shop_id: int = Depends(get_shop_id)):
         "product_attrs": product_attrs,
         "attr_labels": attr_labels,
         "bot_username": bot_username,
+        "theme": shop["theme"] if shop else None,
         "company": {
             "name": shop["company_name"] if shop else None,
             "inn": shop["company_inn"] if shop else None,

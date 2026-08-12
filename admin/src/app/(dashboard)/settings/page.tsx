@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { SystemMessage, DeliverySettings, ProductAttrsSettings, ProductAttrDef, CompanyInfo, LegalDocument, RoskomnadzorInfo, ShopInfo } from "@/lib/types";
+import type { SystemMessage, DeliverySettings, ProductAttrsSettings, ProductAttrDef, CompanyInfo, LegalDocument, RoskomnadzorInfo, ShopInfo, ThemeSettings } from "@/lib/types";
 
 const LEGAL_TYPE_LABELS: Record<string, string> = {
   individual: "Физическое лицо",
@@ -95,6 +95,7 @@ export default function SettingsPage() {
           <TabsTrigger value="attrs">Характеристики</TabsTrigger>
           <TabsTrigger value="company">Реквизиты</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
+          <TabsTrigger value="theme">Дизайн</TabsTrigger>
           <TabsTrigger value="legal">Документы</TabsTrigger>
         </TabsList>
 
@@ -177,6 +178,10 @@ export default function SettingsPage() {
 
         <TabsContent value="payment">
           <PaymentSettings />
+        </TabsContent>
+
+        <TabsContent value="theme">
+          <ThemeSettingsTab />
         </TabsContent>
 
         <TabsContent value="legal">
@@ -374,6 +379,187 @@ function PaymentSettings() {
   );
 }
 
+function ThemeSettingsTab() {
+  const { data, isLoading, mutate } = useSWR<ThemeSettings>("/settings/theme", fetcher);
+
+  const [primaryColor, setPrimaryColor] = useState("");
+  const [bgColor, setBgColor] = useState("");
+  const [textColor, setTextColor] = useState("");
+  const [buttonTextColor, setButtonTextColor] = useState("");
+  const [secondaryBgColor, setSecondaryBgColor] = useState("");
+  const [radius, setRadius] = useState("");
+  const [fontFamily, setFontFamily] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setPrimaryColor(data.primary_color || "");
+      setBgColor(data.bg_color || "");
+      setTextColor(data.text_color || "");
+      setButtonTextColor(data.button_text_color || "");
+      setSecondaryBgColor(data.secondary_bg_color || "");
+      setRadius(data.radius || "");
+      setFontFamily(data.font_family || "");
+    }
+  }, [data]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.put("/settings/theme", {
+        primary_color: primaryColor,
+        bg_color: bgColor,
+        text_color: textColor,
+        button_text_color: buttonTextColor,
+        secondary_bg_color: secondaryBgColor,
+        radius,
+        font_family: fontFamily,
+      });
+      mutate();
+      toast.success("Сохранено");
+    } catch {
+      toast.error("Ошибка");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function ColorField({
+    label,
+    value,
+    onChange,
+    placeholder,
+  }: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    placeholder: string;
+  }) {
+    return (
+      <div className="space-y-1.5">
+        <Label>{label}</Label>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={value || "#000000"}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-input bg-background p-0.5"
+          />
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="flex-1 font-mono text-sm"
+          />
+          {value && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onChange("")}
+              className="shrink-0 text-muted-foreground"
+            >
+              Сбросить
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Цвета</CardTitle>
+          <CardDescription>
+            Оставьте поле пустым, чтобы использовать тему Telegram по умолчанию
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ColorField
+            label="Основной цвет (кнопки, акценты)"
+            value={primaryColor}
+            onChange={setPrimaryColor}
+            placeholder="#3390ec"
+          />
+          <ColorField
+            label="Фон"
+            value={bgColor}
+            onChange={setBgColor}
+            placeholder="#ffffff"
+          />
+          <ColorField
+            label="Текст"
+            value={textColor}
+            onChange={setTextColor}
+            placeholder="#1a1a1a"
+          />
+          <ColorField
+            label="Текст на кнопках"
+            value={buttonTextColor}
+            onChange={setButtonTextColor}
+            placeholder="#ffffff"
+          />
+          <ColorField
+            label="Фон карточек / секций"
+            value={secondaryBgColor}
+            onChange={setSecondaryBgColor}
+            placeholder="#f5f5f5"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Форма и шрифт</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Скругление углов</Label>
+            <Select value={radius} onValueChange={(v) => setRadius(v === "__default__" ? "" : v)} items={{ "__default__": "По умолчанию", "0px": "Острые", "8px": "Маленькое", "14px": "Среднее", "20px": "Большое", "9999px": "Круглое" }}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="По умолчанию" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">По умолчанию</SelectItem>
+                <SelectItem value="0px">Острые</SelectItem>
+                <SelectItem value="8px">Маленькое</SelectItem>
+                <SelectItem value="14px">Среднее</SelectItem>
+                <SelectItem value="20px">Большое</SelectItem>
+                <SelectItem value="9999px">Круглое</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Шрифт</Label>
+            <Select value={fontFamily} onValueChange={(v) => setFontFamily(v === "__default__" ? "" : v)} items={{ "__default__": "Системный (по умолчанию)", "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif": "Sans-serif", "Georgia, 'Times New Roman', serif": "Serif (Georgia)", "'Courier New', Courier, monospace": "Monospace", "'Comic Sans MS', 'Marker Felt', cursive": "Cursive" }}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Системный (по умолчанию)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">Системный (по умолчанию)</SelectItem>
+                <SelectItem value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Sans-serif</SelectItem>
+                <SelectItem value="Georgia, 'Times New Roman', serif">Serif (Georgia)</SelectItem>
+                <SelectItem value="'Courier New', Courier, monospace">Monospace</SelectItem>
+                <SelectItem value="'Comic Sans MS', 'Marker Felt', cursive">Cursive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={saving}>
+          <Save className="mr-2 h-4 w-4" />
+          Сохранить
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function DeliverySettings() {
   const { data, isLoading, mutate } = useSWR<DeliverySettings>("/settings/delivery", fetcher);
 
@@ -515,13 +701,11 @@ function ProductAttrsSettingsTab() {
         <CardTitle className="text-base">Характеристики товаров</CardTitle>
         <CardDescription>
           Управляйте характеристиками, которые можно указать для вариантов товара.
-          «Объём» — встроенная характеристика, она доступна всегда.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary" className="text-sm">Объём (встроенная)</Badge>
             {attrs.map((attr: ProductAttrDef) => (
               <Badge key={attr.id} variant="default" className="gap-1 text-sm">
                 {attr.label}

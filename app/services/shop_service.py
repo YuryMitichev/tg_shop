@@ -58,6 +58,15 @@ def _shop_to_dict(shop: Shop) -> dict:
         "manual_payment_enabled": shop.manual_payment_enabled,
         "offer_text": shop.offer_text,
         "privacy_policy_text": shop.privacy_policy_text,
+        "theme": {
+            "primary_color": shop.theme_primary_color,
+            "bg_color": shop.theme_bg_color,
+            "text_color": shop.theme_text_color,
+            "button_text_color": shop.theme_button_text_color,
+            "secondary_bg_color": shop.theme_secondary_bg_color,
+            "radius": shop.theme_radius,
+            "font_family": shop.theme_font_family,
+        },
         "created_at": shop.created_at.isoformat() if shop.created_at else None,
     }
 
@@ -417,6 +426,46 @@ class ShopService:
 
             shop.offer_text = offer_text or None
             shop.privacy_policy_text = privacy_policy_text or None
+
+            await session.commit()
+            await session.refresh(shop)
+
+            return _shop_to_dict(shop)
+
+    @staticmethod
+    async def update_theme(
+        shop_id: int,
+        primary_color: str | None = None,
+        bg_color: str | None = None,
+        text_color: str | None = None,
+        button_text_color: str | None = None,
+        secondary_bg_color: str | None = None,
+        radius: str | None = None,
+        font_family: str | None = None,
+    ) -> dict | None:
+        """Обновляет настройки темы оформления магазина (TMA).
+
+        None — не менять. Пустая строка — очистить (вернуть к дефолту).
+        """
+        async with async_session() as session:
+            shop = await session.get(Shop, shop_id)
+            if shop is None:
+                return None
+
+            if primary_color is not None:
+                shop.theme_primary_color = primary_color or None
+            if bg_color is not None:
+                shop.theme_bg_color = bg_color or None
+            if text_color is not None:
+                shop.theme_text_color = text_color or None
+            if button_text_color is not None:
+                shop.theme_button_text_color = button_text_color or None
+            if secondary_bg_color is not None:
+                shop.theme_secondary_bg_color = secondary_bg_color or None
+            if radius is not None:
+                shop.theme_radius = radius or None
+            if font_family is not None:
+                shop.theme_font_family = font_family or None
 
             await session.commit()
             await session.refresh(shop)

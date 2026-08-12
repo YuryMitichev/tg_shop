@@ -10,8 +10,8 @@ const App = {
     appliedPromo: null,
     paymentMethods: [],
     selectedPaymentMethod: "manual",
-    productAttrs: ["volume"],
-    attrLabels: { volume: "Объём" },
+    productAttrs: [],
+    attrLabels: {},
     company: null,
     botUsername: null,
     currentRating: 0,
@@ -29,11 +29,6 @@ const App = {
             this.shopId = parseInt(startParam.replace("shop_", ""));
         } else {
             this.shopId = parseInt(params.get("shop")) || 1;
-        }
-
-        const theme = this.tg.themeParams;
-        if (theme.bg_color) {
-            document.body.style.background = theme.bg_color;
         }
 
         this.loadShopConfig();
@@ -127,7 +122,24 @@ const App = {
             if (cfg.attr_labels) this.attrLabels = cfg.attr_labels;
             if (cfg.company) this.company = cfg.company;
             if (cfg.bot_username) this.botUsername = cfg.bot_username;
+            if (cfg.theme) this.applyTheme(cfg.theme);
         } catch (e) { }
+    },
+
+    applyTheme(theme) {
+        const root = document.documentElement.style;
+        const map = {
+            primary_color: "--button",
+            bg_color: "--bg",
+            text_color: "--text",
+            button_text_color: "--button-text",
+            secondary_bg_color: "--secondary-bg",
+            radius: "--radius",
+        };
+        for (const [k, cssVar] of Object.entries(map)) {
+            if (theme[k]) root.setProperty(cssVar, theme[k]);
+        }
+        if (theme.font_family) document.body.style.fontFamily = theme.font_family;
     },
 
     async loadCategories() {
