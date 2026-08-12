@@ -313,6 +313,10 @@ body {
     margin-top: 8px;
 }
 
+.pd-actions {
+    margin-top: 12px;
+}
+
 /* Cart */
 #cart-items {
     padding: 12px 16px;

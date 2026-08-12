@@ -288,6 +288,13 @@ const App = {
             html += `<button class="btn-primary btn-add" onclick="App.addToCart(${p.id})">🛒 Добавить в корзину</button>`;
         }
 
+        if (this.botUsername) {
+            html += `<div class="pd-actions">`;
+            html += `<button class="btn-secondary" onclick="App.tg.openTelegramLink('https://t.me/${this.botUsername}?start=review_${p.id}')">⭐ Оставить отзыв</button>`;
+            html += `<button class="btn-secondary" onclick="App.tg.openTelegramLink('https://t.me/${this.botUsername}?start=manager_${p.id}')">💬 Написать менеджеру</button>`;
+            html += `</div>`;
+        }
+
         if (p.reviews && p.reviews.length > 0) {
             html += `<div class="reviews-section">`;
             html += `<h3>Отзывы</h3>`;
