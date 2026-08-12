@@ -130,7 +130,7 @@ export default function PromosPage() {
               </div>
               <div className="space-y-2">
                 <Label>Тип скидки</Label>
-                <Select value={type} onValueChange={(v) => setType(v || "percent")}>
+                <Select value={type} onValueChange={(v) => setType(v || "percent")} items={{ percent: "Процент (%)", fixed: "Фиксированная сумма (₽)" }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

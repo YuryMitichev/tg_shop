@@ -150,7 +150,7 @@ export default function OrderDetailPage() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-3">
-            <Select value={newStatus} onValueChange={(v) => setNewStatus(v || "")}>
+            <Select value={newStatus} onValueChange={(v) => setNewStatus(v || "")} items={STATUS_LABELS}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Выберите статус" />
               </SelectTrigger>

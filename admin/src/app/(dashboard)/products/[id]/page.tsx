@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
@@ -40,6 +40,14 @@ export default function EditProductPage() {
   const { data: attrsData } = useSWR<ProductAttrsSettings>("/settings/product-attrs", fetcher);
 
   const attrDefs: ProductAttrDef[] = attrsData?.attrs ?? [];
+
+  const categoryItems = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of categories ?? []) {
+      map[String(c.id)] = `${c.emoji} ${c.name}`;
+    }
+    return map;
+  }, [categories]);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -318,7 +326,7 @@ export default function EditProductPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Категория</Label>
-              <Select value={categoryId} onValueChange={(v) => setCategoryId(v || "")}>
+              <Select value={categoryId} onValueChange={(v) => setCategoryId(v || "")} items={categoryItems}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

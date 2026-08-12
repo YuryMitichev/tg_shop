@@ -76,6 +76,24 @@ export default function BroadcastsPage() {
     [products, productId],
   );
 
+  const productItems = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of products ?? []) {
+      map[String(p.id)] = p.name;
+    }
+    return map;
+  }, [products]);
+
+  const variantItems = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (selectedProduct) {
+      for (const v of selectedProduct.variants) {
+        map[String(v.id)] = `${v.volume} — ${v.price}₽`;
+      }
+    }
+    return map;
+  }, [selectedProduct]);
+
   const selectedVariant = useMemo(() => {
     if (!selectedProduct) return null;
     if (!variantId) return selectedProduct.variants[0] || null;
@@ -190,6 +208,7 @@ export default function BroadcastsPage() {
                     setVariantId("");
                     setPreviewCount(null);
                   }}
+                  items={productItems}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Выберите товар..." />
@@ -213,6 +232,7 @@ export default function BroadcastsPage() {
                       setVariantId(v || "");
                       setPreviewCount(null);
                     }}
+                    items={variantItems}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Выберите объём..." />

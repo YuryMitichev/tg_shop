@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { fetcher } from "@/lib/swr";
 import { api, photoUrl } from "@/lib/api";
@@ -50,6 +50,14 @@ export default function ProductsPage() {
 
   const { data: categories } = useSWR<Category[]>("/categories", fetcher);
 
+  const categoryFilterItems = useMemo(() => {
+    const map: Record<string, string> = { all: "Все категории" };
+    for (const c of categories ?? []) {
+      map[String(c.id)] = `${c.emoji} ${c.name}`;
+    }
+    return map;
+  }, [categories]);
+
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1;
 
   async function toggleActive(id: number) {
@@ -93,7 +101,7 @@ export default function ProductsPage() {
       </div>
 
       <div className="flex items-center gap-2">
-        <Select value={filter} onValueChange={(v) => { setFilter(v || "all"); setPage(1); }}>
+        <Select value={filter} onValueChange={(v) => { setFilter(v || "all"); setPage(1); }} items={categoryFilterItems}>
           <SelectTrigger className="w-60">
             <SelectValue placeholder="Все категории" />
           </SelectTrigger>

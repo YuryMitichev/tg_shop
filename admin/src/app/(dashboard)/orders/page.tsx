@@ -39,7 +39,7 @@ export default function OrdersPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">Заказы</h1>
-        <Select value={status} onValueChange={(v) => setStatus(v || "all")}>
+        <Select value={status} onValueChange={(v) => setStatus(v || "all")} items={STATUS_LABELS}>
           <SelectTrigger className="w-48">
             <SelectValue />
           </SelectTrigger>

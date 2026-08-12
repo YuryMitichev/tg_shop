@@ -187,7 +187,7 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Маркетплейс</Label>
-              <Select value={source} onValueChange={(v) => setSource(v || "wb")}>
+              <Select value={source} onValueChange={(v) => setSource(v || "wb")} items={{ ozon: "Ozon", wb: "Wildberries", ym: "Яндекс.Маркет" }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

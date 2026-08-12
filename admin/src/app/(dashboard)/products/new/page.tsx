@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
@@ -39,6 +39,14 @@ export default function NewProductPage() {
   const { data: attrsData } = useSWR<ProductAttrsSettings>("/settings/product-attrs", fetcher);
 
   const attrDefs: ProductAttrDef[] = attrsData?.attrs ?? [];
+
+  const categoryItems = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of categories ?? []) {
+      map[String(c.id)] = `${c.emoji} ${c.name}`;
+    }
+    return map;
+  }, [categories]);
 
   const [categoryId, setCategoryId] = useState("");
   const [name, setName] = useState("");
@@ -135,7 +143,7 @@ export default function NewProductPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Категория</Label>
-              <Select value={categoryId} onValueChange={(v) => setCategoryId(v || "")}>
+              <Select value={categoryId} onValueChange={(v) => setCategoryId(v || "")} items={categoryItems}>
                 <SelectTrigger>
                   <SelectValue placeholder="Выберите категорию" />
                 </SelectTrigger>

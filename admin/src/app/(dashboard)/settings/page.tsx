@@ -662,7 +662,7 @@ function CompanyInfoSettings() {
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <Label>Правовая форма</Label>
-          <Select value={legalType} onValueChange={(v) => setLegalType(v || "individual")}>
+          <Select value={legalType} onValueChange={(v) => setLegalType(v || "individual")} items={{ individual: "Физическое лицо", ip: "Индивидуальный предприниматель", ooo: "Общество с ограниченной ответственностью" }}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Выберите правовую форму" />
             </SelectTrigger>
