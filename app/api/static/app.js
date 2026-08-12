@@ -14,6 +14,7 @@ const App = {
     attrLabels: { volume: "Объём" },
     company: null,
     botUsername: null,
+    currentRating: 0,
 
     init() {
         this.tg = window.Telegram.WebApp;
@@ -290,9 +291,30 @@ const App = {
 
         if (this.botUsername) {
             html += `<div class="pd-actions">`;
-            html += `<button class="btn-secondary" onclick="App.tg.openTelegramLink('https://t.me/${this.botUsername}?start=review_${p.id}')">⭐ Оставить отзыв</button>`;
-            html += `<button class="btn-secondary" onclick="App.tg.openTelegramLink('https://t.me/${this.botUsername}?start=manager_${p.id}')">💬 Написать менеджеру</button>`;
+            html += `<button class="btn-primary" onclick="App.toggleReviewForm()">⭐ Оставить отзыв</button>`;
+            html += `<button class="btn-primary" onclick="App.toggleManagerForm()">💬 Написать менеджеру</button>`;
             html += `</div>`;
+
+            html += `
+                <div id="review-form-wrap" class="pd-form-wrap" style="display:none;">
+                    <h3>Оставить отзыв</h3>
+                    <div class="stars-input" id="stars-input">
+                        ${[1, 2, 3, 4, 5].map(v => `<span class="star" data-val="${v}" onclick="App.setRating(${v})">★</span>`).join("")}
+                    </div>
+                    <textarea id="review-text" rows="3" maxlength="500" placeholder="Расскажите о своих впечатлениях..."></textarea>
+                    <button class="btn-primary" onclick="App.submitReview(${p.id})">Отправить отзыв</button>
+                    <button class="btn-link" onclick="App.toggleReviewForm()">Отмена</button>
+                </div>
+            `;
+
+            html += `
+                <div id="manager-form-wrap" class="pd-form-wrap" style="display:none;">
+                    <h3>Написать менеджеру</h3>
+                    <textarea id="manager-text" rows="3" maxlength="500" placeholder="Ваш вопрос..."></textarea>
+                    <button class="btn-primary" onclick="App.submitManagerMessage(${p.id})">Отправить</button>
+                    <button class="btn-link" onclick="App.toggleManagerForm()">Отмена</button>
+                </div>
+            `;
         }
 
         if (p.reviews && p.reviews.length > 0) {
@@ -326,6 +348,86 @@ const App = {
         });
 
         this.tg.HapticFeedback?.selectionChanged();
+    },
+
+    toggleReviewForm() {
+        const wrap = document.getElementById("review-form-wrap");
+        const mgrWrap = document.getElementById("manager-form-wrap");
+        if (mgrWrap) mgrWrap.style.display = "none";
+        const isOpen = wrap.style.display === "block";
+        wrap.style.display = isOpen ? "none" : "block";
+        if (!isOpen) {
+            this.currentRating = 0;
+            this.updateStars();
+            const ta = document.getElementById("review-text");
+            if (ta) ta.value = "";
+            wrap.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    },
+
+    toggleManagerForm() {
+        const wrap = document.getElementById("manager-form-wrap");
+        const revWrap = document.getElementById("review-form-wrap");
+        if (revWrap) revWrap.style.display = "none";
+        const isOpen = wrap.style.display === "block";
+        wrap.style.display = isOpen ? "none" : "block";
+        if (!isOpen) {
+            const ta = document.getElementById("manager-text");
+            if (ta) ta.value = "";
+            wrap.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    },
+
+    setRating(val) {
+        this.currentRating = val;
+        this.updateStars();
+        this.tg.HapticFeedback?.selectionChanged();
+    },
+
+    updateStars() {
+        document.querySelectorAll("#stars-input .star").forEach(s => {
+            const v = parseInt(s.dataset.val);
+            s.classList.toggle("filled", v <= this.currentRating);
+        });
+    },
+
+    async submitReview(productId) {
+        if (!this.currentRating) {
+            this.toast("Выберите оценку");
+            return;
+        }
+        const text = (document.getElementById("review-text").value || "").trim() || null;
+        try {
+            await this.api("POST", "/reviews", {
+                product_id: productId,
+                rating: this.currentRating,
+                text,
+            });
+            this.tg.HapticFeedback?.notificationOccurred("success");
+            this.toast("Спасибо за отзыв!");
+            await this.openProduct(productId);
+        } catch (e) {
+            this.toast(e.message);
+        }
+    },
+
+    async submitManagerMessage(productId) {
+        const message = (document.getElementById("manager-text").value || "").trim();
+        if (message.length < 3) {
+            this.toast("Введите сообщение");
+            return;
+        }
+        try {
+            await this.api("POST", "/contact-manager", {
+                product_id: productId,
+                message,
+            });
+            this.tg.HapticFeedback?.notificationOccurred("success");
+            this.toast("Сообщение отправлено менеджеру");
+            this.toggleManagerForm();
+        } catch (e) {
+            this.toast(e.message);
+        }
     },
 
     async addToCart(productId) {

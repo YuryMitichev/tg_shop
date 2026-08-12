@@ -91,6 +91,17 @@ class ValidatePromoRequest(BaseModel):
     code: str
 
 
+class CreateReviewRequest(BaseModel):
+    product_id: int
+    rating: int
+    text: str | None = None
+
+
+class ContactManagerRequest(BaseModel):
+    product_id: int
+    message: str
+
+
 # ==========================
 # Каталог
 # ==========================
@@ -387,6 +398,59 @@ async def get_order_detail(order_id: int, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Order not found")
 
     return order
+
+
+# ==========================
+# Отзывы и связь с менеджером
+# ==========================
+
+@router.post("/reviews")
+async def create_review(req: CreateReviewRequest, user: dict = Depends(get_current_user)):
+    if not (1 <= req.rating <= 5):
+        raise HTTPException(status_code=400, detail="Оценка должна быть от 1 до 5")
+
+    if not await OrderService.has_purchased(user["shop_id"], user["id"], req.product_id):
+        raise HTTPException(status_code=403, detail="Отзывать могут только покупатели этого товара")
+
+    await ReviewService.create_or_update(
+        user["shop_id"],
+        req.product_id,
+        user["id"],
+        req.rating,
+        req.text,
+    )
+    return {"ok": True}
+
+
+@router.post("/contact-manager")
+async def contact_manager(req: ContactManagerRequest, user: dict = Depends(get_current_user)):
+    shop = await ShopService.get(user["shop_id"])
+    if shop is None:
+        raise HTTPException(status_code=404, detail="Магазин не найден")
+
+    owner_id = shop.get("owner_telegram_id")
+    if not owner_id:
+        raise HTTPException(status_code=503, detail="Не указан получатель сообщения")
+
+    product = await CatalogService.get_product(user["shop_id"], req.product_id)
+    product_name = product["name"] if product else f"#{req.product_id}"
+
+    bot = get_bot(user["shop_id"])
+    if bot is None:
+        raise HTTPException(status_code=503, detail="Бот недоступен")
+
+    text = (
+        f"📩 Сообщение от покупателя\n\n"
+        f"Товар: {product_name}\n"
+        f"Пользователь: {user.get('first_name') or ''} (id: {user['id']})\n\n"
+        f"{req.message}"
+    )
+    try:
+        await bot.send_message(owner_id, text)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Не удалось отправить сообщение")
+
+    return {"ok": True}
 
 
 @router.get("/legal/{shop_id}/offer")

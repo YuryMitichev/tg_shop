@@ -317,6 +317,71 @@ body {
     margin-top: 12px;
 }
 
+.pd-actions .btn-primary {
+    margin-top: 8px;
+}
+
+.pd-form-wrap {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--section-bg);
+    border-radius: var(--radius);
+}
+
+.pd-form-wrap h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+}
+
+.pd-form-wrap textarea {
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--hint);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+    resize: vertical;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+}
+
+.stars-input {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 32px;
+    line-height: 1;
+}
+
+.stars-input .star {
+    color: var(--hint);
+    cursor: pointer;
+    transition: color 0.15s, transform 0.1s;
+    user-select: none;
+}
+
+.stars-input .star:active {
+    transform: scale(1.2);
+}
+
+.stars-input .star.filled {
+    color: #ffb300;
+}
+
+.btn-link {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    color: var(--hint);
+    font-size: 14px;
+    cursor: pointer;
+}
+
 /* Cart */
 #cart-items {
     padding: 12px 16px;
