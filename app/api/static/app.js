@@ -546,7 +546,7 @@ const App = {
     },
 
     async changeQty(itemId, delta) {
-        const path = delta > 0 ? "inc" : "dec";
+        const path = delta > 0 ? "cart/inc" : "cart/dec";
 
         try {
             await this.api("POST", `/${path}/${itemId}`);
