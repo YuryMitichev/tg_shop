@@ -170,13 +170,14 @@ class CartService:
                 await session.commit()
                 return None
 
-            variant_result = await session.execute(
-                select(ProductVariant).where(ProductVariant.id == item.variant_id)
-            )
-            variant = variant_result.scalar_one_or_none()
+            if delta > 0:
+                variant_result = await session.execute(
+                    select(ProductVariant).where(ProductVariant.id == item.variant_id)
+                )
+                variant = variant_result.scalar_one_or_none()
 
-            if variant and variant.stock > 0 and new_quantity > variant.stock:
-                return f"На складе осталось только {variant.stock} шт."
+                if variant and variant.stock > 0 and new_quantity > variant.stock:
+                    return f"На складе осталось только {variant.stock} шт."
 
             item.quantity = new_quantity
             await session.commit()
