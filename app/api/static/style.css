@@ -127,7 +127,7 @@ body {
 }
 
 .product-card {
-    background: var(--section-bg);
+    background: var(--secondary-bg);
     border-radius: var(--radius);
     overflow: hidden;
     box-shadow: var(--shadow);
