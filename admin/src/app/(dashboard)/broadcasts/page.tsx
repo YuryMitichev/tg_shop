@@ -62,7 +62,11 @@ export default function BroadcastsPage() {
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
 
-  const { data: products } = useSWR<Product[]>("/products", fetcher);
+  const { data: productsData } = useSWR<{ products: Product[] }>(
+    "/products?per_page=100",
+    fetcher,
+  );
+  const products = productsData?.products;
   const { data: tags } = useSWR<string[]>("/crm/tags", fetcher);
   const { data: broadcastsData, isLoading, mutate } =
     useSWR<BroadcastsResponse>("/broadcasts", fetcher);
