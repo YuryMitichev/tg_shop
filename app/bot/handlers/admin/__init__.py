@@ -1,7 +1,6 @@
 from aiogram import Router, F
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot.filters.admin import IsAdmin
 from app.bot.filters.subscription import SubscriptionActive
@@ -48,19 +47,6 @@ def setup_router() -> Router:
     # ==========================
     # Главное меню админки
     # ==========================
-
-    @router.message(Command("admin"))
-    async def open_admin_menu(message: Message, state: FSMContext):
-        await state.clear()
-
-        await message.answer(
-            "⚙️ <b>Панель администратора</b>\n\n"
-            "Управляйте товарами, заказами, промокодами и статистикой "
-            "в удобной веб-админ-панели 👇",
-            reply_markup=await _admin_panel_link_kb(
-                get_shop_id(), message.from_user.id,
-            ),
-        )
 
     @router.callback_query(F.data == "admin_menu")
     async def admin_menu_callback(callback: CallbackQuery, state: FSMContext):
