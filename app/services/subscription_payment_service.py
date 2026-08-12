@@ -45,6 +45,8 @@ class SubscriptionPaymentService:
 
         return_url = settings.admin_panel_url or settings.app_base_url or "https://t.me"
 
+        description = f"Подписка «{plan['name']}» — {plan['duration_days']} дней (магазин «{shop['name']}»)"
+
         receipt = None
         customer_email = settings.receipt_email
         if customer_email:
