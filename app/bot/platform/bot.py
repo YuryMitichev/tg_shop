@@ -351,6 +351,11 @@ async def _finalize_shop_creation(
         await state.clear()
         return
 
+    for _ in range(10):
+        if get_bot(shop["id"]) is not None:
+            break
+        await asyncio.sleep(0.5)
+
     await _send_shop_links_via_shop_bot(
         shop["id"], shop.get("owner_telegram_id"), bot_username
     )
