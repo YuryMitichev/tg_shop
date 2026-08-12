@@ -10,6 +10,7 @@ from app.services.catalog_service import CatalogService
 from app.services.cart_service import CartService
 from app.services.order_service import OrderService
 from app.services.review_service import ReviewService
+from app.services.shop_service import ShopService
 
 
 def setup_router() -> Router:
@@ -223,5 +224,60 @@ def setup_router() -> Router:
         variant_id = data.get("variant_id")
         await show_product(_FakeCallback(callback), state, product, variant_id=variant_id)
         await callback.answer("Отменено")
+
+    @router.callback_query(F.data == "contact_manager")
+    async def contact_manager(callback: CallbackQuery, state: FSMContext):
+        """Отправляет менеджеру уведомление о консультации по товару."""
+        data = await state.get_data()
+        product_id = data.get("product_id")
+        variant_id = data.get("variant_id")
+
+        shop = await ShopService.get(get_shop_id())
+        if not shop:
+            await callback.answer("Магазин недоступен.", show_alert=True)
+            return
+
+        user = callback.from_user
+        user_link = f"@{user.username}" if user.username else user.full_name
+
+        product = await CatalogService.get_product(get_shop_id(), product_id) if product_id else None
+
+        if product:
+            variant = CatalogService.get_variant(product, variant_id) if variant_id else None
+            price_line = f"\n🏷 {variant['volume']} — {variant['price']} ₽" if variant else ""
+            product_line = f"📦 <b>{product['name']}</b> (ID: <code>{product['id']}</code>){price_line}"
+        else:
+            product_line = "📦 Информация о товаре недоступна"
+
+        admin_text = (
+            "💬 <b>Запрос консультации по товару</b>\n\n"
+            f"Покупатель: {user_link} (ID: <code>{user.id}</code>)\n"
+            f"{product_line}"
+        )
+
+        try:
+            await callback.bot.send_message(
+                chat_id=shop["owner_telegram_id"],
+                text=admin_text,
+            )
+        except Exception:
+            await callback.answer(
+                "❌ Не удалось связаться с менеджером. Попробуйте позже.",
+                show_alert=True,
+            )
+            return
+
+        builder = InlineKeyboardBuilder()
+        builder.button(
+            text="💬 Написать напрямую",
+            url=f"tg://user?id={shop['owner_telegram_id']}",
+        )
+
+        await callback.message.answer(
+            "✅ Менеджер получил ваш запрос и скоро свяжется с вами.\n"
+            "Вы также можете написать ему напрямую:",
+            reply_markup=builder.as_markup(),
+        )
+        await callback.answer()
 
     return router
