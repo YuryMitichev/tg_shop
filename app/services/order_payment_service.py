@@ -62,6 +62,8 @@ class OrderPaymentService:
                             "currency": "RUB",
                         },
                         "vat_code": settings.yookassa_default_vat_code,
+                        "payment_mode": "full_payment",
+                        "payment_subject": "commodity",
                     }
                 ],
             }
