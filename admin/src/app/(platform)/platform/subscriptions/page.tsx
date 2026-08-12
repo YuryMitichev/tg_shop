@@ -2,9 +2,8 @@
 
 import useSWR from "swr";
 import { superAdminFetcher } from "@/lib/swr";
-import { superAdminApi, api } from "@/lib/api";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { superAdminApi } from "@/lib/api";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,29 +38,14 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function SubscriptionsPage() {
-  const router = useRouter();
-  const [allowed, setAllowed] = useState(false);
   const [filter, setFilter] = useState<string>("all");
   const [extendShop, setExtendShop] = useState<PlatformSubscription | null>(null);
   const [addDays, setAddDays] = useState("30");
   const [extending, setExtending] = useState(false);
 
-  useEffect(() => {
-    api
-      .get<{ is_super_admin: boolean }>("/auth/me")
-      .then((res) => {
-        if (!res.is_super_admin) {
-          router.replace("/dashboard");
-        } else {
-          setAllowed(true);
-        }
-      })
-      .catch(() => router.replace("/login"));
-  }, [router]);
-
   const queryParams = filter !== "all" ? `?status=${filter}` : "";
   const { data, isLoading, mutate } = useSWR<{ subscriptions: PlatformSubscription[] }>(
-    allowed ? `/subscriptions${queryParams}` : null,
+    `/subscriptions${queryParams}`,
     superAdminFetcher,
   );
 
@@ -90,14 +74,6 @@ export default function SubscriptionsPage() {
     } finally {
       setExtending(false);
     }
-  }
-
-  if (!allowed) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-muted-foreground">Загрузка...</p>
-      </div>
-    );
   }
 
   return (

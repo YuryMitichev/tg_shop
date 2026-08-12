@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { superAdminFetcher } from "@/lib/swr";
-import { superAdminApi, api } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,40 +30,14 @@ import {
 import { Store, Trash2 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import type { ShopManagement } from "@/lib/types";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 
 export default function ShopsPage() {
-  const router = useRouter();
-  const [allowed, setAllowed] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<{ is_super_admin: boolean }>("/auth/me")
-      .then((res) => {
-        if (!res.is_super_admin) {
-          router.replace("/dashboard");
-        } else {
-          setAllowed(true);
-        }
-      })
-      .catch(() => router.replace("/login"));
-  }, [router]);
-
   const { data, isLoading, mutate } = useSWR<{ shops: ShopManagement[] }>(
-    allowed ? "/shops" : null,
+    "/shops",
     superAdminFetcher,
   );
 
   const shops = data?.shops ?? [];
-
-  if (!allowed) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-muted-foreground">Загрузка...</p>
-      </div>
-    );
-  }
 
   async function remove(shop: ShopManagement) {
     try {

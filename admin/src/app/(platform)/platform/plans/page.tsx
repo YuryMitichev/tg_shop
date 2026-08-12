@@ -2,9 +2,8 @@
 
 import useSWR from "swr";
 import { superAdminFetcher } from "@/lib/swr";
-import { superAdminApi, api } from "@/lib/api";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { superAdminApi } from "@/lib/api";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,38 +26,15 @@ import { formatPrice } from "@/lib/format";
 import type { SubscriptionPlanAdmin } from "@/lib/types";
 
 export default function PlansPage() {
-  const router = useRouter();
-  const [allowed, setAllowed] = useState(false);
   const [editing, setEditing] = useState<SubscriptionPlanAdmin | null>(null);
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    api
-      .get<{ is_super_admin: boolean }>("/auth/me")
-      .then((res) => {
-        if (!res.is_super_admin) {
-          router.replace("/dashboard");
-        } else {
-          setAllowed(true);
-        }
-      })
-      .catch(() => router.replace("/login"));
-  }, [router]);
-
   const { data, isLoading, mutate } = useSWR<{ plans: SubscriptionPlanAdmin[] }>(
-    allowed ? "/plans" : null,
+    "/plans",
     superAdminFetcher,
   );
 
   const plans = data?.plans ?? [];
-
-  if (!allowed) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-muted-foreground">Загрузка...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

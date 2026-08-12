@@ -2,7 +2,6 @@
 
 import useSWR from "swr";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,29 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Save } from "lucide-react";
-import { superAdminApi, api } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { superAdminFetcher } from "@/lib/swr";
 import type { PlatformPaymentSettings } from "@/lib/types";
 
 export default function PlatformPaymentSettingsPage() {
-  const router = useRouter();
-  const [allowed, setAllowed] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<{ is_super_admin: boolean }>("/auth/me")
-      .then((res) => {
-        if (!res.is_super_admin) {
-          router.replace("/dashboard");
-        } else {
-          setAllowed(true);
-        }
-      })
-      .catch(() => router.replace("/login"));
-  }, [router]);
-
   const { data, isLoading, mutate } = useSWR<PlatformPaymentSettings>(
-    allowed ? "/payment-settings" : null,
+    "/payment-settings",
     superAdminFetcher,
   );
 
@@ -67,14 +50,6 @@ export default function PlatformPaymentSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }
-
-  if (!allowed) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-muted-foreground">Загрузка...</p>
-      </div>
-    );
   }
 
   return (

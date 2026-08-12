@@ -2,9 +2,6 @@
 
 import useSWR from "swr";
 import { superAdminFetcher } from "@/lib/swr";
-import { api } from "@/lib/api";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Store, TrendingUp, Clock, AlertCircle, PlusCircle, Wallet } from "lucide-react";
@@ -12,28 +9,12 @@ import { formatPrice } from "@/lib/format";
 import type { PlatformStats } from "@/lib/types";
 
 export default function PlatformDashboardPage() {
-  const router = useRouter();
-  const [allowed, setAllowed] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<{ is_super_admin: boolean }>("/auth/me")
-      .then((res) => {
-        if (!res.is_super_admin) {
-          router.replace("/dashboard");
-        } else {
-          setAllowed(true);
-        }
-      })
-      .catch(() => router.replace("/login"));
-  }, [router]);
-
   const { data, isLoading } = useSWR<PlatformStats>(
-    allowed ? "/dashboard" : null,
+    "/dashboard",
     superAdminFetcher,
   );
 
-  if (!allowed || isLoading || !data) {
+  if (isLoading || !data) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
