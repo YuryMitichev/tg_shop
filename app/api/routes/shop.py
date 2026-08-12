@@ -247,7 +247,9 @@ async def add_to_cart(req: AddToCartRequest, user: dict = Depends(get_current_us
 
 @router.post("/cart/inc/{cart_item_id}")
 async def inc_cart_item(cart_item_id: int, user: dict = Depends(get_current_user)):
-    await CartService.change_quantity(user["shop_id"], user["id"], cart_item_id, +1)
+    error = await CartService.change_quantity(user["shop_id"], user["id"], cart_item_id, +1)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
     return {"ok": True}
 
 

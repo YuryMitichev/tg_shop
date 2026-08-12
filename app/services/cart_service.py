@@ -144,8 +144,11 @@ class CartService:
             return items
 
     @staticmethod
-    async def change_quantity(shop_id: int, telegram_user_id: int, cart_item_id: int, delta: int) -> None:
-        """Изменить количество; при уходе в 0 и меньше — удалить позицию."""
+    async def change_quantity(shop_id: int, telegram_user_id: int, cart_item_id: int, delta: int) -> str | None:
+        """Изменить количество; при уходе в 0 и меньше — удалить позицию.
+
+        Возвращает None при успехе, либо сообщение об ошибке (превышен остаток).
+        """
         async with async_session() as session:
             result = await session.execute(
                 select(CartItem).where(
@@ -157,14 +160,26 @@ class CartService:
             item = result.scalar_one_or_none()
 
             if not item:
-                return
+                return None
 
-            item.quantity += delta
+            new_quantity = item.quantity + delta
 
-            if item.quantity <= 0:
+            if new_quantity <= 0:
                 await session.delete(item)
+                await session.commit()
+                return None
 
+            variant_result = await session.execute(
+                select(ProductVariant).where(ProductVariant.id == item.variant_id)
+            )
+            variant = variant_result.scalar_one_or_none()
+
+            if variant and variant.stock > 0 and new_quantity > variant.stock:
+                return f"На складе осталось только {variant.stock} шт."
+
+            item.quantity = new_quantity
             await session.commit()
+            return None
 
     @staticmethod
     async def remove_item(shop_id: int, telegram_user_id: int, cart_item_id: int) -> None:
