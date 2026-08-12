@@ -439,10 +439,13 @@ async def contact_manager(req: ContactManagerRequest, user: dict = Depends(get_c
     if bot is None:
         raise HTTPException(status_code=503, detail="Бот недоступен")
 
+    username = user.get("username")
+    user_line = f"@{username}" if username else f"id: {user['id']}"
+
     text = (
         f"📩 Сообщение от покупателя\n\n"
         f"Товар: {product_name}\n"
-        f"Пользователь: {user.get('first_name') or ''} (id: {user['id']})\n\n"
+        f"Пользователь: {user.get('first_name') or ''} ({user_line})\n\n"
         f"{req.message}"
     )
     try:
