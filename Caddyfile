@@ -1,4 +1,5 @@
 {$DOMAIN}, www.{$DOMAIN} {
+	encode zstd gzip
 	reverse_proxy bot:8000
 	handle_errors 502 503 504 {
 		header Access-Control-Allow-Origin "*"

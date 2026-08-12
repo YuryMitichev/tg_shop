@@ -31,10 +31,12 @@ const App = {
             this.shopId = parseInt(params.get("shop")) || 1;
         }
 
-        this.loadShopConfig();
-        this.loadCategories();
-        this.updateCartBadge();
-        this.loadOffers();
+        await Promise.all([
+            this.loadShopConfig(),
+            this.loadCategories(),
+            this.updateCartBadge(),
+            this.loadOffers(),
+        ]);
     },
 
     // ==========================

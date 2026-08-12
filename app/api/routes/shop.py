@@ -210,7 +210,11 @@ async def get_photo(photo_id: int):
                 raise HTTPException(status_code=502, detail="Download error")
             content = await resp.read()
 
-    return Response(content=content, media_type="image/jpeg")
+    return Response(
+        content=content,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # ==========================

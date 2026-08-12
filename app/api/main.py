@@ -45,13 +45,13 @@ def init_sentry() -> None:
 init_sentry()
 
 
-class NoCacheStaticFiles(StaticFiles):
-    """StaticFiles с заголовком Cache-Control: no-cache,
-    чтобы Telegram WebApp не кешировал старые версии."""
+class VersionedStaticFiles(StaticFiles):
+    """StaticFiles с долгим кешем для версионированных файлов (?v=...)
+    и коротким для остальных."""
 
     async def get_response(self, path: str, scope) -> Response:
         response = await super().get_response(path, scope)
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Cache-Control"] = "public, max-age=300"
         return response
 
 
@@ -127,7 +127,7 @@ def create_app() -> FastAPI:
     if static_dir.exists():
         app.mount(
             "/app",
-            NoCacheStaticFiles(directory=str(static_dir), html=True),
+            VersionedStaticFiles(directory=str(static_dir), html=True),
             name="webapp",
         )
 
