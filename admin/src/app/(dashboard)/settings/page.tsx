@@ -518,7 +518,7 @@ function ThemeSettingsTab() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Скругление углов</Label>
-            <Select value={radius} onValueChange={(v) => setRadius(v === "__default__" ? "" : v)} items={{ "__default__": "По умолчанию", "0px": "Острые", "8px": "Маленькое", "14px": "Среднее", "20px": "Большое", "9999px": "Круглое" }}>
+            <Select value={radius} onValueChange={(v) => setRadius((v ?? "") === "__default__" ? "" : (v ?? ""))} items={{ "__default__": "По умолчанию", "0px": "Острые", "8px": "Маленькое", "14px": "Среднее", "20px": "Большое", "9999px": "Круглое" }}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="По умолчанию" />
               </SelectTrigger>
@@ -534,7 +534,7 @@ function ThemeSettingsTab() {
           </div>
           <div className="space-y-2">
             <Label>Шрифт</Label>
-            <Select value={fontFamily} onValueChange={(v) => setFontFamily(v === "__default__" ? "" : v)} items={{ "__default__": "Системный (по умолчанию)", "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif": "Sans-serif", "Georgia, 'Times New Roman', serif": "Serif (Georgia)", "'Courier New', Courier, monospace": "Monospace", "'Comic Sans MS', 'Marker Felt', cursive": "Cursive" }}>
+            <Select value={fontFamily} onValueChange={(v) => setFontFamily((v ?? "") === "__default__" ? "" : (v ?? ""))} items={{ "__default__": "Системный (по умолчанию)", "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif": "Sans-serif", "Georgia, 'Times New Roman', serif": "Serif (Georgia)", "'Courier New', Courier, monospace": "Monospace", "'Comic Sans MS', 'Marker Felt', cursive": "Cursive" }}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Системный (по умолчанию)" />
               </SelectTrigger>
