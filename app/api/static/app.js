@@ -16,7 +16,7 @@ const App = {
     botUsername: null,
     currentRating: 0,
 
-    init() {
+    async init() {
         this.tg = window.Telegram.WebApp;
         this.tg.ready();
         this.tg.expand();
