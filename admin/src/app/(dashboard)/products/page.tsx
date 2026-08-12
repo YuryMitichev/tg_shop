@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const PER_PAGE = 20;
+const PER_PAGE = 18;
 
 export default function ProductsPage() {
   const [filter, setFilter] = useState<string>("all");
@@ -120,9 +120,9 @@ export default function ProductsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-64 w-full rounded-lg" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          {[...Array(18)].map((_, i) => (
+            <Skeleton key={i} className="h-56 w-full rounded-lg" />
           ))}
         </div>
       ) : products?.length === 0 ? (
@@ -132,9 +132,9 @@ export default function ProductsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {products?.map((product) => (
-            <Card key={product.id} className="overflow-hidden">
+            <Card key={product.id} size="sm" className="overflow-hidden">
               <div className="aspect-square bg-muted">
                 {product.photos[0] ? (
                   <img
@@ -143,52 +143,46 @@ export default function ProductsPage() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-muted-foreground">
+                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
                     Нет фото
                   </div>
                 )}
               </div>
 
-              <CardContent className="space-y-3 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-semibold">{product.name}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {product.category_name}
-                    </p>
-                  </div>
-                  <Badge variant={product.is_active ? "default" : "secondary"}>
-                    {product.is_active ? (
-                      <Eye className="mr-1 h-3 w-3" />
-                    ) : (
-                      <EyeOff className="mr-1 h-3 w-3" />
-                    )}
-                    {product.is_active ? "Видим" : "Скрыт"}
+              <CardContent className="space-y-2 p-3">
+                <div className="flex items-start justify-between gap-1">
+                  <h3 className="line-clamp-2 text-xs font-semibold leading-tight">{product.name}</h3>
+                  <Badge variant={product.is_active ? "default" : "secondary"} className="shrink-0 text-[10px]">
+                    {product.is_active ? "✓" : "✕"}
                   </Badge>
                 </div>
 
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {product.category_name}
+                </p>
+
                 <div className="flex flex-wrap gap-1">
-                  {product.variants.map((v) => (
-                    <Badge key={v.id} variant="outline" className="text-xs">
+                  {product.variants.slice(0, 3).map((v) => (
+                    <Badge key={v.id} variant="outline" className="text-[10px]">
                       {v.volume} — {v.price}₽
                     </Badge>
                   ))}
                 </div>
 
-                <div className="flex gap-2 pt-1">
-                  <Button size="sm" variant="outline" render={<Link href={`/products/${product.id}`} className="flex-1" />}>
-                    <Pencil className="mr-1 h-3 w-3" />
-                    Изменить
+                <div className="flex gap-1 pt-1">
+                  <Button size="sm" variant="outline" className="h-7 flex-1 px-2 text-xs" render={<Link href={`/products/${product.id}`} />}>
+                    <Pencil className="h-3 w-3" />
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
+                    className="h-7 w-7 p-0"
                     onClick={() => toggleActive(product.id)}
                   >
                     {product.is_active ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                   </Button>
                   <AlertDialog>
-                    <AlertDialogTrigger render={<Button size="sm" variant="outline" />}>
+                    <AlertDialogTrigger render={<Button size="sm" variant="outline" className="h-7 w-7 p-0" />}>
                       <Trash2 className="h-3 w-3 text-red-500" />
                     </AlertDialogTrigger>
                     <AlertDialogContent>
