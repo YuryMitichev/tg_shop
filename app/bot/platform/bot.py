@@ -18,6 +18,7 @@ from aiogram.types import (
 )
 
 from app.core.config import settings
+from app.services.platform_settings_service import PlatformSettingsService
 from app.services.shop_service import ShopService
 from app.services.subscription_service import SubscriptionService
 from app.services.subscription_payment_service import SubscriptionPaymentService
@@ -778,7 +779,7 @@ async def on_pay(callback: CallbackQuery) -> None:
     shop_id = int(shop_id_str)
     plan_id = int(plan_id_str)
 
-    if not settings.yookassa_enabled:
+    if not await PlatformSettingsService.is_yookassa_enabled():
         await callback.answer("Оплата скоро будет доступна", show_alert=True)
         return
 

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.api.auth import get_current_user
 from app.api.routes.shop import get_shop_id
 from app.core.config import settings
+from app.services.platform_settings_service import PlatformSettingsService
 from app.services.subscription_service import SubscriptionService
 from app.services.subscription_payment_service import SubscriptionPaymentService
 
@@ -37,7 +38,7 @@ async def create_payment(
     shop_id: int = Depends(get_shop_id),
 ):
     """Создаёт платёж для оплаты подписки через ЮKassa."""
-    if not settings.yookassa_enabled:
+    if not await PlatformSettingsService.is_yookassa_enabled():
         raise HTTPException(status_code=503, detail="ЮKassa не настроена")
 
     result = await SubscriptionPaymentService.create_payment(
