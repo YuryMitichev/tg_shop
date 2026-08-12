@@ -164,6 +164,7 @@ body {
 
 .product-card .info {
     padding: 10px 12px 14px;
+    background: var(--secondary-bg);
 }
 
 @media (min-width: 600px) {
@@ -190,7 +191,7 @@ body {
 }
 
 .product-card .price {
-    color: var(--link);
+    color: var(--button-text);
     font-weight: 700;
     font-size: 16px;
 }
