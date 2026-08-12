@@ -39,6 +39,7 @@ class YooKassaClient:
         metadata: dict[str, str],
         shop_id: str | None = None,
         secret_key: str | None = None,
+        receipt: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """
         Создаёт платёж.
@@ -71,6 +72,9 @@ class YooKassaClient:
             "description": description,
             "metadata": metadata,
         }
+
+        if receipt is not None:
+            payload["receipt"] = receipt
 
         try:
             async with aiohttp.ClientSession() as session:

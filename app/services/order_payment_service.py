@@ -34,6 +34,7 @@ class OrderPaymentService:
 
             amount = order.total_amount
             description = f"Заказ №{order_id}"
+            customer_phone = order.phone
 
         return_url = settings.webapp_url or settings.admin_panel_url or "https://t.me"
 
@@ -41,6 +42,29 @@ class OrderPaymentService:
         if creds is None:
             logger.error("ЮKassa ключи не настроены для магазина %d", shop_id)
             return None
+
+        receipt = None
+        customer_email = settings.receipt_email
+        if customer_email or customer_phone:
+            customer = {}
+            if customer_email:
+                customer["email"] = customer_email
+            if customer_phone:
+                customer["phone"] = customer_phone
+            receipt = {
+                "customer": customer,
+                "items": [
+                    {
+                        "description": description[:128],
+                        "quantity": "1",
+                        "amount": {
+                            "value": f"{float(amount):.2f}",
+                            "currency": "RUB",
+                        },
+                        "vat_code": settings.yookassa_default_vat_code,
+                    }
+                ],
+            }
 
         result = await YooKassaClient.create_payment(
             amount_rub=float(amount),
@@ -53,6 +77,7 @@ class OrderPaymentService:
             },
             shop_id=creds[0],
             secret_key=creds[1],
+            receipt=receipt,
         )
 
         if result is None:

@@ -45,9 +45,27 @@ class SubscriptionPaymentService:
 
         return_url = settings.admin_panel_url or settings.app_base_url or "https://t.me"
 
+        receipt = None
+        customer_email = settings.receipt_email
+        if customer_email:
+            receipt = {
+                "customer": {"email": customer_email},
+                "items": [
+                    {
+                        "description": description[:128],
+                        "quantity": "1",
+                        "amount": {
+                            "value": f"{plan['price']:.2f}",
+                            "currency": "RUB",
+                        },
+                        "vat_code": settings.yookassa_default_vat_code,
+                    }
+                ],
+            }
+
         result = await YooKassaClient.create_payment(
             amount_rub=plan["price"],
-            description=f"Подписка «{plan['name']}» — {plan['duration_days']} дней (магазин «{shop['name']}»)",
+            description=description,
             return_url=return_url,
             metadata={
                 "type": "subscription",
@@ -56,6 +74,7 @@ class SubscriptionPaymentService:
             },
             shop_id=creds[0],
             secret_key=creds[1],
+            receipt=receipt,
         )
 
         if result is None:

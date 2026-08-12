@@ -135,6 +135,10 @@ class Settings(BaseSettings):
     def yookassa_enabled(self) -> bool:
         return bool(self.yookassa_shop_id and self.yookassa_secret_key)
 
+    receipt_email: str | None = Field(default=None, alias="RECEIPT_EMAIL")
+
+    yookassa_default_vat_code: int = Field(default=1, alias="YOOKASSA_DEFAULT_VAT_CODE")
+
     # ==========================
     # Ручная оплата (без эквайринга)
     # ==========================
