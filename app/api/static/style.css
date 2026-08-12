@@ -180,13 +180,54 @@ body {
     border-radius: var(--radius);
     overflow: hidden;
     margin-bottom: 16px;
+    position: relative;
 }
 
-.gallery img {
+.gallery-track {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.gallery-track::-webkit-scrollbar {
+    display: none;
+}
+
+.gallery-slide {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+}
+
+.gallery-slide img {
     width: 100%;
     aspect-ratio: 1;
     object-fit: cover;
     background: var(--secondary-bg);
+    pointer-events: none;
+}
+
+.gallery-dots {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 0;
+}
+
+.gallery-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--hint);
+    opacity: 0.4;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.gallery-dot.active {
+    opacity: 1;
+    transform: scale(1.3);
 }
 
 .gallery-placeholder {

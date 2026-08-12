@@ -218,13 +218,26 @@ const App = {
     },
 
     renderProductDetail(p) {
-        const photo = this.photoUrl(p.photos?.[0]?.id);
+        const photos = (p.photos || []).map(ph => this.photoUrl(ph.id)).filter(Boolean);
         const rating = p.rating ? `⭐ ${p.rating.avg} (${p.rating.count} отз.)` : "Нет отзывов";
 
         let html = "";
 
-        if (photo) {
-            html += `<div class="gallery"><img src="${photo}" onerror="this.parentElement.style.display='none'"></div>`;
+        if (photos.length > 0) {
+            const slides = photos.map((src, i) =>
+                `<div class="gallery-slide"><img src="${src}" onerror="this.parentElement.style.display='none'"></div>`
+            ).join("");
+            const dots = photos.map((_, i) =>
+                `<span class="gallery-dot${i === 0 ? ' active' : ''}" onclick="App.scrollToSlide(${i})"></span>`
+            ).join("");
+            html += `
+                <div class="gallery" id="product-gallery">
+                    <div class="gallery-track" onscroll="App.onGalleryScroll()">
+                        ${slides}
+                    </div>
+                    ${photos.length > 1 ? `<div class="gallery-dots" id="gallery-dots">${dots}</div>` : ''}
+                </div>
+            `;
         } else {
             html += `<div class="gallery-placeholder">${this.catEmoji()}</div>`;
         }
@@ -348,6 +361,21 @@ const App = {
         });
 
         this.tg.HapticFeedback?.selectionChanged();
+    },
+
+    onGalleryScroll() {
+        const track = document.getElementById("product-gallery")?.querySelector(".gallery-track");
+        if (!track) return;
+        const idx = Math.round(track.scrollLeft / track.clientWidth);
+        document.querySelectorAll("#gallery-dots .gallery-dot").forEach((d, i) => {
+            d.classList.toggle("active", i === idx);
+        });
+    },
+
+    scrollToSlide(idx) {
+        const track = document.getElementById("product-gallery")?.querySelector(".gallery-track");
+        if (!track) return;
+        track.scrollTo({ left: idx * track.clientWidth, behavior: "smooth" });
     },
 
     toggleReviewForm() {
