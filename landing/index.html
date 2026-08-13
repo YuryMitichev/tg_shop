@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <title>Свой канал — магазин внутри Telegram без сайта и программиста</title>
+  <meta name="description" content="Преврати свой Telegram-канал в магазин: каталог, корзина, оплата и база клиентов прямо в боте. Без сайта, без переписки, без потерянных заказов. 7 дней бесплатно.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://svoi-kanal.ru/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://svoi-kanal.ru/">
+  <meta property="og:title" content="Свой канал — магазин внутри Telegram">
+  <meta property="og:description" content="Преврати свой Telegram-канал в магазин: каталог, корзина, оплата и CRM прямо в боте. Без потерянных заказов.">
+  <meta property="og:image" content="https://svoi-kanal.ru/og-image.svg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="ru_RU">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Свой канал — магазин внутри Telegram">
+  <meta name="twitter:description" content="Преврати свой Telegram-канал в магазин: каталог, корзина, оплата и CRM прямо в боте.">
+  <meta name="twitter:image" content="https://svoi-kanal.ru/og-image.svg">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <!-- Styles -->
+  <link rel="preload" href="style.css" as="style">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Schema.org: SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Свой канал",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Telegram",
+    "description": "Платформа, которая превращает Telegram-канал в полноценный магазин с каталогом, корзиной, оплатой и CRM прямо внутри Telegram.",
+    "url": "https://svoi-kanal.ru/",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "RUB",
+      "description": "7 дней бесплатно, без привязки карты"
+    },
+    "featureList": [
+      "Каталог товаров в боте",
+      "Корзина и оформление заказа в чате",
+      "Приём оплаты (ЮKassa, перевод на карту)",
+      "CRM: профили клиентов, история заказов, рассылки",
+      "Админ-панель без кода",
+      "Полностью белый лейбл — свой бренд"
+    ]
+  }
+  </script>
+
+  <!-- Schema.org: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Нужен ли программист для запуска магазина?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Нет. Ты создаёшь бота через @BotFather — это официальный инструмент Telegram, займёт 2 минуты. Затем вставляешь токен в платформу, и магазин готов. Каталог и заказы настраиваются в админ-панели мышкой, без единой строчки кода."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Сколько это стоит?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Первые 7 дней — бесплатно, без привязки карты. Дальше действует подписка по тарифам, которые можно посмотреть у бота при регистрации. Никаких комиссий с каждой продажи — ты получаешь всю сумму заказа."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как принимаются платежи?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Два способа: ЮKassa для онлайн-оплаты картой прямо в боте или перевод на карту с автоматическим подтверждением. В обоих случаях покупатель не покидает Telegram."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Мой Telegram-канал как-то изменится?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Нет. Канал остаётся точно таким же — те же посты, те же подписчики. Ты просто добавляешь ссылку на бота в закреплённое сообщение или посты, и подписчики оформляют заказы через бота вместо переписки в директе."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Можно ли перенести мой текущий ассортимент?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Да. Загружаешь товары в админ-панели: название, цена, фото, описание. Поддерживается массовый импорт. Если у тебя десятки позиций — добавление займёт несколько минут."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Кто организует доставку?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Доставку ты организуешь так же, как делаешь сейчас. Платформа обрабатывает заказы и платежи, а логистика остаётся за тобой — мы не вмешиваемся в этот процесс."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ===== STICKY MOBILE CTA ===== -->
+  <div class="sticky-cta" id="stickyCta">
+    <a href="https://t.me/svoi_kanal_bot" class="btn btn-primary btn-block">
+      Создать магазин · 7 дней бесплатно
+    </a>
+  </div>
+
+  <!-- ===== HEADER ===== -->
+  <header class="site-header" id="siteHeader">
+    <div class="container header-inner">
+      <a href="#top" class="logo" aria-label="Свой канал — главная">
+        <span class="logo-icon" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <rect width="32" height="32" rx="8" fill="url(#logo-grad)"/>
+            <path d="M10 11h12l-1 3H11l-1 3h10l-1 3H9l-1 3h12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32">
+                <stop offset="0" stop-color="#2AABEE"/>
+                <stop offset="1" stop-color="#2563EB"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </span>
+        <span class="logo-text">Свой канал</span>
+      </a>
+      <nav class="nav-desktop" aria-label="Основная навигация">
+        <a href="#problem">Зачем</a>
+        <a href="#solution">Как работает</a>
+        <a href="#features">Возможности</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a href="https://t.me/svoi_kanal_bot" class="btn btn-primary btn-sm header-cta">
+        Создать магазин
+      </a>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ===== HERO ===== -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-content">
+          <span class="eyebrow">Магазин внутри Telegram</span>
+          <h1>
+            Твои подписчики хотят купить. Часть из них передумывает, пока пишет тебе в директ.
+          </h1>
+          <p class="hero-sub">
+            «Свой канал» превращает твой Telegram-канал в магазин: каталог, корзина, оплата и база клиентов — прямо в боте. Без сайта. Без переписки. Без потерянных заказов.
+          </p>
+          <div class="hero-cta-group">
+            <a href="https://t.me/svoi_kanal_bot" class="btn btn-primary btn-lg">
+              Создать магазин за 5 минут
+            </a>
+            <span class="trial-note">7 дней бесплатно · без привязки карты</span>
+          </div>
+          <ul class="hero-bullets">
+            <li>Без программиста</li>
+            <li>Без хостинга</li>
+            <li>Без сайта</li>
+          </ul>
+        </div>
+
+        <!-- Phone screenshot -->
+        <div class="hero-visual">
+          <div class="phone-screenshot">
+            <img src="img/product-detail.jpg" alt="Карточка товара в магазине внутри Telegram" width="280" height="auto">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PROBLEM ===== -->
+    <section class="section" id="problem">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="section-tag">Проблема</span>
+          <h2>Каждое «напишите в директ» — заказ, который может не состояться</h2>
+        </div>
+        <div class="problem-grid">
+          <article class="card problem-card reveal">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="9" y1="9" x2="9" y2="9.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="15" y1="14" x2="15" y2="14.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            <h3>Заказ теряется в переписке</h3>
+            <p>«Напишите в директ для заказа» — и дальше: какой вариант, сколько, куда отправлять, пришла ли оплата. Пока вы переписываетесь, покупатель уходит к тому, у кого быстрее.</p>
+          </article>
+          <article class="card problem-card reveal">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M23 21v-2a4 4 0 0 0-3-3.87" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Ты не знаешь своих покупателей</h3>
+            <p>У тебя 5 000 подписчиков, но ты не помнишь, кто уже покупал, кто вернулся за повторным заказом, а кто просто читает. Канал не даёт данных о покупателях — и база не ведётся.</p>
+          </article>
+          <article class="card problem-card reveal">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="12 6 12 12 16 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Нет истории заказов</h3>
+            <p>Каждый новый заказ — с нуля. Ты не можешь написать тем, кто покупал в прошлом месяце, и предложить новинку. Рассылка по реальным покупателям невозможна.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SOLUTION ===== -->
+    <section class="section section-alt" id="solution">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="section-tag">Решение</span>
+          <h2>Покупатель проходит весь путь до оплаты, не выходя из чата</h2>
+          <p class="section-desc">Никаких внешних ссылок, регистраций на сайте или возвратов в директ. Три шага — и заказ оплачен.</p>
+        </div>
+        <div class="flow-grid">
+          <div class="flow-step reveal">
+            <div class="flow-number">1</div>
+            <div class="flow-screenshot">
+              <img src="img/catalog.jpg" alt="Каталог товаров в боте" loading="lazy" width="560" height="auto">
+            </div>
+            <h3>Открывает каталог</h3>
+            <p>Покупатель запускает бота прямо из твоего канала. Видит разделы и товары с фото, ценами и описаниями — как в интернет-магазине, только внутри Telegram.</p>
+          </div>
+          <div class="flow-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20"><polyline points="9 18 15 12 9 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="flow-step reveal">
+            <div class="flow-number">2</div>
+            <div class="flow-screenshot">
+              <img src="img/add-to-cart.jpg" alt="Добавление товара в корзину" loading="lazy" width="560" height="auto">
+            </div>
+            <h3>Добавляет в корзину</h3>
+            <p>Жмёт «В корзину» прямо под товаром. Бот сам считает сумму и количество. Покупатель видит корзину и нажимает «Оформить» — без переписки с тобой.</p>
+          </div>
+          <div class="flow-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20"><polyline points="9 18 15 12 9 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="flow-step reveal">
+            <div class="flow-number">3</div>
+            <div class="flow-screenshot">
+              <img src="img/payment.jpg" alt="Оплата внутри Telegram" loading="lazy" width="560" height="auto">
+            </div>
+            <h3>Оплачивает в чате</h3>
+            <p>Выбирает способ оплаты — карта через ЮKassa или перевод. Деньги идут тебе. Заказ автоматически появляется в твоей админ-панели со статусом «Оплачен».</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FEATURES ===== -->
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="section-tag">Возможности</span>
+          <h2>Что получает твой канал</h2>
+        </div>
+        <div class="features-grid">
+          <article class="card feature-card reveal">
+            <div class="feature-screenshot">
+              <img src="img/cart.jpg" alt="Корзина покупателя внутри Telegram" loading="lazy" width="560" height="auto">
+            </div>
+            <h3>Всё в одном окне</h3>
+            <p>Покупатель листает каталог, добавляет в корзину и оплачивает — прямо в чате с ботом. Не нужно переходить на сторонний сайт, регистрироваться или писать продавцу лично.</p>
+          </article>
+          <article class="card feature-card reveal">
+            <div class="feature-screenshot">
+              <img src="img/admin-panel.jpg" alt="Админ-панель магазина" loading="lazy" width="560" height="auto">
+            </div>
+            <h3>Своя CRM</h3>
+            <p>Каждый покупатель автоматически попадает в базу: профиль, теги, история заказов. Отправляй рассылки по сегментам, предлагай новинки тем, кто уже покупал — канал сам по себе такого не даёт.</p>
+          </article>
+          <article class="card feature-card reveal">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Свой бренд</h3>
+            <p>Бот работает под твоим именем: твоё название, твоё описание, твоё лого. Никаких упоминаний платформы — покупатель видит только твой магазин.</p>
+          </article>
+          <article class="card feature-card reveal">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28"><polyline points="16 18 22 12 16 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="8 6 2 12 8 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Без программиста</h3>
+            <p>Админ-панель для управления каталогом, ценами, промокодами и заказами. Добавляешь товары, нажимаешь «Опубликовать» — изменения появляются в боте мгновенно. Ни одной строчки кода.</p>
+          </article>
+          <article class="card feature-card reveal">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28"><rect x="1" y="4" width="22" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="1" y1="10" x2="23" y2="10" stroke="currentColor" stroke-width="2"/><line x1="6" y1="15" x2="10" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            <h3>Оплата внутри</h3>
+            <p>ЮKassa для онлайн-оплаты картой или перевод на карту с авто-подтверждением. Деньги идут тебе напрямую. Покупатель не покидает Telegram — и не передумывает.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== HOW IT WORKS ===== -->
+    <section class="section section-alt" id="how">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="section-tag">Запуск</span>
+          <h2>Запуск за 5 минут — без программиста и хостинга</h2>
+          <p class="section-desc">Ты делаешь четыре шага. На четвёртом магазин уже работает.</p>
+        </div>
+        <ol class="steps-list">
+          <li class="step-item reveal">
+            <div class="step-marker">1</div>
+            <div class="step-body">
+              <h3>Создай бота в @BotFather <span class="step-time">~2 мин</span></h3>
+              <p>Открой <strong>@BotFather</strong> в Telegram, отправь команду <code>/newbot</code>, придумай имя и юзернейм. Получишь токен — это ключ от твоего магазина.</p>
+            </div>
+          </li>
+          <li class="step-item reveal">
+            <div class="step-marker">2</div>
+            <div class="step-body">
+              <h3>Подключи бота к платформе <span class="step-time">~1 мин</span></h3>
+              <p>Открой <a href="https://t.me/svoi_kanal_bot" class="inline-link"><strong>@svoi_kanal_bot</strong></a>, пройди регистрацию и вставь токен. Бот готов принимать заказы.</p>
+            </div>
+          </li>
+          <li class="step-item reveal">
+            <div class="step-marker">3</div>
+            <div class="step-body">
+              <h3>Загрузи товары <span class="step-time">~3 мин</span></h3>
+              <p>В админ-панели добавь товары: название, цена, фото, описание. По одному или массовым импортом. Нажми «Опубликовать» — каталог появляется в боте.</p>
+            </div>
+          </li>
+          <li class="step-item reveal">
+            <div class="step-marker step-marker-done">
+              <svg viewBox="0 0 24 24" width="20" height="20"><polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="step-body">
+              <h3>Опубликуй ссылку в канале <span class="step-time">~30 сек</span></h3>
+              <p>Закрепи ссылку на бота в канале. Подписчики открывают, выбирают, оплачивают — ты видишь заказы в админ-панели. Магазин работает.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ===== FAQ ===== -->
+    <section class="section" id="faq">
+      <div class="container container-narrow">
+        <div class="section-head reveal">
+          <span class="section-tag">FAQ</span>
+          <h2>Частые вопросы</h2>
+        </div>
+        <div class="faq-list reveal">
+          <details class="faq-item">
+            <summary>Нужен ли программист?</summary>
+            <div class="faq-answer">
+              <p>Нет. Ты создаёшь бота через <strong>@BotFather</strong> — это официальный инструмент Telegram, займёт 2 минуты. Затем вставляешь токен в платформу, и магазин готов. Каталог и заказы настраиваются в админ-панели мышкой, без единой строчки кода.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Сколько стоит?</summary>
+            <div class="faq-answer">
+              <p>Первые <strong>7 дней — бесплатно</strong>, без привязки карты. Дальше действует подписка, тарифы можно посмотреть у бота при регистрации. Никаких комиссий с каждой продажи — ты получаешь всю сумму заказа.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Что с оплатой?</summary>
+            <div class="faq-answer">
+              <p>Два способа: <strong>ЮKassa</strong> для онлайн-оплаты картой прямо в боте или <strong>перевод на карту</strong> с автоматическим подтверждением. В обоих случаях покупатель не покидает Telegram.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Мой Telegram-канал останется как есть?</summary>
+            <div class="faq-answer">
+              <p>Да. Канал остаётся точно таким же — те же посты, те же подписчики, тот же контент. Ты просто добавляешь ссылку на бота в закреплённое сообщение или посты, и подписчики оформляют заказы через бота вместо переписки в директе.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Можно ли перенести мой текущий ассортимент?</summary>
+            <div class="faq-answer">
+              <p>Да. Загружаешь товары в админ-панели: название, цена, фото, описание. Поддерживается массовый импорт. Если у тебя десятки позиций — добавление займёт несколько минут.</p>
+            </div>
+          </details>
+          <details class="faq-item">
+            <summary>Кто организует доставку?</summary>
+            <div class="faq-answer">
+              <p>Доставку ты организуешь так же, как делаешь сейчас. Платформа обрабатывает заказы и платежи, а логистика остаётся за тобой — мы не вмешиваемся в этот процесс.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== EARLY ACCESS ===== -->
+    <section class="section early-access">
+      <div class="container container-narrow reveal">
+        <div class="early-card">
+          <h2>Ранний доступ — набираем первых пользователей</h2>
+          <p>Платформа в активной разработке. Первые пользователи получают:</p>
+          <ul class="early-list">
+            <li><strong>Личная помощь</strong> с настройкой магазина на старте</li>
+            <li><strong>Приоритет</strong> на запросы новых функций</li>
+            <li><strong>Фиксированная цена</strong> по тарифу при запуске</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FINAL CTA ===== -->
+    <section class="section cta-final">
+      <div class="container">
+        <div class="cta-inner reveal">
+          <h2>Хватит терять заказы в переписке</h2>
+          <p>Подключи магазин к своему каналу. На это уйдёт 5 минут — а каждый следующий подписчик сможет купить без единого сообщения в директ.</p>
+          <a href="https://t.me/svoi_kanal_bot" class="btn btn-light btn-lg">
+            Создать магазин за 5 минут
+          </a>
+          <span class="trial-note trial-note-light">7 дней бесплатно · без привязки карты</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <span class="logo-icon" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="24" height="24">
+            <rect width="32" height="32" rx="8" fill="url(#logo-grad-2)"/>
+            <path d="M10 11h12l-1 3H11l-1 3h10l-1 3H9l-1 3h12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="logo-grad-2" x1="0" y1="0" x2="32" y2="32">
+                <stop offset="0" stop-color="#2AABEE"/>
+                <stop offset="1" stop-color="#2563EB"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </span>
+        <span>Свой канал</span>
+      </div>
+      <p class="footer-note">Платформа в активной разработке. Набираем первых пользователей.</p>
+      <p class="footer-copy">© 2026 Свой канал</p>
+    </div>
+  </footer>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
