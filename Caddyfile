@@ -14,3 +14,14 @@ admin.{$DOMAIN} {
 main-svoi.{$DOMAIN} {
 	reverse_proxy platform-admin:3000
 }
+
+www.svoi-kanal.ru {
+	redir https://svoi-kanal.ru{uri} permanent
+}
+
+svoi-kanal.ru {
+	encode zstd gzip
+	root * /srv/landing
+	header /img/* Cache-Control "public, max-age=604800"
+	file_server
+}
