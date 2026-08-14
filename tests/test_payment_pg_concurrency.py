@@ -57,7 +57,7 @@ async def pg_engine():
 
 @pytest_asyncio.fixture
 async def pg_session_maker(pg_engine, monkeypatch):
-    maker = async_sessionmaker(engine=pg_engine, expire_on_commit=False)
+    maker = async_sessionmaker(bind=pg_engine, expire_on_commit=False)
     monkeypatch.setattr(order_payment_service, "async_session", maker)
     return maker
 
