@@ -16,8 +16,23 @@ const App = {
     botUsername: null,
     currentRating: 0,
 
+    _tgStub() {
+        return {
+            initData: "",
+            initDataUnsafe: {},
+            ready() { },
+            expand() { },
+            close() { },
+            openTelegramLink(url) { window.open(url, "_blank"); },
+            showAlert(msg) { alert(msg); },
+            HapticFeedback: null,
+        };
+    },
+
     async init() {
-        this.tg = window.Telegram.WebApp;
+        this.tg = window.Telegram && window.Telegram.WebApp
+            ? window.Telegram.WebApp
+            : this._tgStub();
         this.tg.ready();
         this.tg.expand();
 
@@ -137,6 +152,9 @@ const App = {
             button_text_color: "--button-text",
             secondary_bg_color: "--secondary-bg",
             radius: "--radius",
+            price_color: "--price-color",
+            price_size: "--price-size",
+            price_weight: "--price-weight",
         };
         for (const [k, cssVar] of Object.entries(map)) {
             if (theme[k]) root.setProperty(cssVar, theme[k]);
@@ -150,6 +168,8 @@ const App = {
 
             if (this.categories.length > 0) {
                 this.selectCategory(this.categories[0]);
+            } else {
+                document.getElementById("products").innerHTML = `<div class="error-msg">В магазине пока нет товаров</div>`;
             }
         } catch (e) {
             document.getElementById("products").innerHTML = `<div class="error-msg">Ошибка загрузки</div>`;

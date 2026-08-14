@@ -74,6 +74,12 @@ class Shop(Base):
     theme_button_text_color: Mapped[str | None] = mapped_column(nullable=True)
     theme_secondary_bg_color: Mapped[str | None] = mapped_column(nullable=True)
     theme_radius: Mapped[str | None] = mapped_column(nullable=True)
+
     theme_font_family: Mapped[str | None] = mapped_column(nullable=True)
 
+    theme_price_color: Mapped[str | None] = mapped_column(nullable=True)
+
+    theme_price_size: Mapped[str | None] = mapped_column(nullable=True)
+
+    theme_price_weight: Mapped[str | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

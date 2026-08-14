@@ -66,6 +66,9 @@ def _shop_to_dict(shop: Shop) -> dict:
             "secondary_bg_color": shop.theme_secondary_bg_color,
             "radius": shop.theme_radius,
             "font_family": shop.theme_font_family,
+            "price_color": shop.theme_price_color,
+            "price_size": shop.theme_price_size,
+            "price_weight": shop.theme_price_weight,
         },
         "created_at": shop.created_at.isoformat() if shop.created_at else None,
     }
@@ -442,6 +445,9 @@ class ShopService:
         secondary_bg_color: str | None = None,
         radius: str | None = None,
         font_family: str | None = None,
+        price_color: str | None = None,
+        price_size: str | None = None,
+        price_weight: str | None = None,
     ) -> dict | None:
         """Обновляет настройки темы оформления магазина (TMA).
 
@@ -466,6 +472,12 @@ class ShopService:
                 shop.theme_radius = radius or None
             if font_family is not None:
                 shop.theme_font_family = font_family or None
+            if price_color is not None:
+                shop.theme_price_color = price_color or None
+            if price_size is not None:
+                shop.theme_price_size = price_size or None
+            if price_weight is not None:
+                shop.theme_price_weight = price_weight or None
 
             await session.commit()
             await session.refresh(shop)

@@ -207,6 +207,9 @@ export interface ThemeSettings {
   secondary_bg_color: string | null;
   radius: string | null;
   font_family: string | null;
+  price_color: string | null;
+  price_size: string | null;
+  price_weight: string | null;
 }
 
 export interface Stats {

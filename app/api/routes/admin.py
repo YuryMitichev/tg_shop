@@ -155,6 +155,9 @@ class UpdateThemeBody(BaseModel):
     secondary_bg_color: str | None = None
     radius: str | None = None
     font_family: str | None = None
+    price_color: str | None = None
+    price_size: str | None = None
+    price_weight: str | None = None
 
 
 class UpdateSellerAddendumBody(BaseModel):
@@ -975,6 +978,9 @@ async def update_shop_theme(
         secondary_bg_color=body.secondary_bg_color,
         radius=body.radius,
         font_family=body.font_family,
+        price_color=body.price_color,
+        price_size=body.price_size,
+        price_weight=body.price_weight,
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Shop not found")

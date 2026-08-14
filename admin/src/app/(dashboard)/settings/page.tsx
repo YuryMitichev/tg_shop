@@ -389,6 +389,9 @@ function ThemeSettingsTab() {
   const [secondaryBgColor, setSecondaryBgColor] = useState("");
   const [radius, setRadius] = useState("");
   const [fontFamily, setFontFamily] = useState("");
+  const [priceColor, setPriceColor] = useState("");
+  const [priceSize, setPriceSize] = useState("");
+  const [priceWeight, setPriceWeight] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -400,6 +403,9 @@ function ThemeSettingsTab() {
       setSecondaryBgColor(data.secondary_bg_color || "");
       setRadius(data.radius || "");
       setFontFamily(data.font_family || "");
+      setPriceColor(data.price_color || "");
+      setPriceSize(data.price_size || "");
+      setPriceWeight(data.price_weight || "");
     }
   }, [data]);
 
@@ -414,6 +420,9 @@ function ThemeSettingsTab() {
         secondary_bg_color: secondaryBgColor,
         radius,
         font_family: fontFamily,
+        price_color: priceColor,
+        price_size: priceSize,
+        price_weight: priceWeight,
       });
       mutate();
       toast.success("Сохранено");
@@ -478,36 +487,38 @@ function ThemeSettingsTab() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ColorField
-            label="Основной цвет (кнопки, акценты)"
-            value={primaryColor}
-            onChange={setPrimaryColor}
-            placeholder="#3390ec"
-          />
-          <ColorField
-            label="Фон"
-            value={bgColor}
-            onChange={setBgColor}
-            placeholder="#ffffff"
-          />
-          <ColorField
-            label="Текст"
-            value={textColor}
-            onChange={setTextColor}
-            placeholder="#1a1a1a"
-          />
-          <ColorField
-            label="Текст на кнопках"
-            value={buttonTextColor}
-            onChange={setButtonTextColor}
-            placeholder="#ffffff"
-          />
-          <ColorField
-            label="Фон карточек / секций"
-            value={secondaryBgColor}
-            onChange={setSecondaryBgColor}
-            placeholder="#f5f5f5"
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ColorField
+              label="Основной цвет (кнопки, акценты)"
+              value={primaryColor}
+              onChange={setPrimaryColor}
+              placeholder="#3390ec"
+            />
+            <ColorField
+              label="Фон"
+              value={bgColor}
+              onChange={setBgColor}
+              placeholder="#ffffff"
+            />
+            <ColorField
+              label="Текст"
+              value={textColor}
+              onChange={setTextColor}
+              placeholder="#1a1a1a"
+            />
+            <ColorField
+              label="Текст на кнопках"
+              value={buttonTextColor}
+              onChange={setButtonTextColor}
+              placeholder="#ffffff"
+            />
+            <ColorField
+              label="Фон карточек / секций"
+              value={secondaryBgColor}
+              onChange={setSecondaryBgColor}
+              placeholder="#f5f5f5"
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -546,6 +557,75 @@ function ThemeSettingsTab() {
                 <SelectItem value="'Comic Sans MS', 'Marker Felt', cursive">Cursive</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Цена в каталоге</CardTitle>
+          <CardDescription>
+            Оформление цены на карточках товаров в каталоге
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ColorField
+              label="Цвет цены"
+              value={priceColor}
+              onChange={setPriceColor}
+              placeholder="Как основной цвет"
+            />
+            <div className="space-y-1.5">
+              <Label>Размер шрифта</Label>
+              <Select value={priceSize} onValueChange={(v) => setPriceSize((v ?? "") === "__default__" ? "" : (v ?? ""))} items={{ "__default__": "По умолчанию", "13px": "Мелкий (13px)", "14px": "Небольшой (14px)", "16px": "Средний (16px)", "18px": "Крупный (18px)", "22px": "Очень крупный (22px)" }}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="По умолчанию" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">По умолчанию</SelectItem>
+                  <SelectItem value="13px">Мелкий (13px)</SelectItem>
+                  <SelectItem value="14px">Небольшой (14px)</SelectItem>
+                  <SelectItem value="16px">Средний (16px)</SelectItem>
+                  <SelectItem value="18px">Крупный (18px)</SelectItem>
+                  <SelectItem value="22px">Очень крупный (22px)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Насыщенность шрифта</Label>
+            <Select value={priceWeight} onValueChange={(v) => setPriceWeight((v ?? "") === "__default__" ? "" : (v ?? ""))} items={{ "__default__": "По умолчанию (жирный)", "400": "Обычный", "500": "Средний", "600": "Полужирный", "700": "Жирный", "800": "Очень жирный" }}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="По умолчанию (жирный)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">По умолчанию (жирный)</SelectItem>
+                <SelectItem value="400">Обычный</SelectItem>
+                <SelectItem value="500">Средний</SelectItem>
+                <SelectItem value="600">Полужирный</SelectItem>
+                <SelectItem value="700">Жирный</SelectItem>
+                <SelectItem value="800">Очень жирный</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-lg border bg-muted/40 p-4">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Предпросмотр карточки товара
+            </p>
+            <div className="inline-flex flex-col gap-1 rounded-xl border bg-background p-3">
+              <span className="text-sm text-foreground">Кружка термостекло</span>
+              <span
+                className="font-bold text-primary"
+                style={{
+                  color: priceColor || undefined,
+                  fontSize: priceSize || undefined,
+                  fontWeight: priceWeight || undefined,
+                }}
+              >
+                от 1 490 ₽
+              </span>
+            </div>
           </div>
         </CardContent>
       </Card>

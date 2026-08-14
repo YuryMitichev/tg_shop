@@ -191,14 +191,14 @@ body {
 }
 
 .product-card .price {
-    color: var(--button-text);
-    font-weight: 700;
-    font-size: 16px;
+    color: var(--price-color, var(--button-text));
+    font-weight: var(--price-weight, 700);
+    font-size: var(--price-size, 16px);
 }
 
 @media (min-width: 600px) {
     .product-card .price {
-        font-size: 14px;
+        font-size: var(--price-size, 14px);
     }
 }
 
