@@ -40,12 +40,17 @@ class YooKassaClient:
         shop_id: str | None = None,
         secret_key: str | None = None,
         receipt: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any] | None:
         """
         Создаёт платёж.
 
         Если переданы shop_id и secret_key — используются per-shop ключи магазина.
         Иначе — глобальные ключи платформы (для подписок).
+
+        Если передан idempotency_key — он используется как Idempotence-Key:
+        повторный запрос с тем же ключом возвращает уже созданный платёж.
+        Иначе генерируется новый UUID (повторный запрос создаст дубль).
 
         Возвращает dict:
         - payment_id: str
@@ -55,7 +60,7 @@ class YooKassaClient:
         """
         headers = {
             "Authorization": YooKassaClient._auth_header(shop_id, secret_key),
-            "Idempotence-Key": str(uuid.uuid4()),
+            "Idempotence-Key": idempotency_key or str(uuid.uuid4()),
             "Content-Type": "application/json",
         }
 

@@ -2,18 +2,27 @@ import hashlib
 import hmac
 import json
 import logging
+import time
 from urllib.parse import parse_qsl
 
 from fastapi import Header, HTTPException
 
+from app.core.config import settings
 from app.services.shop_service import ShopService
 
 logger = logging.getLogger(__name__)
 
 
+def _parse_auth_date(raw: str | None) -> int | None:
+    """Строго парсит auth_date: только ASCII-цифры без знака/пробелов."""
+    if not raw or not (raw.isascii() and raw.isdigit()):
+        return None
+    return int(raw)
+
+
 async def validate_init_data(init_data: str, bot_token: str) -> dict | None:
     """
-    Проверяет подпись Telegram WebApp initData.
+    Проверяет подпись и свежесть Telegram WebApp initData.
     Возвращает словарь пользователя (id, first_name, ...) или None.
     """
     try:
@@ -48,8 +57,31 @@ async def validate_init_data(init_data: str, bot_token: str) -> dict | None:
             hashlib.sha256,
         ).hexdigest()
 
-        if calculated_hash != hash_value:
+        if not hmac.compare_digest(calculated_hash, hash_value):
             logger.warning("validate_init_data: HMAC mismatch (wrong bot_token?)")
+            return None
+
+        # Свежесть проверяем после HMAC: auth_date входит в подписанные данные.
+        auth_date = _parse_auth_date(params.get("auth_date"))
+        if auth_date is None:
+            logger.warning("validate_init_data: auth_date missing or malformed")
+            return None
+
+        now = int(time.time())
+        if now - auth_date > settings.init_data_max_age + max(settings.init_data_clock_skew, 0):
+            logger.warning(
+                "validate_init_data: auth_date too old — age=%ds, allowed=%ds",
+                now - auth_date,
+                settings.init_data_max_age + max(settings.init_data_clock_skew, 0),
+            )
+            return None
+
+        if auth_date - now > max(settings.init_data_clock_skew, 0):
+            logger.warning(
+                "validate_init_data: auth_date in future — delta=%ds, skew=%ds",
+                auth_date - now,
+                settings.init_data_clock_skew,
+            )
             return None
 
         user_data = json.loads(params.get("user", "{}"))
@@ -89,11 +121,11 @@ async def get_current_user(
     if not user:
         logger.warning(
             "get_current_user: auth failed — shop_id=%s, init_data_empty=%s, "
-            "header_prefix_ok=%s, auth_preview=[%s]",
+            "header_prefix_ok=%s, init_data_len=%d",
             x_shop_id,
             not init_data,
             authorization.startswith("tma "),
-            authorization[:300],
+            len(init_data),
         )
         raise HTTPException(status_code=401, detail="Invalid auth")
 

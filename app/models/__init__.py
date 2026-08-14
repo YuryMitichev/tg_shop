@@ -8,6 +8,7 @@ from app.models.product_photo import ProductPhoto
 from app.models.cart_item import CartItem
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.payment import Payment
 from app.models.system_message import SystemMessage
 from app.models.review import Review
 from app.models.promo_code import PromoCode
@@ -33,6 +34,7 @@ __all__ = [
     "CartItem",
     "Order",
     "OrderItem",
+    "Payment",
     "SystemMessage",
     "Review",
     "PromoCode",

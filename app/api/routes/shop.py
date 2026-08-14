@@ -197,18 +197,28 @@ async def get_photo(photo_id: int):
 
     file_id = photo.file_id
 
-    if file_id not in _file_path_cache:
-        tg_file = await bot.get_file(file_id)
+    async def download(file_path: str) -> bytes | None:
+        url = f"https://api.telegram.org/file/bot{bot.token}/{file_path}"
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.get(url) as resp:
+                if resp.status != 200:
+                    return None
+                return await resp.read()
+
+    content = None
+    cached_path = _file_path_cache.get(file_id)
+    if cached_path is not None:
+        content = await download(cached_path)
+
+    if content is None:
+        try:
+            tg_file = await bot.get_file(file_id)
+        except Exception:
+            raise HTTPException(status_code=502, detail="Download error")
+        content = await download(tg_file.file_path)
+        if content is None:
+            raise HTTPException(status_code=502, detail="Download error")
         _file_path_cache[file_id] = tg_file.file_path
-
-    file_path = _file_path_cache[file_id]
-    url = f"https://api.telegram.org/file/bot{bot.token}/{file_path}"
-
-    async with aiohttp.ClientSession() as http_session:
-        async with http_session.get(url) as resp:
-            if resp.status != 200:
-                raise HTTPException(status_code=502, detail="Download error")
-            content = await resp.read()
 
     return Response(
         content=content,
@@ -382,7 +392,7 @@ async def create_order(request: Request, req: CreateOrderRequest, user: dict = D
             "total": order["total"],
             "discount": order["discount"],
             "payment": "yookassa",
-            "confirmation_url": payment["confirmation_url"],
+            "confirmation_url": payment.get("confirmation_url"),
         }
 
     return {

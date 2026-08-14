@@ -1,5 +1,5 @@
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -70,20 +70,19 @@ class TestRateLimitOnWebhooks:
 
         with patch(
             "app.api.routes.payments.YooKassaClient.get_payment",
-            new_callable=lambda: None,
+            new_callable=AsyncMock,
+            return_value=None,
         ):
-            pass
-
-        app = create_app()
-        transport = ASGITransport(app=app, raise_app_exceptions=False)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            statuses = []
-            for i in range(62):
-                resp = await client.post(
-                    "/payments/yookassa/webhook",
-                    json={"event": "payment.succeeded", "object": {"id": f"pay-{i}"}},
-                )
-                statuses.append(resp.status_code)
+            app = create_app()
+            transport = ASGITransport(app=app, raise_app_exceptions=False)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                statuses = []
+                for i in range(62):
+                    resp = await client.post(
+                        "/payments/yookassa/webhook",
+                        json={"event": "payment.succeeded", "object": {"id": f"pay-{i}"}},
+                    )
+                    statuses.append(resp.status_code)
 
         assert 429 in statuses, f"Expected 429 after 60+ requests, got statuses: {set(statuses)}"
 

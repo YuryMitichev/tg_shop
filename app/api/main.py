@@ -97,6 +97,27 @@ def create_app() -> FastAPI:
 
     app.add_middleware(RequestIdMiddleware)
 
+    access_logger = logging.getLogger("app.access")
+
+    @app.middleware("http")
+    async def log_http_requests(request: Request, call_next):
+        try:
+            response = await call_next(request)
+        except Exception:
+            access_logger.exception(
+                "%s %s -> EXCEPTION", request.method, request.url.path
+            )
+            raise
+        access_logger.info(
+            "%s %s -> %s ua=[%s] shop=[%s]",
+            request.method,
+            str(request.url),
+            response.status_code,
+            request.headers.get("user-agent", "-")[:160],
+            request.headers.get("x-shop-id", "-"),
+        )
+        return response
+
     @app.get("/health")
     async def health_check():
         try:

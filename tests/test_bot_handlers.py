@@ -1,6 +1,7 @@
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from aiogram.filters import CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Chat, Message, User
 
@@ -57,14 +58,18 @@ class TestStartHandler:
         from app.bot.handlers.start import setup_router
 
         router = setup_router()
-        handler = router.message.handlers[0].callback
+        handler = next(
+            h.callback
+            for h in router.message.handlers
+            if h.callback.__name__ == "cmd_start"
+        )
 
         msg = make_message(text="/start")
         state = make_state()
 
         with patch("app.bot.handlers.start.settings") as mock_settings:
             mock_settings.webapp_enabled = False
-            await handler(msg, state)
+            await handler(msg, state, CommandObject(command="start"))
 
         msg.answer.assert_called_once()
         call_kwargs = msg.answer.call_args

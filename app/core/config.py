@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     # «Поддержка» в главном меню платформенного бота.
     support_bot_username: str | None = Field(default=None, alias="SUPPORT_BOT_USERNAME")
 
+    # Максимальный возраст initData Telegram WebApp в секундах
+    # (по полю auth_date). Защищает от replay устаревших подписанных данных.
+    init_data_max_age: int = Field(default=300, alias="INIT_DATA_MAX_AGE")
+
+    # Допустимое расхождение часов клиент/сервер (секунды) при проверке
+    # auth_date: небольшие будущие значения в этом окне не отклоняются.
+    init_data_clock_skew: int = Field(default=30, alias="INIT_DATA_CLOCK_SKEW")
+
     @property
     def admin_id_list(self) -> list[int]:
         return [int(x.strip()) for x in self.admin_ids.split(",") if x.strip()]

@@ -69,6 +69,7 @@ from app.models.subscription import Subscription, SubscriptionPlan  # noqa: F401
 from app.utils.crypto import encrypt, token_hash
 from app.services.stats_service import StatsService
 from app.services.subscription_service import SubscriptionService
+from app.api.rate_limit import limiter
 
 
 
@@ -83,6 +84,7 @@ def _clear_service_caches():
     StatsService._stats_cache.clear()
     StatsService._chart_cache.clear()
     StatsService._analytics_cache.clear()
+    limiter.reset()
 
 
 _PATCH_TARGETS = [

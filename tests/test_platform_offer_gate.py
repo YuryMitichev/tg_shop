@@ -5,6 +5,7 @@ import pytest
 from aiogram.types import CallbackQuery, Chat, Message, User
 
 from app.services.offer_agreement_service import OfferAgreementService
+from app.services.platform_settings_service import PlatformSettingsService
 
 
 def _make_callback(data="pay:1:2", user_id=111):
@@ -22,7 +23,14 @@ def _make_callback(data="pay:1:2", user_id=111):
 
 @pytest.fixture
 def mock_yookassa():
-    with patch("app.bot.platform.bot.settings") as mock_settings:
+    with patch(
+        "app.bot.platform.bot.settings"
+    ) as mock_settings, patch.object(
+        PlatformSettingsService,
+        "is_yookassa_enabled",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
         mock_settings.yookassa_enabled = True
         yield mock_settings
 
