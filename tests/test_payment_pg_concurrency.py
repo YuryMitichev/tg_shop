@@ -162,10 +162,13 @@ class TestPGServiceConcurrency:
     @staticmethod
     def _patch_provider(monkeypatch, keys):
         async def fake_create(amount_rub, description, return_url, metadata, **kwargs):
-            keys.append(kwargs.get("idempotency_key"))
+            key = kwargs.get("idempotency_key")
+            keys.append(key)
             await asyncio.sleep(0.05)
+            # Как реальный YooKassa: один idempotency key -> один payment id,
+            # новый ключ -> новый платёж с уникальным id.
             return {
-                "payment_id": "yk_pg",
+                "payment_id": f"yk:{key}",
                 "confirmation_url": "https://yoomoney.ru/pg",
             }
 
@@ -206,8 +209,8 @@ class TestPGServiceConcurrency:
                     select(Payment).where(Payment.order_id == 100)
                 )
             ).scalars().all()
-            assert len(rows) == 1
-            assert rows[0].provider_payment_id == "yk_pg"
+        assert len(rows) == 1
+        assert rows[0].provider_payment_id == "yk:order:100:yookassa"
 
     async def test_canceled_then_new_attempt_on_pg(
         self, pg_session_maker, pg_order, monkeypatch
@@ -220,7 +223,7 @@ class TestPGServiceConcurrency:
         canceled = await OrderPaymentService.process_webhook({
             "event": "payment.canceled",
             "object": {
-                "id": "yk_pg",
+                "id": "yk:order:100:yookassa",
                 "metadata": {"type": "order", "shop_id": "1", "order_id": "100"},
             },
         })
@@ -241,3 +244,4 @@ class TestPGServiceConcurrency:
             assert [p.attempt for p in rows] == [1, 2]
             assert rows[0].status == "canceled"
             assert rows[1].status == "pending"
+            assert rows[1].provider_payment_id == "yk:order:100:yookassa:2"
