@@ -92,7 +92,7 @@ class AdminAuthService:
 
     @staticmethod
     async def create_login_url(
-        telegram_user_id: int, shop_id: int, panel_url: str | None = None,
+        telegram_user_id: int, shop_id: int,
     ) -> str | None:
         """Создаёт magic link для конкретного магазина без отправки через бот.
 
@@ -108,14 +108,14 @@ class AdminAuthService:
         token = await AdminAuthService._create_login_token(
             telegram_user_id, shop_id, is_super,
         )
-        base_url = panel_url or settings.admin_panel_url or "https://t.me"
+        base_url = settings.admin_panel_url or "https://t.me"
         return f"{base_url.rstrip('/')}/login?token={token}"
 
     @staticmethod
     async def request_login(
         telegram_user_id: int,
-        panel_url: str | None = None,
         shop_id: int | None = None,
+        panel: str = "admin",
     ) -> bool:
         from app.services.shop_service import ShopService
 
@@ -128,7 +128,10 @@ class AdminAuthService:
             if not shops:
                 return False
 
-        base_url = panel_url or settings.admin_panel_url or "https://t.me"
+        if panel == "platform":
+            base_url = settings.platform_admin_url or settings.admin_panel_url or "https://t.me"
+        else:
+            base_url = settings.admin_panel_url or "https://t.me"
 
         sent_any = False
         for sid, is_super in shops:

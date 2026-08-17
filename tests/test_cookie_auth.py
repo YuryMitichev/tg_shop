@@ -51,7 +51,7 @@ class TestVerifyTokenCookie:
         cookies = resp.headers.get_list("set-cookie")
         assert any("admin_token=" in c for c in cookies)
         assert any("httponly" in c.lower() for c in cookies)
-        assert any("samesite=none" in c.lower() for c in cookies)
+        assert any("samesite=lax" in c.lower() for c in cookies)
 
     async def test_verify_token_invalid(self, db_session, seed_data):
         app = create_app()
@@ -65,8 +65,7 @@ class TestVerifyTokenCookie:
         assert resp.status_code == 200
         assert resp.json()["ok"] is False
 
-    async def test_verify_token_returns_token_in_json(self, db_session, seed_data):
-        """Bearer mode: токен возвращается в JSON для localStorage."""
+    async def test_verify_token_does_not_return_token_in_json(self, db_session, seed_data):
         token = "test-no-json-token"
         async with db_session() as session:
             session.add(LoginToken(
@@ -88,8 +87,7 @@ class TestVerifyTokenCookie:
 
         body = resp.json()
         assert body["ok"] is True
-        assert "token" in body
-        assert isinstance(body["token"], str)
+        assert "token" not in body
 
 
 class TestCookieAuth:
@@ -139,6 +137,22 @@ class TestCookieAuth:
             resp = await client.get("/api/admin/categories")
 
         assert resp.status_code == 401
+
+
+class TestLoginRequestOrigin:
+    async def test_rejects_client_supplied_panel_url(self):
+        app = create_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/api/admin/auth/request-login",
+                json={
+                    "telegram_user_id": 123456,
+                    "panel_url": "https://attacker.example",
+                },
+            )
+
+        assert resp.status_code == 422
 
 
 class TestLogout:

@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { api, setToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +41,7 @@ function LoginForm() {
 
   async function verifyToken(t: string) {
     try {
-      const res = await api.post<{ ok: boolean; token?: string; error?: string }>(
+      const res = await api.post<{ ok: boolean; error?: string }>(
         "/auth/verify-token",
         { token: t },
       );
@@ -52,10 +52,7 @@ function LoginForm() {
         return;
       }
 
-      if (res.token) {
-        setToken(res.token);
-      }
-
+      window.history.replaceState({}, "", "/login");
       router.push("/dashboard");
     } catch {
       setVerifyError("Ошибка запроса");
@@ -78,7 +75,7 @@ function LoginForm() {
         "/auth/request-login",
         {
           telegram_user_id: Number(telegramId),
-          panel_url: window.location.origin,
+          panel: "admin",
           ...(shopIdFromUrl ? { shop_id: Number(shopIdFromUrl) } : {}),
         },
       );

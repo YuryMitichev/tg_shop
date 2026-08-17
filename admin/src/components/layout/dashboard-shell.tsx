@@ -8,7 +8,7 @@ import {
   SubscriptionProvider,
   isRouteBlocked,
 } from "@/lib/subscription-context";
-import { api, clearToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { LogOut, Menu } from "lucide-react";
@@ -50,7 +50,6 @@ export function DashboardShell({
   }, [router, requireSuperAdmin]);
 
   async function handleLogout() {
-    clearToken();
     try {
       await api.post("/auth/logout");
     } catch {

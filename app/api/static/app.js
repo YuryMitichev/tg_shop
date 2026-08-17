@@ -188,7 +188,7 @@ const App = {
         container.innerHTML = this.categories.map(c => `
             <button class="cat-chip ${c.id === this.currentCategory.id ? 'active' : ''}"
                     onclick="App.selectCategory(${JSON.stringify(c).replace(/"/g, '&quot;')})">
-                ${c.emoji || ""} ${c.name}
+                ${this.esc(c.emoji || "")} ${this.esc(c.name)}
             </button>
         `).join("");
     },
