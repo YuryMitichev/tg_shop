@@ -4,11 +4,16 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: [main]
+    branches: [master]
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push'
@@ -21,8 +26,37 @@ jobs:
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
             cd /root/tg_shop
-            git pull origin main
+            previous_sha=$(git rev-parse HEAD)
+            target_sha="${{ github.event.workflow_run.head_sha }}"
+            git fetch origin master
+            git checkout --detach "$target_sha"
+
+            rollback() {
+              echo "Deployment failed, rolling back to $previous_sha"
+              git checkout --detach "$previous_sha"
+              docker compose up -d --build
+            }
+
+            trap rollback ERR
             docker compose up -d --build
+
+            healthy=false
+            for attempt in $(seq 1 12); do
+              if docker compose exec -T bot python -c \
+                "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"; then
+                healthy=true
+                break
+              fi
+              sleep 5
+            done
+
+            if [ "$healthy" != "true" ]; then
+              echo "Health check failed"
+              false
+            fi
+
+            trap - ERR
             docker image prune -f
-            echo "Deploy completed at $(date)"
+            echo "Deploy of $target_sha completed at $(date)"
