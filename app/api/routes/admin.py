@@ -1,9 +1,10 @@
 import asyncio
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from aiogram.types import BufferedInputFile
 from datetime import datetime
 
@@ -42,9 +43,11 @@ router = APIRouter()
 # ==========================
 
 class RequestLoginBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     telegram_user_id: int
-    panel_url: str | None = None
     shop_id: int | None = None
+    panel: Literal["admin", "platform"] = "admin"
 
 
 class VerifyTokenBody(BaseModel):
@@ -206,7 +209,7 @@ class PreviewRecipientsBody(BaseModel):
 @limiter.limit("20/hour")
 async def request_login(request: Request, body: RequestLoginBody):
     ok = await AdminAuthService.request_login(
-        body.telegram_user_id, panel_url=body.panel_url, shop_id=body.shop_id,
+        body.telegram_user_id, shop_id=body.shop_id, panel=body.panel,
     )
 
     if not ok:
@@ -223,13 +226,13 @@ async def verify_login_token(request: Request, body: VerifyTokenBody):
     if token is None:
         return {"ok": False, "error": "Неверная или истекшая ссылка"}
 
-    response = JSONResponse(content={"ok": True, "token": token})
+    response = JSONResponse(content={"ok": True})
     response.set_cookie(
         key="admin_token",
         value=token,
         httponly=True,
         secure=True,
-        samesite="none",
+        samesite="lax",
         domain=app_settings.cookie_domain,
         path="/",
         max_age=86400,

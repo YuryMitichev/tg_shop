@@ -1,4 +1,4 @@
-from fastapi import Cookie, Depends, HTTPException, Request
+from fastapi import Cookie, Depends, HTTPException
 
 from app.services.admin_auth_service import AdminAuthService
 from app.services.subscription_service import SubscriptionService
@@ -10,23 +10,15 @@ class SubscriptionExpiredException(Exception):
     pass
 
 
-async def _extract_token(request: Request, admin_token: str | None = Cookie(default=None)) -> str | None:
-    auth = request.headers.get("Authorization")
-    if auth and auth.startswith("Bearer "):
-        return auth[7:]
-    return admin_token
-
-
-async def require_admin(request: Request, admin_token: str | None = Cookie(default=None)) -> dict:
+async def require_admin(admin_token: str | None = Cookie(default=None)) -> dict:
     """
-    FastAPI dependency: проверяет JWT-токен из Authorization header или cookie.
+    FastAPI dependency: проверяет JWT-токен только из httpOnly-cookie.
     Возвращает {'admin_id': int, 'shop_id': int, 'is_super_admin': bool}.
     """
-    token = await _extract_token(request, admin_token)
-    if not token:
+    if not admin_token:
         raise HTTPException(status_code=401, detail="Не авторизован")
 
-    result = await AdminAuthService.verify_token(token)
+    result = await AdminAuthService.verify_token(admin_token)
 
     if result is None:
         raise HTTPException(status_code=401, detail="Не авторизован")
@@ -61,16 +53,15 @@ async def require_active_subscription(
     return admin
 
 
-async def require_super_admin(request: Request, admin_token: str | None = Cookie(default=None)) -> dict:
+async def require_super_admin(admin_token: str | None = Cookie(default=None)) -> dict:
     """
-    FastAPI dependency: проверяет JWT-токен супер-админа из header или cookie.
+    FastAPI dependency: проверяет JWT-токен супер-админа из httpOnly-cookie.
     Возвращает {'admin_id': int, 'shop_id': int, 'is_super_admin': bool}.
     """
-    token = await _extract_token(request, admin_token)
-    if not token:
+    if not admin_token:
         raise HTTPException(status_code=401, detail="Не авторизован")
 
-    result = await AdminAuthService.verify_token(token)
+    result = await AdminAuthService.verify_token(admin_token)
 
     if result is None:
         raise HTTPException(status_code=401, detail="Не авторизован")

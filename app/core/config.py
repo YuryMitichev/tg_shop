@@ -40,6 +40,7 @@ class Settings(BaseSettings):
 
     # URL админ-панели (отдельный поддомен).
     admin_panel_url: str | None = Field(default=None, alias="ADMIN_PANEL_URL")
+    platform_admin_url: str | None = Field(default=None, alias="PLATFORM_ADMIN_URL")
 
     # Username бота техподдержки (без @). Используется для кнопки
     # «Поддержка» в главном меню платформенного бота.

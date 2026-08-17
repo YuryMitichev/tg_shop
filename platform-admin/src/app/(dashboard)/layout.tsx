@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
-import { api, clearToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { LogOut, Menu } from "lucide-react";
@@ -18,7 +18,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .get<{ is_super_admin: boolean }>("/auth/me")
       .then((res) => {
         if (!res.is_super_admin) {
-          clearToken();
           router.push("/login");
         } else {
           setReady(true);
@@ -28,7 +27,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [router]);
 
   async function handleLogout() {
-    clearToken();
     try {
       await api.post("/auth/logout");
     } catch {

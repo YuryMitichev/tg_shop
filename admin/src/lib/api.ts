@@ -7,25 +7,6 @@ export function photoUrl(photoId: number): string {
   return `${SHOP_API}/photo/${photoId}`;
 }
 
-const TOKEN_KEY = "admin_token";
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(TOKEN_KEY, token);
-  }
-}
-
-export function clearToken(): void {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem(TOKEN_KEY);
-  }
-}
-
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -38,11 +19,6 @@ async function request<T>(
 
   if (!(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
-  }
-
-  const token = getToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const controller = new AbortController();
@@ -66,7 +42,6 @@ async function request<T>(
   }
 
   if (res.status === 401) {
-    clearToken();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.href = "/login";
     }
@@ -91,18 +66,12 @@ async function downloadFile(
   base: string = ADMIN_API,
 ): Promise<{ blob: Blob; filename: string }> {
   const headers: Record<string, string> = {};
-  const token = getToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
   const res = await fetch(`${base}${path}`, {
     headers,
     credentials: "include",
   });
 
   if (res.status === 401) {
-    clearToken();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.href = "/login";
     }

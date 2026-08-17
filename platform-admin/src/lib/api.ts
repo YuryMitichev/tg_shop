@@ -2,25 +2,6 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 const ADMIN_API = `${API_BASE}/api/admin`;
 const SUPER_ADMIN_API = `${API_BASE}/api/super-admin`;
 
-const TOKEN_KEY = "admin_token";
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(TOKEN_KEY, token);
-  }
-}
-
-export function clearToken(): void {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem(TOKEN_KEY);
-  }
-}
-
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -33,11 +14,6 @@ async function request<T>(
 
   if (!(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
-  }
-
-  const token = getToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const controller = new AbortController();
@@ -61,7 +37,6 @@ async function request<T>(
   }
 
   if (res.status === 401) {
-    clearToken();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.href = "/login";
     }
