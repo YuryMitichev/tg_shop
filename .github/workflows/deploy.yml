@@ -41,6 +41,8 @@ jobs:
 
             trap rollback ERR
             docker compose up -d --build
+            docker compose exec -T caddy caddy validate --config /etc/caddy/Caddyfile
+            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 
             healthy=false
             for attempt in $(seq 1 12); do
