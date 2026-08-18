@@ -1,91 +1,59 @@
-(function () {
+(() => {
   'use strict';
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const header = document.querySelector('#siteHeader');
+  const hero = document.querySelector('.hero');
+  const finalCta = document.querySelector('#finalCta');
+  const mobileCta = document.querySelector('#mobileCta');
+  const reveals = [...document.querySelectorAll('.reveal')];
 
-  /* ===== SCROLL REVEAL via Intersection Observer ===== */
-  var revealEls = document.querySelectorAll('.reveal');
-
-  if ('IntersectionObserver' in window && revealEls.length) {
-    var observer = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('revealed');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, {
-      rootMargin: '0px 0px -60px 0px',
-      threshold: 0.1
-    });
-
-    revealEls.forEach(function (el) {
-      observer.observe(el);
-    });
+  if (reduceMotion || !('IntersectionObserver' in window)) {
+    reveals.forEach((item) => item.classList.add('revealed'));
   } else {
-    revealEls.forEach(function (el) {
-      el.classList.add('revealed');
-    });
-  }
-
-  /* ===== HEADER SHADOW ON SCROLL ===== */
-  var header = document.getElementById('siteHeader');
-  var scrolledClass = 'scrolled';
-
-  function updateHeader() {
-    if (window.scrollY > 8) {
-      header.classList.add(scrolledClass);
-    } else {
-      header.classList.remove(scrolledClass);
-    }
-  }
-
-  /* ===== STICKY MOBILE CTA ===== */
-  var stickyCta = document.getElementById('stickyCta');
-  var hero = document.querySelector('.hero');
-  var finalCta = document.querySelector('.cta-final');
-
-  function updateStickyCta() {
-    var scrollY = window.scrollY;
-    var showAfter = hero ? hero.offsetHeight * 0.6 : 400;
-    var hideAt = finalCta ? finalCta.offsetTop - window.innerHeight + 100 : Infinity;
-
-    if (scrollY > showAfter && scrollY < hideAt) {
-      stickyCta.classList.add('visible');
-    } else {
-      stickyCta.classList.remove('visible');
-    }
-  }
-
-  /* ===== COMBINED SCROLL HANDLER (throttled via rAF) ===== */
-  var ticking = false;
-
-  function onScroll() {
-    if (!ticking) {
-      window.requestAnimationFrame(function () {
-        updateHeader();
-        updateStickyCta();
-        ticking = false;
+    const revealObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('revealed');
+        observer.unobserve(entry.target);
       });
-      ticking = true;
-    }
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    reveals.forEach((item) => revealObserver.observe(item));
   }
 
+  let ticking = false;
+  const updateChrome = () => {
+    header?.classList.toggle('scrolled', window.scrollY > 12);
+    if (hero && finalCta && mobileCta) {
+      const heroPassed = window.scrollY > hero.offsetTop + hero.offsetHeight * 0.65;
+      const finalReached = finalCta.getBoundingClientRect().top < window.innerHeight * 0.92;
+      mobileCta.classList.toggle('visible', heroPassed && !finalReached);
+    }
+    ticking = false;
+  };
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    window.requestAnimationFrame(updateChrome);
+  };
   window.addEventListener('scroll', onScroll, { passive: true });
-  updateHeader();
-  updateStickyCta();
+  window.addEventListener('resize', onScroll, { passive: true });
+  updateChrome();
 
-  /* ===== FAQ: CLOSE OTHERS ON OPEN (optional UX enhancement) ===== */
-  var faqItems = document.querySelectorAll('.faq-item');
-
-  faqItems.forEach(function (item) {
-    item.addEventListener('toggle', function () {
-      if (item.open) {
-        faqItems.forEach(function (other) {
-          if (other !== item && other.open) {
-            other.open = false;
-          }
-        });
-      }
+  document.querySelectorAll('details').forEach((item) => {
+    item.addEventListener('toggle', () => {
+      if (!item.open) return;
+      document.querySelectorAll('details[open]').forEach((other) => {
+        if (other !== item) other.open = false;
+      });
     });
   });
 
+  document.querySelectorAll('.track-cta').forEach((link) => {
+    link.addEventListener('click', () => {
+      const detail = { event: 'cta_click', location: link.dataset.ctaLocation || 'unknown', href: link.href };
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push(detail);
+      window.dispatchEvent(new CustomEvent('svoi:cta_click', { detail }));
+    });
+  });
 })();
