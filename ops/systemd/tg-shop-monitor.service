@@ -1,0 +1,15 @@
+[Unit]
+Description=TG Shop production health monitor
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/tg_shop
+ExecStart=/usr/bin/python3 /usr/local/lib/tg-shop-monitor/monitor.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/tg-shop-monitor
+

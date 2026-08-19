@@ -83,6 +83,14 @@ jobs:
               false
             fi
 
+            install -d -m 0750 /usr/local/lib/tg-shop-monitor
+            install -m 0750 scripts/monitor.py /usr/local/lib/tg-shop-monitor/monitor.py
+            install -d -m 0700 /var/lib/tg-shop-monitor
+            install -m 0644 ops/systemd/tg-shop-monitor.service /etc/systemd/system/tg-shop-monitor.service
+            install -m 0644 ops/systemd/tg-shop-monitor.timer /etc/systemd/system/tg-shop-monitor.timer
+            systemctl daemon-reload
+            systemctl enable --now tg-shop-monitor.timer
+
             trap - ERR
             docker image prune -f
             echo "Deploy of $target_sha completed at $(date)"

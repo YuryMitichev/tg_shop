@@ -52,6 +52,7 @@ jobs:
           sh -n scripts/backup.sh
           sh -n scripts/verify_backup.sh
           sh -n scripts/verify_offsite_backup.sh
+          python -m py_compile scripts/monitor.py
           docker build -f backup.Dockerfile -t tg-shop-backup-check .
           cp .env.example .env
           trap 'rm -f .env' EXIT
