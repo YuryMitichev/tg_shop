@@ -25,6 +25,7 @@ from app.models.channel_import import ChannelConnection
 from app.models.shop import Shop
 from app.services.channel_import_service import ChannelImportService
 from app.services.channel_post_button_service import ChannelPostButtonService
+from app.services.channel_storefront_service import ChannelStorefrontService
 
 
 _album_messages: defaultdict[tuple[int, str], list[tuple[Message, bool]]] = defaultdict(list)
@@ -210,6 +211,25 @@ def setup_router() -> Router:
             reply_markup=keyboard,
         )
 
+    @router.message(Command("pin_store"))
+    async def pin_store_command(message: Message, bot: Bot):
+        if not message.from_user:
+            return
+        shop_id = get_shop_id()
+        if await _owner_shop(shop_id, message.from_user.id) is None:
+            await message.answer("Закрепить магазин может только владелец.")
+            return
+        try:
+            result = await ChannelStorefrontService.sync(shop_id, bot=bot)
+        except (ValueError, RuntimeError) as exc:
+            await message.answer(f"Не удалось закрепить магазин: {exc}")
+            return
+        await message.answer(
+            "Закреплённая кнопка магазина установлена."
+            if result["status"] == "active"
+            else "Установка закрепления запущена."
+        )
+
     @router.message(F.chat_shared)
     async def channel_shared(message: Message, bot: Bot):
         if not message.from_user or not message.chat_shared:
@@ -277,6 +297,19 @@ def setup_router() -> Router:
 
         if ChannelImportService.mtproto_configured():
             asyncio.create_task(start_backfill())
+
+        async def sync_storefront():
+            try:
+                await ChannelStorefrontService.sync(shop_id, bot=bot)
+                await message.answer("Закреплённая кнопка магазина установлена в канале.")
+            except (ValueError, RuntimeError) as exc:
+                await message.answer(
+                    "Канал подключён, но кнопку магазина закрепить не удалось: "
+                    f"{exc}. Повторите командой /pin_store."
+                )
+
+        if ChannelStorefrontService.enabled_for_shop(shop_id):
+            asyncio.create_task(sync_storefront())
 
     async def handle_channel_post(message: Message, *, edited: bool) -> None:
         shop_id = get_shop_id()
