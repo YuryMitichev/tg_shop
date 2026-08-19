@@ -97,3 +97,11 @@ def test_post_analysis_schema_has_no_open_dictionary_fields():
                 assert_closed(child)
 
     assert_closed(schema)
+
+
+def test_product_classification_does_not_depend_on_existing_categories():
+    prompt = ChannelAIService.SYSTEM_PROMPT
+
+    assert "независимо от списка существующих" in prompt
+    assert "category_is_new=true" in prompt
+    assert "никогда не является причиной классификации non_product" in prompt

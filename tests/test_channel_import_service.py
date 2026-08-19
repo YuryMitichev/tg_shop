@@ -2,6 +2,7 @@ from sqlalchemy import func, select
 import pytest
 
 from app.models.channel_import import (
+    CatalogAnalysisRun,
     CatalogImportCandidate,
     CatalogImportJob,
     ChannelPost,
@@ -225,3 +226,40 @@ async def test_approval_requires_stock(db_session, seed_data):
 
     with pytest.raises(ValueError, match="остаток"):
         await ChannelImportService.approve_candidate(1, candidate.id)
+
+
+@pytest.mark.asyncio
+async def test_stats_expose_cloud_ai_non_product_flow(db_session, seed_data):
+    await ChannelImportService.connect_channel(
+        1,
+        channel_id=-100112,
+        channel_title="Stats channel",
+        channel_username=None,
+        connected_by=1,
+    )
+    job_id = await ChannelImportService.ingest_post(
+        1, telegram_message_id=8, text="Энергетик 450 мл, 150 ₽", media=[]
+    )
+    async with db_session() as session:
+        job = await session.get(CatalogImportJob, job_id)
+        post = await session.get(ChannelPost, job.post_id)
+        job.status = "completed"
+        post.status = "non_product"
+        session.add(
+            CatalogAnalysisRun(
+                shop_id=1,
+                job_id=job_id,
+                run_type="cloud_ai",
+                result={"classification": "non_product"},
+                input_tokens=100,
+                output_tokens=10,
+                cost_microusd=120,
+            )
+        )
+        await session.commit()
+
+    stats = await ChannelImportService.stats(1)
+
+    assert stats["posts"]["non_product"] == 1
+    assert stats["ai"]["runs"] == 1
+    assert stats["ai"]["non_product"] == 1

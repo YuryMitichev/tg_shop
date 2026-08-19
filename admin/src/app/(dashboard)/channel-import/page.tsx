@@ -59,7 +59,14 @@ type ImportStats = {
   candidates: Record<string, number>;
   prefilter: Record<string, number>;
   jobs: Record<string, number>;
-  ai: { cost_usd: number; budget_usd: number; budget_percent: number };
+  posts: Record<string, number>;
+  ai: {
+    cost_usd: number;
+    budget_usd: number;
+    budget_percent: number;
+    runs: number;
+    non_product: number;
+  };
 };
 
 const statusLabel: Record<string, string> = {
@@ -217,6 +224,9 @@ export default function ChannelImportPage() {
         <Card>
           <CardHeader><CardTitle>Поток</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 gap-3 text-sm">
+            <Metric label="Получено постов" value={Object.values(stats?.posts ?? {}).reduce((sum, value) => sum + value, 0)} />
+            <Metric label="Обработано AI" value={stats?.ai.runs ?? 0} />
+            <Metric label="AI: не товар" value={stats?.ai.non_product ?? 0} />
             <Metric label="Отсечено локально" value={stats?.prefilter.non_product ?? 0} />
             <Metric label="Черновиков" value={stats?.candidates.pending ?? 0} />
             <Metric label="Ручная проверка" value={stats?.candidates.needs_manual ?? 0} />
