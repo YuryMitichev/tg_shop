@@ -47,5 +47,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Validate operational scripts
+        run: |
+          sh -n scripts/backup.sh
+          sh -n scripts/verify_backup.sh
+          cp .env.example .env
+          trap 'rm -f .env' EXIT
+          docker compose config --quiet
+
       - name: Run tests
         run: python -m pytest --tb=short -q
