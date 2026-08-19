@@ -10,6 +10,9 @@ concurrency:
   group: production-deploy
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -20,7 +23,7 @@ jobs:
 
     steps:
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: root
@@ -62,6 +65,33 @@ jobs:
               false
             fi
 
+            backup_ready=false
+            for attempt in $(seq 1 12); do
+              if docker compose exec -T backup sh -c \
+                'test -f /backups/last_success &&
+                 last=$(cat /backups/last_success) &&
+                 now=$(date +%s) &&
+                 [ $((now - last)) -lt 129600 ]'; then
+                backup_ready=true
+                break
+              fi
+              sleep 5
+            done
+
+            if [ "$backup_ready" != "true" ]; then
+              echo "Fresh backup check failed"
+              false
+            fi
+
+            install -d -m 0750 /usr/local/lib/tg-shop-monitor
+            install -m 0750 scripts/monitor.py /usr/local/lib/tg-shop-monitor/monitor.py
+            install -d -m 0700 /var/lib/tg-shop-monitor
+            install -m 0644 ops/systemd/tg-shop-monitor.service /etc/systemd/system/tg-shop-monitor.service
+            install -m 0644 ops/systemd/tg-shop-monitor.timer /etc/systemd/system/tg-shop-monitor.timer
+            systemctl daemon-reload
+            systemctl enable --now tg-shop-monitor.timer
+
             trap - ERR
             docker image prune -f
+            docker builder prune -af --filter until=168h
             echo "Deploy of $target_sha completed at $(date)"

@@ -23,24 +23,43 @@ services:
           cpus: "0.7"
 
   backup:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: backup.Dockerfile
     container_name: tg_shop_backup
     restart: unless-stopped
     environment:
       - PGPASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - YANDEX_BACKUP_ENABLED=${YANDEX_BACKUP_ENABLED:-false}
+      - YANDEX_BACKUP_BUCKET=${YANDEX_BACKUP_BUCKET:-}
+      - AWS_ACCESS_KEY_ID=${YANDEX_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${YANDEX_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=ru-central1
+      - AWS_EC2_METADATA_DISABLED=true
+      - BACKUP_ENCRYPTION_PASSPHRASE=${BACKUP_ENCRYPTION_PASSPHRASE:-}
     volumes:
       - ./scripts/backup.sh:/scripts/backup.sh:ro
+      - ./scripts/verify_offsite_backup.sh:/scripts/verify_offsite_backup.sh:ro
       - backup_data:/backups
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-          echo "0 3 * * * /bin/sh /scripts/backup.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root
-          crond -f -l 8
+          /bin/sh /scripts/backup.sh
+          echo "0 3 * * * /bin/sh /scripts/backup.sh >> /proc/1/fd/1 2>&1" > /etc/crontabs/root
+          exec crond -f -l 8
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - shopnet
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test -f /backups/last_success && last=$$(cat /backups/last_success) && now=$$(date +%s) && [ $$((now - last)) -lt 129600 ]
+      interval: 5m
+      timeout: 5s
+      retries: 2
+      start_period: 2m
     deploy:
       resources:
         limits:
@@ -120,12 +139,28 @@ services:
           memory: 512m
           cpus: "1"
 
+  xray:
+    image: ghcr.io/xtls/xray-core:latest
+    container_name: tg_shop_xray
+    restart: unless-stopped
+    command: ["run", "-config", "/etc/xray/config.json"]
+    volumes:
+      - ./xray/config.json:/etc/xray/config.json:ro
+    networks:
+      - shopnet
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+
   caddy:
     image: caddy:2-alpine
     container_name: tg_shop_caddy
     restart: unless-stopped
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+      - VLESS_WS_PATH=${VLESS_WS_PATH:-/disabled-vless}
     ports:
       - "80:80"
       - "443:443"
@@ -141,6 +176,7 @@ services:
       - bot
       - admin
       - platform-admin
+      - xray
     deploy:
       resources:
         limits:

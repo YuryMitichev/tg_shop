@@ -5,6 +5,14 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
+		-X-Powered-By
+	}
+}
+
+(admin_security_headers) {
+	header {
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://{$DOMAIN}; worker-src 'self' blob:; frame-src 'none'; upgrade-insecure-requests"
+		Cross-Origin-Opener-Policy "same-origin"
 	}
 }
 
@@ -19,16 +27,24 @@
 
 admin.{$DOMAIN} {
 	import security_headers
+	import admin_security_headers
 	reverse_proxy admin:3000
 }
 
 main-svoi.{$DOMAIN} {
 	import security_headers
+	import admin_security_headers
 	reverse_proxy platform-admin:3000
 }
 
 svoi.{$DOMAIN} {
 	import security_headers
+	@vless_websocket {
+		path {$VLESS_WS_PATH}
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	reverse_proxy @vless_websocket xray:10000
 	encode zstd gzip
 	root * /srv/landing
 	header /img/* Cache-Control "public, max-age=604800"

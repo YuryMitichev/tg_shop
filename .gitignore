@@ -24,6 +24,10 @@ venv/
 # Логи
 *.log
 
+# Рабочая конфигурация Xray содержит приватный UUID.
+xray/config.json
+xray/config.json.*
+
 # Admin (Next.js)
 admin/node_modules/
 admin/.next/
