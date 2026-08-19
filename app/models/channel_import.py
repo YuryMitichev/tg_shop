@@ -65,6 +65,11 @@ class ChannelPost(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime)
     edited_at: Mapped[datetime | None] = mapped_column(DateTime)
     raw_data: Mapped[dict | None] = mapped_column(JSON)
+    source_reply_markup: Mapped[dict | None] = mapped_column(JSON)
+    source_reply_markup_known: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    button_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
@@ -179,7 +184,42 @@ class ProductSourceRef(Base):
     candidate_position: Mapped[int] = mapped_column(Integer, nullable=False)
     sku: Mapped[str | None] = mapped_column(String(255))
     fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    source_kind: Mapped[str] = mapped_column(String(16), default="ai", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class ChannelPostButtonJob(Base):
+    __tablename__ = "channel_post_button_jobs"
+    __table_args__ = (
+        UniqueConstraint("post_id", "button_version", name="uq_channel_button_jobs_version"),
+        Index(
+            "ix_channel_button_jobs_claim",
+            "status",
+            "available_at",
+            "locked_until",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), index=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("channel_posts.id", ondelete="CASCADE"), index=True)
+    button_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(64))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    locked_by: Mapped[str | None] = mapped_column(String(128))
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class PrefilterFeedback(Base):

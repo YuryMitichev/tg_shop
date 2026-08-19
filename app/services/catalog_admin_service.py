@@ -6,6 +6,7 @@ from app.models.category import Category
 from app.models.product import Product
 from app.models.product_variant import ProductVariant
 from app.models.product_photo import ProductPhoto
+from app.services.channel_post_button_service import ChannelPostButtonService
 
 from io import BytesIO
 
@@ -245,6 +246,12 @@ class CatalogAdminService:
             )
             product = result.scalar_one_or_none()
             if product:
+                await ChannelPostButtonService.enqueue_product_change_in_session(
+                    session,
+                    shop_id,
+                    product_id,
+                    reason="product_deleted",
+                )
                 await session.delete(product)
                 await session.commit()
 
@@ -263,6 +270,12 @@ class CatalogAdminService:
                 return None
 
             product.is_active = not product.is_active
+            await ChannelPostButtonService.enqueue_product_change_in_session(
+                session,
+                shop_id,
+                product_id,
+                reason="product_activation_changed",
+            )
             await session.commit()
 
             return product.is_active
@@ -282,6 +295,12 @@ class CatalogAdminService:
                 return
 
             product.is_active = is_active
+            await ChannelPostButtonService.enqueue_product_change_in_session(
+                session,
+                shop_id,
+                product_id,
+                reason="product_activation_changed",
+            )
             await session.commit()
 
     @staticmethod
@@ -303,10 +322,19 @@ class CatalogAdminService:
             if not product:
                 return
 
+            name_changed = name is not None and name != product.name
             if name is not None:
                 product.name = name
             if description is not None:
                 product.description = description
+
+            if name_changed:
+                await ChannelPostButtonService.enqueue_product_change_in_session(
+                    session,
+                    shop_id,
+                    product_id,
+                    reason="product_renamed",
+                )
 
             await session.commit()
 

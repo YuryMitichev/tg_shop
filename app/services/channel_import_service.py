@@ -17,6 +17,7 @@ from app.models.channel_import import (
     CatalogImportJob,
     ChannelConnection,
     ChannelPost,
+    ChannelPostButtonJob,
     ChannelPostMedia,
     PrefilterFeedback,
     ProductSourceRef,
@@ -162,6 +163,8 @@ class ChannelImportService:
         Подтверждённый товар не меняется: правка только фиксируется в журнале.
         Для неподтверждённого черновика старая версия помечается superseded.
         """
+        from app.services.channel_post_button_service import ChannelPostButtonService
+
         async with async_session() as session:
             connection = (
                 await session.execute(
@@ -182,6 +185,15 @@ class ChannelImportService:
                     )
                 )
             ).scalar_one_or_none()
+            if post is None and media_group_id:
+                post = (
+                    await session.execute(
+                        select(ChannelPost).where(
+                            ChannelPost.connection_id == connection.id,
+                            ChannelPost.media_group_id == media_group_id,
+                        ).order_by(ChannelPost.id).limit(1)
+                    )
+                ).scalar_one_or_none()
             is_edit = post is not None
             if post is None:
                 post = ChannelPost(
@@ -217,6 +229,10 @@ class ChannelImportService:
                     post.edited_at = edited_at or _utcnow()
                     post.status = "published_unchanged"
                     post.raw_data = raw_data
+                    ChannelPostButtonService.capture_source_markup(post, raw_data)
+                    await ChannelPostButtonService.enqueue_in_session(
+                        session, post, reason="source_post_edited"
+                    )
                     await session.commit()
                     return None
                 post.version += 1
@@ -239,6 +255,7 @@ class ChannelImportService:
             post.edited_at = edited_at if is_edit else None
             post.status = "received"
             post.raw_data = raw_data
+            ChannelPostButtonService.capture_source_markup(post, raw_data)
 
             if media is not None:
                 old_media = (
@@ -528,6 +545,12 @@ class ChannelImportService:
             if source_exists:
                 candidate.status = "approved"
                 candidate.product_id = source_exists.product_id
+                post.status = "published"
+                from app.services.channel_post_button_service import ChannelPostButtonService
+
+                await ChannelPostButtonService.enqueue_in_session(
+                    session, post, reason="candidate_approved_existing_source"
+                )
                 await session.commit()
                 return source_exists.product_id
 
@@ -621,11 +644,17 @@ class ChannelImportService:
                     candidate_position=candidate.position,
                     sku=candidate.sku,
                     fingerprint=candidate.fingerprint,
+                    source_kind="ai",
                 )
             )
             candidate.product_id = product.id
             candidate.status = "approved"
             post.status = "published"
+            from app.services.channel_post_button_service import ChannelPostButtonService
+
+            await ChannelPostButtonService.enqueue_in_session(
+                session, post, reason="candidate_approved"
+            )
             await session.commit()
             return product.id
 
@@ -767,6 +796,13 @@ class ChannelImportService:
                     .group_by(ChannelPost.status)
                 )
             ).all()
+            button_jobs = (
+                await session.execute(
+                    select(ChannelPostButtonJob.status, func.count())
+                    .where(ChannelPostButtonJob.shop_id == shop_id)
+                    .group_by(ChannelPostButtonJob.status)
+                )
+            ).all()
             ai_runs = (
                 await session.execute(
                     select(func.count(func.distinct(CatalogAnalysisRun.job_id))).where(
@@ -796,6 +832,7 @@ class ChannelImportService:
             "prefilter": dict(prefilter),
             "jobs": dict(jobs),
             "posts": dict(posts),
+            "button_jobs": dict(button_jobs),
             "ai": {
                 "input_tokens": usage[0],
                 "output_tokens": usage[1],

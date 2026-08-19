@@ -40,11 +40,8 @@ const App = {
 
         const params = new URLSearchParams(window.location.search);
         const startParam = this.tg.initDataUnsafe?.start_param || "";
-        if (startParam.startsWith("shop_")) {
-            this.shopId = parseInt(startParam.replace("shop_", ""));
-        } else {
-            this.shopId = parseInt(params.get("shop")) || 1;
-        }
+        const launchTarget = this.parseLaunchTarget(startParam, params);
+        this.shopId = launchTarget.shopId;
 
         await Promise.all([
             this.loadShopConfig(),
@@ -52,6 +49,20 @@ const App = {
             this.updateCartBadge(),
             this.loadOffers(),
         ]);
+        if (launchTarget.productId) {
+            await this.openProduct(launchTarget.productId, true);
+        }
+    },
+
+    parseLaunchTarget(startParam, params = new URLSearchParams()) {
+        const match = /^shop_(\d+)(?:_product_(\d+))?$/.exec(startParam || "");
+        const queryShopId = parseInt(params.get("shop"));
+        const shopId = match ? parseInt(match[1]) : (queryShopId > 0 ? queryShopId : 1);
+        const productId = match && match[2] ? parseInt(match[2]) : null;
+        return {
+            shopId: shopId > 0 ? shopId : 1,
+            productId: productId && productId > 0 ? productId : null,
+        };
     },
 
     // ==========================
@@ -235,7 +246,7 @@ const App = {
         return this.currentCategory?.emoji || "📦";
     },
 
-    async openProduct(productId) {
+    async openProduct(productId, fallbackToCatalog = false) {
         this.showView("product");
         const detail = document.getElementById("product-detail");
         detail.innerHTML = `<div class="loading">Загрузка...</div>`;
@@ -246,8 +257,15 @@ const App = {
             this.selectedVariant = p.variants[0];
 
             detail.innerHTML = this.renderProductDetail(p);
+            return true;
         } catch (e) {
+            if (fallbackToCatalog) {
+                this.showView("catalog");
+                this.toast("Товар недоступен. Показываем каталог магазина.");
+                return false;
+            }
             detail.innerHTML = `<div class="error-msg">Ошибка: ${this.esc(e.message)}</div>`;
+            return false;
         }
     },
 
