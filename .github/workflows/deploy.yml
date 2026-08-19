@@ -65,6 +65,24 @@ jobs:
               false
             fi
 
+            backup_ready=false
+            for attempt in $(seq 1 12); do
+              if docker compose exec -T backup sh -c \
+                'test -f /backups/last_success &&
+                 last=$(cat /backups/last_success) &&
+                 now=$(date +%s) &&
+                 [ $((now - last)) -lt 129600 ]'; then
+                backup_ready=true
+                break
+              fi
+              sleep 5
+            done
+
+            if [ "$backup_ready" != "true" ]; then
+              echo "Fresh backup check failed"
+              false
+            fi
+
             trap - ERR
             docker image prune -f
             echo "Deploy of $target_sha completed at $(date)"

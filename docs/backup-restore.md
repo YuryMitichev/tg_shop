@@ -1,40 +1,59 @@
-# Восстановление БД из бэкапа
+# Резервное копирование и восстановление БД
 
-## Бэкапы
+## Что создаётся автоматически
 
-Контейнер `tg_shop_backup` автоматически создаёт бэкапы каждый день в 03:00:
-- **Дневные:** `/backups/daily/` — хранятся 7 штук
-- **Недельные** (по воскресеньям): `/backups/weekly/` — хранятся 4 штуки
+Контейнер `tg_shop_backup` создаёт резервную копию при запуске и затем каждый день в 03:00:
 
-Формат: `tg_shop_YYYYMMDD_HHMMSS.sql.gz` (gzip-сжатый SQL дамп)
+- дневные копии в `/backups/daily/` — последние 7 файлов;
+- недельные копии в `/backups/weekly/` — последние 4 воскресенья;
+- `/backups/last_success` — время последнего успешного копирования.
 
-## Восстановление
+Формат файла: `tg_shop_YYYYMMDD_HHMMSS.sql.gz`.
 
-### Способ 1: Через docker exec
+Скрипт делает до трёх попыток `pg_dump`, проверяет признак завершённого SQL-дампа,
+проверяет gzip и только затем атомарно публикует готовый файл. Незавершённый временный
+файл не считается резервной копией.
 
-```bash
-# Посмотреть список бэкапов
-docker exec tg_shop_backup ls -lh /backups/daily/
-
-# Восстановить из файла (замените имя файла)
-gunzip -c /backups/daily/tg_shop_20250115_030000.sql.gz | \
-    docker exec -i tg_shop_db psql -U tg_shop -d tg_shop
-```
-
-### Способ 2: Копировать файл на хост, затем восстановить
+## Контроль состояния
 
 ```bash
-# Скопировать бэкап из контейнера
-docker cp tg_shop_backup:/backups/daily/tg_shop_20250115_030000.sql.gz /tmp/
-
-# Восстановить
-gunzip -c /tmp/tg_shop_20250115_030000.sql.gz | \
-    docker exec -i tg_shop_db psql -U tg_shop -d tg_shop
+docker compose ps backup
+docker compose logs --tail=100 backup
+docker compose exec -T backup ls -lh /backups/daily/
 ```
 
-## Ручной бэкап
+Контейнер получает статус `unhealthy`, если последняя успешная копия старше 36 часов.
+
+## Проверка восстановления без изменения production-базы
 
 ```bash
-docker exec tg_shop_backup pg_dump -h postgres -U tg_shop tg_shop \
-    --no-owner --no-privileges | gzip > /tmp/manual_backup.sql.gz
+sh scripts/verify_backup.sh
 ```
+
+Скрипт запускает отдельный временный PostgreSQL-контейнер, восстанавливает туда
+последнюю дневную копию, проверяет наличие таблиц и удаляет временный контейнер.
+Production-база не изменяется.
+
+Проверку следует выполнять после изменения backup-скрипта и затем не реже раза в месяц.
+
+## Аварийное восстановление production-базы
+
+Это разрушительная операция: она заменяет данные. Перед выполнением остановите запись,
+создайте дополнительную копию текущего состояния и явно выберите нужный архив.
+
+```bash
+docker compose stop bot
+
+docker compose exec -T backup gzip -dc \
+  /backups/daily/tg_shop_YYYYMMDD_HHMMSS.sql.gz | \
+docker compose exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U tg_shop -d tg_shop
+
+docker compose start bot
+```
+
+## Ограничение текущей схемы
+
+Volume `backup_data` находится на том же VPS, что и основная база. Он защищает от
+ошибки приложения или случайного удаления данных, но не от потери всего сервера.
+Нужна дополнительная зашифрованная копия во внешнем S3-совместимом хранилище.
