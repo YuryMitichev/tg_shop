@@ -10,6 +10,9 @@ DB_USER="${DB_USER:-tg_shop}"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 BACKUP_MAX_ATTEMPTS="${BACKUP_MAX_ATTEMPTS:-3}"
 BACKUP_RETRY_DELAY="${BACKUP_RETRY_DELAY:-10}"
+YANDEX_BACKUP_ENABLED="${YANDEX_BACKUP_ENABLED:-false}"
+YANDEX_BACKUP_BUCKET="${YANDEX_BACKUP_BUCKET:-}"
+YANDEX_STORAGE_ENDPOINT="${YANDEX_STORAGE_ENDPOINT:-https://storage.yandexcloud.net}"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 DAILY_DIR="${BACKUP_DIR}/daily"
@@ -19,6 +22,7 @@ TEMP_SQL="${DAILY_DIR}/.${DB_NAME}_${TIMESTAMP}.sql.tmp"
 TEMP_GZIP="${DUMP_FILE}.tmp"
 SUCCESS_FILE="${BACKUP_DIR}/last_success"
 WEEKLY_TEMP=""
+ENCRYPTED_TEMP=""
 
 mkdir -p "${DAILY_DIR}" "${WEEKLY_DIR}"
 
@@ -26,6 +30,9 @@ cleanup() {
     rm -f "${TEMP_SQL}" "${TEMP_GZIP}" "${SUCCESS_FILE}.tmp"
     if [ -n "${WEEKLY_TEMP}" ]; then
         rm -f "${WEEKLY_TEMP}"
+    fi
+    if [ -n "${ENCRYPTED_TEMP}" ]; then
+        rm -f "${ENCRYPTED_TEMP}"
     fi
 }
 trap cleanup EXIT HUP INT TERM
@@ -84,6 +91,52 @@ if [ "$(date +%u)" = "7" ]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Removed old weekly backup: ${file#./}"
     done
 fi
+
+upload_to_yandex() {
+    if [ "${YANDEX_BACKUP_ENABLED}" != "true" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Off-site backup is disabled."
+        return
+    fi
+
+    if [ -z "${YANDEX_BACKUP_BUCKET}" ] || [ -z "${AWS_ACCESS_KEY_ID:-}" ] || \
+       [ -z "${AWS_SECRET_ACCESS_KEY:-}" ] || [ -z "${BACKUP_ENCRYPTION_PASSPHRASE:-}" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Off-site backup configuration is incomplete" >&2
+        exit 1
+    fi
+
+    object_key="database/${DB_NAME}_${TIMESTAMP}.sql.gz.enc"
+    ENCRYPTED_TEMP="${DUMP_FILE}.enc.tmp"
+
+    openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+        -in "${DUMP_FILE}" -out "${ENCRYPTED_TEMP}" \
+        -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+
+    content_md5=$(openssl dgst -md5 -binary "${ENCRYPTED_TEMP}" | openssl base64 -A)
+    aws s3api put-object \
+        --endpoint-url "${YANDEX_STORAGE_ENDPOINT}" \
+        --bucket "${YANDEX_BACKUP_BUCKET}" \
+        --key "${object_key}" \
+        --body "${ENCRYPTED_TEMP}" \
+        --content-md5 "${content_md5}" >/dev/null
+
+    remote_size=$(aws s3api head-object \
+        --endpoint-url "${YANDEX_STORAGE_ENDPOINT}" \
+        --bucket "${YANDEX_BACKUP_BUCKET}" \
+        --key "${object_key}" \
+        --query ContentLength --output text)
+    local_size=$(wc -c < "${ENCRYPTED_TEMP}" | tr -d ' ')
+
+    if [ "${remote_size}" != "${local_size}" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Off-site backup size verification failed" >&2
+        exit 1
+    fi
+
+    rm -f "${ENCRYPTED_TEMP}"
+    ENCRYPTED_TEMP=""
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Encrypted off-site backup uploaded and verified."
+}
+
+upload_to_yandex
 
 date +%s > "${SUCCESS_FILE}.tmp"
 mv "${SUCCESS_FILE}.tmp" "${SUCCESS_FILE}"
