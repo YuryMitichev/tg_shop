@@ -22,6 +22,10 @@ def test_prefilter_keeps_product_posts(text):
         "Важная информация: завтра магазин закрыт, изменилось расписание работы.",
         "Опрос: в какое время вам удобнее читать наши новости?",
         "Открыта вакансия администратора. Ищем сотрудника в команду.",
+        "Друзья, приглашаем Вас на открытие магазина в Люберцах! Завтра в 15.00",
+        "Ждём вас на мастер-класс в субботу в 12:00.",
+        "Объявление: временно не работаем из-за технических работ.",
+        "Сегодня проведём прямой эфир и ответим на ваши вопросы.",
     ],
 )
 def test_prefilter_skips_only_clear_non_products(text):
@@ -36,6 +40,22 @@ def test_product_signal_wins_over_contest_word():
         has_photos=True,
     )
     assert decision.label == "product"
+
+
+def test_product_signal_wins_over_event_invitation():
+    decision = classify_post(
+        "Приглашаем на презентацию новой свечи. Объём 200 мл, цена 1200 ₽, в наличии.",
+        has_photos=True,
+    )
+    assert decision.label == "product"
+
+
+def test_event_reason_is_auditable():
+    decision = classify_post(
+        "Друзья, приглашаем Вас на открытие магазина в Люберцах! Завтра в 15.00",
+        has_photos=False,
+    )
+    assert decision.features["non_product_patterns"] == ["event_invitation"]
 
 
 def test_ambiguous_post_is_not_dropped():
