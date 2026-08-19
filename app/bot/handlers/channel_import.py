@@ -5,6 +5,8 @@ from collections import defaultdict
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
     KeyboardButton,
@@ -24,6 +26,26 @@ from app.services.channel_import_service import ChannelImportService
 
 _album_messages: defaultdict[tuple[int, str], list[tuple[Message, bool]]] = defaultdict(list)
 _album_tasks: dict[tuple[int, str], asyncio.Task] = {}
+
+
+class ChannelImportState(StatesGroup):
+    waiting_stock = State()
+
+
+def _next_missing_stock(variants: list[dict], start: int = 0) -> int | None:
+    return next(
+        (index for index in range(start, len(variants)) if variants[index].get("stock") is None),
+        None,
+    )
+
+
+def _stock_prompt(variant: dict, index: int, total: int) -> str:
+    title = variant.get("title") or variant.get("volume") or "—"
+    suffix = f" ({index + 1}/{total})" if total > 1 else ""
+    return (
+        f"Укажите остаток товара{suffix} для варианта «{title}» — "
+        "целое число от 0. Для отмены отправьте «отмена»."
+    )
 
 
 async def _owner_shop(shop_id: int, telegram_id: int) -> Shop | None:
@@ -202,7 +224,7 @@ def setup_router() -> Router:
         await handle_channel_post(message, edited=True)
 
     @router.callback_query(F.data.startswith("ci:"))
-    async def candidate_action(callback: CallbackQuery):
+    async def candidate_action(callback: CallbackQuery, state: FSMContext):
         if not callback.from_user or not callback.data:
             return
         shop_id = get_shop_id()
@@ -213,7 +235,27 @@ def setup_router() -> Router:
         candidate_id = int(raw_id)
         try:
             if action == "approve":
-                product_id = await ChannelImportService.approve_candidate(shop_id, candidate_id)
+                candidate = await ChannelImportService.get_candidate(shop_id, candidate_id)
+                if candidate is None:
+                    raise ValueError("Черновик не найден")
+                variants = candidate.get("variants") or []
+                missing_index = _next_missing_stock(variants)
+                if missing_index is not None:
+                    await state.set_state(ChannelImportState.waiting_stock)
+                    await state.set_data(
+                        {"candidate_id": candidate_id, "variant_index": missing_index}
+                    )
+                    if callback.message:
+                        await callback.message.answer(
+                            _stock_prompt(
+                                variants[missing_index], missing_index, len(variants)
+                            )
+                        )
+                    await callback.answer()
+                    return
+                product_id = await ChannelImportService.approve_candidate(
+                    shop_id, candidate_id
+                )
                 text = f"Товар опубликован, ID {product_id}."
             elif action == "reject":
                 await ChannelImportService.set_candidate_status(
@@ -234,5 +276,65 @@ def setup_router() -> Router:
             await callback.message.edit_reply_markup(reply_markup=None)
             await callback.message.answer(text)
         await callback.answer()
+
+    @router.message(ChannelImportState.waiting_stock)
+    async def receive_candidate_stock(message: Message, state: FSMContext):
+        if not message.from_user:
+            return
+        shop_id = get_shop_id()
+        if await _owner_shop(shop_id, message.from_user.id) is None:
+            await message.answer("Доступно только владельцу магазина.")
+            await state.clear()
+            return
+        raw_value = (message.text or "").strip()
+        if raw_value.casefold() == "отмена":
+            await state.clear()
+            await message.answer("Ввод остатка отменён.")
+            return
+        try:
+            stock = int(raw_value)
+            if stock < 0:
+                raise ValueError
+        except ValueError:
+            await message.answer("Введите целое число от 0 или отправьте «отмена».")
+            return
+
+        data = await state.get_data()
+        candidate_id = int(data.get("candidate_id", 0))
+        variant_index = int(data.get("variant_index", 0))
+        candidate = await ChannelImportService.get_candidate(shop_id, candidate_id)
+        if candidate is None:
+            await state.clear()
+            await message.answer("Черновик больше не найден.")
+            return
+        variants = [dict(item) for item in (candidate.get("variants") or [])]
+        if variant_index >= len(variants):
+            await state.clear()
+            await message.answer("Вариант товара больше не найден.")
+            return
+        variants[variant_index]["stock"] = stock
+        await ChannelImportService.update_candidate(
+            shop_id, candidate_id, {"variants": variants}
+        )
+
+        next_index = _next_missing_stock(variants, variant_index + 1)
+        if next_index is not None:
+            await state.update_data(variant_index=next_index)
+            await message.answer(
+                _stock_prompt(variants[next_index], next_index, len(variants))
+            )
+            return
+
+        await state.clear()
+        try:
+            product_id = await ChannelImportService.approve_candidate(
+                shop_id, candidate_id
+            )
+        except ValueError as exc:
+            await message.answer(
+                f"Остаток сохранён, но товар пока нельзя опубликовать: {exc}"
+            )
+            return
+        await message.answer(f"Товар опубликован, ID {product_id}.")
 
     return router

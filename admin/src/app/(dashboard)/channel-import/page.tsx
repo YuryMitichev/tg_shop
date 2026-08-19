@@ -289,23 +289,27 @@ function CandidateEditor({ candidate, onChanged }: { candidate: Candidate; onCha
   const [attributesJson, setAttributesJson] = useState(JSON.stringify(candidate.attributes ?? {}, null, 2));
   const [saving, setSaving] = useState(false);
 
-  async function save() {
+  async function save(showSuccess = true): Promise<boolean> {
     let attributes: Record<string, string>;
     try {
       attributes = JSON.parse(attributesJson);
     } catch {
       toast.error("Характеристики должны быть валидным JSON-объектом");
-      return;
+      return false;
     }
     setSaving(true);
     try {
       await api.patch(`/channel-import/candidates/${candidate.id}`, {
         name, description, category_name: category, sku, currency, variants, attributes,
       });
-      toast.success("Черновик сохранён");
-      await onChanged();
+      if (showSuccess) {
+        toast.success("Черновик сохранён");
+        await onChanged();
+      }
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось сохранить");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -313,6 +317,11 @@ function CandidateEditor({ candidate, onChanged }: { candidate: Candidate; onCha
 
   async function action(actionName: "approve" | "reject" | "mark-duplicate" | "reanalyze") {
     try {
+      // Подтверждение всегда использует текущие значения формы, даже если
+      // владелец не нажал отдельную кнопку «Сохранить».
+      if (actionName === "approve" && !(await save(false))) {
+        return;
+      }
       await api.post(`/channel-import/candidates/${candidate.id}/${actionName}`);
       toast.success(actionName === "approve" ? "Товар опубликован" : "Решение сохранено");
       await onChanged();
@@ -334,8 +343,8 @@ function CandidateEditor({ candidate, onChanged }: { candidate: Candidate; onCha
             <Badge className="mt-2" variant="outline">{statusLabel[candidate.status] || candidate.status}</Badge>
           </div>
           <div className="flex flex-wrap gap-2">
-            {editable && <Button variant="outline" onClick={save} disabled={saving}><Save className="mr-2 h-4 w-4" />Сохранить</Button>}
-            {editable && <Button onClick={() => action("approve")}><Check className="mr-2 h-4 w-4" />Подтвердить</Button>}
+            {editable && <Button variant="outline" onClick={() => void save()} disabled={saving}><Save className="mr-2 h-4 w-4" />Сохранить</Button>}
+            {editable && <Button onClick={() => action("approve")} disabled={saving}><Check className="mr-2 h-4 w-4" />Подтвердить</Button>}
           </div>
         </div>
       </CardHeader>
