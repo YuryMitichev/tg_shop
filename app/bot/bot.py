@@ -65,6 +65,8 @@ def _create_dispatcher() -> Dispatcher:
 
     dp.message.middleware(ShopMiddleware())
     dp.callback_query.middleware(ShopMiddleware())
+    dp.channel_post.middleware(ShopMiddleware())
+    dp.edited_channel_post.middleware(ShopMiddleware())
     dp.message.middleware(ThrottlingMiddleware())
     dp.callback_query.middleware(ThrottlingMiddleware())
     dp.message.middleware(CrmMiddleware())
@@ -229,6 +231,11 @@ async def start_all_bots() -> None:
 
     asyncio.create_task(_auto_cancel_loop())
     asyncio.create_task(_subscription_check_loop())
+    if settings.channel_import_enabled:
+        from app.services.channel_import_worker import ChannelImportWorker
+
+        asyncio.create_task(ChannelImportWorker(concurrency=2).run_forever())
+        asyncio.create_task(_channel_import_cleanup_loop())
 
     if settings.platform_bot_token:
         asyncio.create_task(_run_platform_bot())
@@ -253,6 +260,20 @@ async def start_all_bots() -> None:
         tasks.append(_run_shop_bot(shop["id"], token))
 
     await asyncio.gather(*tasks) if tasks else None
+
+
+async def _channel_import_cleanup_loop() -> None:
+    """Ежедневно удаляет сырые данные закрытых импортов старше 90 дней."""
+    from app.services.channel_import_service import ChannelImportService
+
+    while True:
+        await asyncio.sleep(24 * 3600)
+        try:
+            cleaned = await ChannelImportService.cleanup_raw_data(days=90)
+            if cleaned:
+                logger.info("AI-import retention cleanup: очищено постов %d", cleaned)
+        except Exception:
+            logger.exception("AI-import retention cleanup failed")
 
 
 async def _run_platform_bot() -> None:

@@ -22,6 +22,16 @@ from app.models.shop_offer_acceptance import ShopOfferAcceptance
 from app.models.shop_legal_document import ShopLegalDocument
 from app.models.platform_settings import PlatformSettings
 from app.models.subscription import SubscriptionPlan, Subscription
+from app.models.channel_import import (
+    ChannelConnection,
+    ChannelPost,
+    ChannelPostMedia,
+    CatalogImportJob,
+    CatalogImportCandidate,
+    CatalogAnalysisRun,
+    ProductSourceRef,
+    PrefilterFeedback,
+)
 
 __all__ = [
     "Shop",
@@ -49,4 +59,12 @@ __all__ = [
     "PlatformSettings",
     "SubscriptionPlan",
     "Subscription",
+    "ChannelConnection",
+    "ChannelPost",
+    "ChannelPostMedia",
+    "CatalogImportJob",
+    "CatalogImportCandidate",
+    "CatalogAnalysisRun",
+    "ProductSourceRef",
+    "PrefilterFeedback",
 ]

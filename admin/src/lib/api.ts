@@ -7,6 +7,10 @@ export function photoUrl(photoId: number): string {
   return `${SHOP_API}/photo/${photoId}`;
 }
 
+export function channelImportMediaUrl(mediaId: number): string {
+  return `${ADMIN_API}/channel-import/media/${mediaId}`;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
