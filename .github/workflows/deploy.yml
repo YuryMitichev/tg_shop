@@ -93,4 +93,5 @@ jobs:
 
             trap - ERR
             docker image prune -f
+            docker builder prune -af --filter until=168h
             echo "Deploy of $target_sha completed at $(date)"
