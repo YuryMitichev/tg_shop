@@ -23,8 +23,15 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def product_start_param(shop_id: int, product_id: int) -> str:
-    return f"shop_{shop_id}_product_{product_id}"
+def product_start_param(
+    shop_id: int, product_id: int, source_token: str | None = None
+) -> str:
+    value = f"shop_{shop_id}_product_{product_id}"
+    if source_token:
+        value += f"_ref_{source_token}"
+    if len(value) > 64:
+        raise ValueError("Telegram startapp parameter exceeds 64 characters")
+    return value
 
 
 def shop_deep_link(bot_username: str, shop_id: int) -> str:
@@ -32,9 +39,17 @@ def shop_deep_link(bot_username: str, shop_id: int) -> str:
     return f"https://t.me/{username}?startapp=shop_{shop_id}"
 
 
-def product_deep_link(bot_username: str, shop_id: int, product_id: int) -> str:
+def product_deep_link(
+    bot_username: str,
+    shop_id: int,
+    product_id: int,
+    source_token: str | None = None,
+) -> str:
     username = bot_username.lstrip("@")
-    return f"https://t.me/{username}?startapp={product_start_param(shop_id, product_id)}"
+    return (
+        f"https://t.me/{username}?startapp="
+        f"{product_start_param(shop_id, product_id, source_token)}"
+    )
 
 
 def is_managed_product_url(url: str | None) -> bool:

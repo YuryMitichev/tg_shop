@@ -15,6 +15,8 @@ from app.models.channel_import import ChannelPost, ChannelPostMedia
 from app.services.channel_import_service import ChannelImportService
 from app.services.channel_post_button_service import ChannelPostButtonService
 from app.services.channel_storefront_service import ChannelStorefrontService
+from app.services.channel_attribution_service import ChannelAttributionService
+from app.services.channel_metrics_service import ChannelMetricsService
 
 
 router = APIRouter(prefix="/channel-import")
@@ -180,6 +182,24 @@ async def sync_storefront_pin(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/publication-analytics")
+async def get_publication_analytics(admin: dict = Depends(require_admin)):
+    return await ChannelAttributionService.publication_report(admin["shop_id"])
+
+
+@router.post("/publication-analytics/views/refresh")
+async def refresh_publication_views(
+    admin: dict = Depends(require_active_subscription),
+):
+    try:
+        updated = await ChannelMetricsService.refresh_shop(admin["shop_id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"ok": True, "updated": updated}
 
 
 @router.get("/candidates")

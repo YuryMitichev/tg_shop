@@ -48,6 +48,8 @@ import app.services.channel_post_button_service as channel_post_button_service
 import app.services.channel_post_button_worker as channel_post_button_worker
 import app.services.channel_storefront_service as channel_storefront_service
 import app.services.channel_backfill_service as channel_backfill_service
+import app.services.channel_attribution_service as channel_attribution_service
+import app.services.channel_metrics_service as channel_metrics_service
 from app.services.admin_auth_service import AdminAuthService
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
@@ -124,6 +126,8 @@ _PATCH_TARGETS = [
     channel_post_button_worker,
     channel_storefront_service,
     channel_backfill_service,
+    channel_attribution_service,
+    channel_metrics_service,
 ]
 
 

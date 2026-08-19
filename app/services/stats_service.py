@@ -12,6 +12,7 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.product import Product
 from app.models.review import Review
+from app.services.sales_service import SalesService
 
 
 class StatsService:
@@ -29,7 +30,7 @@ class StatsService:
     async def get_stats(shop_id: int) -> dict:
         """
         Сводная статистика по магазину.
-        Выручка считается по заказам, не отменённым (status != 'cancelled').
+        Выручка считается только по подтверждённым продажам.
         """
         hit, cached = StatsService._stats_cache.get(shop_id)
         if hit:
@@ -47,11 +48,19 @@ class StatsService:
             new_orders = status_counts.get(OrderStatus.NEW, 0)
             cancelled_orders = status_counts.get(OrderStatus.CANCELLED, 0)
 
+            paid_orders_result = await session.execute(
+                select(func.count()).select_from(Order).where(
+                    Order.shop_id == shop_id,
+                    SalesService.confirmed_condition(),
+                )
+            )
+            paid_orders = paid_orders_result.scalar() or 0
+
             revenue_result = await session.execute(
                 select(func.coalesce(func.sum(Order.total_amount), 0))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
+                    SalesService.confirmed_condition(),
                 )
             )
             total_revenue = revenue_result.scalar() or 0
@@ -61,9 +70,9 @@ class StatsService:
                 select(func.coalesce(func.sum(Order.total_amount), 0))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    extract("year", Order.created_at) == now.year,
-                    extract("month", Order.created_at) == now.month,
+                    SalesService.confirmed_condition(),
+                    extract("year", Order.payment_confirmed_at) == now.year,
+                    extract("month", Order.payment_confirmed_at) == now.month,
                 )
             )
             month_revenue = month_revenue_result.scalar() or 0
@@ -77,7 +86,7 @@ class StatsService:
                 .join(Order, OrderItem.order_id == Order.id)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
+                    SalesService.confirmed_condition(),
                 )
                 .group_by(OrderItem.product_name)
                 .order_by(func.sum(OrderItem.price * OrderItem.quantity).desc())
@@ -96,7 +105,11 @@ class StatsService:
             result = {
                 "total_orders": total_orders,
                 "new_orders": new_orders,
+                "paid_orders": paid_orders,
                 "cancelled_orders": cancelled_orders,
+                "payment_conversion_rate": round(
+                    paid_orders / total_orders * 100, 1
+                ) if total_orders else 0,
                 "total_revenue": total_revenue,
                 "month_revenue": month_revenue,
                 "top_products": top_products,
@@ -120,29 +133,63 @@ class StatsService:
             now = datetime.now()
             start = now - timedelta(days=days)
 
-            result = await session.execute(
+            paid_result = await session.execute(
                 select(
-                    func.date(Order.created_at).label("date"),
+                    func.date(Order.payment_confirmed_at).label("date"),
                     func.sum(Order.total_amount).label("revenue"),
-                    func.count(Order.id).label("orders"),
+                    func.count(Order.id).label("paid_orders"),
                 )
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
+                )
+                .group_by(func.date(Order.payment_confirmed_at))
+            )
+            created_result = await session.execute(
+                select(func.date(Order.created_at), func.count(Order.id))
+                .where(Order.shop_id == shop_id, Order.created_at >= start)
+                .group_by(func.date(Order.created_at))
+            )
+            cancelled_result = await session.execute(
+                select(func.date(Order.created_at), func.count(Order.id))
+                .where(
+                    Order.shop_id == shop_id,
+                    Order.status == OrderStatus.CANCELLED,
                     Order.created_at >= start,
                 )
                 .group_by(func.date(Order.created_at))
-                .order_by(func.date(Order.created_at))
             )
 
-            data = [
-                {
-                    "date": str(row[0]),
-                    "revenue": row[1] or 0,
-                    "orders": row[2],
+            by_date: dict[str, dict] = {}
+            for row in created_result.all():
+                key = str(row[0])
+                by_date[key] = {
+                    "date": key,
+                    "revenue": 0,
+                    "orders": row[1],
+                    "created_orders": row[1],
+                    "paid_orders": 0,
+                    "cancelled_orders": 0,
                 }
-                for row in result.all()
-            ]
+            for row in paid_result.all():
+                key = str(row[0])
+                item = by_date.setdefault(
+                    key,
+                    {"date": key, "revenue": 0, "orders": 0, "created_orders": 0,
+                     "paid_orders": 0, "cancelled_orders": 0},
+                )
+                item["revenue"] = row[1] or 0
+                item["paid_orders"] = row[2]
+            for row in cancelled_result.all():
+                key = str(row[0])
+                item = by_date.setdefault(
+                    key,
+                    {"date": key, "revenue": 0, "orders": 0, "created_orders": 0,
+                     "paid_orders": 0, "cancelled_orders": 0},
+                )
+                item["cancelled_orders"] = row[1]
+            data = [by_date[key] for key in sorted(by_date)]
 
         StatsService._chart_cache.set(cache_key, data)
         return data
@@ -167,6 +214,9 @@ class StatsService:
             prev_rev,
             cur_orders,
             prev_orders,
+            cur_paid_orders,
+            prev_paid_orders,
+            cur_cancelled,
             cur_customers,
             prev_customers,
             cur_repeat,
@@ -177,6 +227,9 @@ class StatsService:
             StatsService._period_revenue(shop_id, prev_start, cur_start),
             StatsService._period_orders(shop_id, cur_start, now),
             StatsService._period_orders(shop_id, prev_start, cur_start),
+            StatsService._period_paid_orders(shop_id, cur_start, now),
+            StatsService._period_paid_orders(shop_id, prev_start, cur_start),
+            StatsService._period_cancelled_orders(shop_id, cur_start, now),
             StatsService._period_unique_customers(shop_id, cur_start, now),
             StatsService._period_unique_customers(shop_id, prev_start, cur_start),
             StatsService._period_repeat_customers(shop_id, cur_start, now),
@@ -184,22 +237,27 @@ class StatsService:
             StatsService._period_completed(shop_id, cur_start),
         )
 
-        cur_aov = cur_rev / cur_orders if cur_orders else 0
-        prev_aov = prev_rev / prev_orders if prev_orders else 0
-        avg_items = cur_items / cur_orders if cur_orders else 0
-        completion_rate = completed / cur_orders * 100 if cur_orders else 0
+        cur_aov = cur_rev / cur_paid_orders if cur_paid_orders else 0
+        prev_aov = prev_rev / prev_paid_orders if prev_paid_orders else 0
+        avg_items = cur_items / cur_paid_orders if cur_paid_orders else 0
+        payment_rate = cur_paid_orders / cur_orders * 100 if cur_orders else 0
 
         result = {
             "revenue": cur_rev,
             "revenue_growth": StatsService._growth_pct(cur_rev, prev_rev),
             "orders": cur_orders,
             "orders_growth": StatsService._growth_pct(cur_orders, prev_orders),
+            "created_orders": cur_orders,
+            "paid_orders": cur_paid_orders,
+            "paid_orders_growth": StatsService._growth_pct(cur_paid_orders, prev_paid_orders),
+            "cancelled_orders": cur_cancelled,
+            "order_to_payment_rate": round(payment_rate, 1),
             "avg_order_value": cur_aov,
             "aov_growth": StatsService._growth_pct(cur_aov, prev_aov),
             "unique_customers": cur_customers,
             "customers_growth": StatsService._growth_pct(cur_customers, prev_customers),
             "completed_orders": completed,
-            "completion_rate": round(completion_rate, 1),
+            "completion_rate": round(payment_rate, 1),
             "repeat_customers": cur_repeat,
             "repeat_rate": round(cur_repeat / cur_customers * 100, 1) if cur_customers else 0,
             "avg_items_per_order": round(avg_items, 1),
@@ -214,9 +272,9 @@ class StatsService:
                 select(func.coalesce(func.sum(Order.total_amount), 0))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
-                    Order.created_at < end,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
+                    Order.payment_confirmed_at < end,
                 )
             )
             return result.scalar() or 0
@@ -229,7 +287,32 @@ class StatsService:
                 .select_from(Order)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
+                    Order.created_at >= start,
+                    Order.created_at < end,
+                )
+            )
+            return result.scalar() or 0
+
+    @staticmethod
+    async def _period_paid_orders(shop_id: int, start, end) -> int:
+        async with async_session() as session:
+            result = await session.execute(
+                select(func.count()).select_from(Order).where(
+                    Order.shop_id == shop_id,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
+                    Order.payment_confirmed_at < end,
+                )
+            )
+            return result.scalar() or 0
+
+    @staticmethod
+    async def _period_cancelled_orders(shop_id: int, start, end) -> int:
+        async with async_session() as session:
+            result = await session.execute(
+                select(func.count()).select_from(Order).where(
+                    Order.shop_id == shop_id,
+                    Order.status == OrderStatus.CANCELLED,
                     Order.created_at >= start,
                     Order.created_at < end,
                 )
@@ -243,9 +326,9 @@ class StatsService:
                 select(func.count(func.distinct(Order.telegram_user_id)))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
-                    Order.created_at < end,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
+                    Order.payment_confirmed_at < end,
                 )
             )
             return result.scalar() or 0
@@ -257,9 +340,9 @@ class StatsService:
                 select(Order.telegram_user_id, func.count(Order.id).label("cnt"))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
-                    Order.created_at < end,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
+                    Order.payment_confirmed_at < end,
                 )
                 .group_by(Order.telegram_user_id)
             )
@@ -273,9 +356,9 @@ class StatsService:
                 .join(Order, OrderItem.order_id == Order.id)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
-                    Order.created_at < end,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
+                    Order.payment_confirmed_at < end,
                 )
             )
             return result.scalar() or 0
@@ -323,8 +406,8 @@ class StatsService:
                 .join(Order, OrderItem.order_id == Order.id, isouter=True)
                 .where(
                     Category.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
                 )
                 .group_by(Category.id, Category.name, Category.emoji)
                 .order_by(func.coalesce(func.sum(OrderItem.price * OrderItem.quantity), 0).desc())
@@ -356,8 +439,8 @@ class StatsService:
                 .join(Order, OrderItem.order_id == Order.id)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
                 )
                 .group_by(OrderItem.product_name)
                 .order_by(func.sum(OrderItem.quantity).desc())
@@ -380,10 +463,13 @@ class StatsService:
 
         async with async_session() as session:
             first_order_result = await session.execute(
-                select(Order.telegram_user_id, func.min(Order.created_at).label("first"))
+                select(
+                    Order.telegram_user_id,
+                    func.min(Order.payment_confirmed_at).label("first"),
+                )
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
+                    SalesService.confirmed_condition(),
                 )
                 .group_by(Order.telegram_user_id)
             )
@@ -396,7 +482,7 @@ class StatsService:
                 select(func.coalesce(func.sum(Order.total_amount), 0))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
+                    SalesService.confirmed_condition(),
                 )
             )
             total_revenue = total_rev_result.scalar() or 0
@@ -411,7 +497,7 @@ class StatsService:
                 )
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
+                    SalesService.confirmed_condition(),
                 )
                 .group_by(Order.full_name)
                 .order_by(func.sum(Order.total_amount).desc())
@@ -441,8 +527,8 @@ class StatsService:
                 select(func.coalesce(func.sum(Order.discount_amount), 0))
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
                     Order.discount_amount > 0,
                 )
             )
@@ -453,8 +539,8 @@ class StatsService:
                 .select_from(Order)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
                     Order.promo_code.isnot(None),
                 )
             )
@@ -465,8 +551,8 @@ class StatsService:
                 .select_from(Order)
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
                     Order.promo_code.is_(None),
                 )
             )
@@ -480,8 +566,8 @@ class StatsService:
                 )
                 .where(
                     Order.shop_id == shop_id,
-                    Order.status != OrderStatus.CANCELLED,
-                    Order.created_at >= start,
+                    SalesService.confirmed_condition(),
+                    Order.payment_confirmed_at >= start,
                     Order.promo_code.isnot(None),
                 )
                 .group_by(Order.promo_code)

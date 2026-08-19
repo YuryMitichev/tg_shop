@@ -639,6 +639,8 @@ class TestProcessWebhook:
             order = await session.get(Order, order_in_db)
             assert order.status == "paid"
             assert order.payment_id == "yk_paid_123"
+            assert order.payment_confirmed_at is not None
+            assert order.payment_confirmation_source == "online"
 
     async def test_payment_succeeded_wrong_amount(
         self, db_session, seed_data, order_in_db

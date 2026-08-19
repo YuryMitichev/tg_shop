@@ -89,6 +89,12 @@ class Settings(BaseSettings):
     channel_product_buttons_pilot_shop_id: int | None = Field(
         default=None, alias="CHANNEL_PRODUCT_BUTTONS_PILOT_SHOP_ID"
     )
+    channel_attribution_enabled: bool = Field(
+        default=False, alias="CHANNEL_ATTRIBUTION_ENABLED"
+    )
+    channel_attribution_pilot_shop_id: int | None = Field(
+        default=None, alias="CHANNEL_ATTRIBUTION_PILOT_SHOP_ID"
+    )
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str = Field(
         default="gpt-5.4-mini-2026-03-17", alias="OPENAI_CHANNEL_IMPORT_MODEL"

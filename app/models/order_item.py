@@ -27,6 +27,15 @@ class OrderItem(Base):
     # nullable: старые заказы (до миграции) не содержат это поле.
     variant_id: Mapped[int | None] = mapped_column(nullable=True)
 
+    # Прямая атрибуция позиции к кнопке и публикации Telegram.
+    # source_post_id сохраняет аналитику, даже если привязку товара удалят.
+    source_ref_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_source_refs.id", ondelete="SET NULL"), nullable=True
+    )
+    source_post_id: Mapped[int | None] = mapped_column(
+        ForeignKey("channel_posts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     product_name: Mapped[str] = mapped_column(nullable=False)
     variant_volume: Mapped[str] = mapped_column(nullable=False)
     price: Mapped[int] = mapped_column(nullable=False)

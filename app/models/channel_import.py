@@ -1,4 +1,5 @@
 from datetime import datetime
+import secrets
 
 from sqlalchemy import (
     BigInteger,
@@ -77,6 +78,9 @@ class ChannelPost(Base):
         Boolean, default=False, nullable=False
     )
     button_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    telegram_views: Mapped[int | None] = mapped_column(Integer)
+    telegram_forwards: Mapped[int | None] = mapped_column(Integer)
+    metrics_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
@@ -191,10 +195,48 @@ class ProductSourceRef(Base):
     candidate_position: Mapped[int] = mapped_column(Integer, nullable=False)
     sku: Mapped[str | None] = mapped_column(String(255))
     fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    public_token: Mapped[str] = mapped_column(
+        String(32), unique=True, index=True, default=lambda: secrets.token_hex(6)
+    )
     source_kind: Mapped[str] = mapped_column(String(16), default="ai", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class ChannelAttributionEvent(Base):
+    __tablename__ = "channel_attribution_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "shop_id", "event_type", "event_key", name="uq_channel_attribution_event_key"
+        ),
+        Index(
+            "ix_channel_attribution_post_event",
+            "shop_id",
+            "post_id",
+            "event_type",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shop_id: Mapped[int] = mapped_column(
+        ForeignKey("shops.id", ondelete="CASCADE"), index=True
+    )
+    post_id: Mapped[int | None] = mapped_column(
+        ForeignKey("channel_posts.id", ondelete="SET NULL"), index=True
+    )
+    source_ref_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_source_refs.id", ondelete="SET NULL"), index=True
+    )
+    product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id", ondelete="SET NULL"), index=True
+    )
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
     )
 
 

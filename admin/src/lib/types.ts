@@ -215,7 +215,9 @@ export interface ThemeSettings {
 export interface Stats {
   total_orders: number;
   new_orders: number;
+  paid_orders: number;
   cancelled_orders: number;
+  payment_conversion_rate: number;
   total_revenue: number;
   month_revenue: number;
   top_products: { name: string; quantity: number; revenue: number }[];
@@ -225,6 +227,9 @@ export interface RevenueChartItem {
   date: string;
   revenue: number;
   orders: number;
+  created_orders: number;
+  paid_orders: number;
+  cancelled_orders: number;
 }
 
 export interface StatusOption {
@@ -237,6 +242,11 @@ export interface AnalyticsOverview {
   revenue_growth: number;
   orders: number;
   orders_growth: number;
+  created_orders: number;
+  paid_orders: number;
+  paid_orders_growth: number;
+  cancelled_orders: number;
+  order_to_payment_rate: number;
   avg_order_value: number;
   aov_growth: number;
   unique_customers: number;
@@ -246,6 +256,42 @@ export interface AnalyticsOverview {
   repeat_customers: number;
   repeat_rate: number;
   avg_items_per_order: number;
+}
+
+export interface PublicationAnalyticsPost {
+  post_id: number;
+  telegram_message_id: number;
+  published_at: string | null;
+  text: string;
+  channel_title: string;
+  post_url: string | null;
+  media_id: number | null;
+  products: string[];
+  views: number;
+  forwards: number;
+  views_updated_at: string | null;
+  opens: number;
+  total_opens: number;
+  cart_adds: number;
+  total_cart_adds: number;
+  paid_orders: number;
+  units_sold: number;
+  revenue: number;
+  ctr: number;
+  purchase_conversion: number;
+}
+
+export interface PublicationAnalyticsReport {
+  summary: {
+    views: number;
+    opens: number;
+    cart_adds: number;
+    paid_orders: number;
+    revenue: number;
+    ctr: number;
+    purchase_conversion: number;
+  };
+  posts: PublicationAnalyticsPost[];
 }
 
 export interface CategoryStat {

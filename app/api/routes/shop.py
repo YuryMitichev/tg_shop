@@ -1,7 +1,8 @@
 import aiohttp
+from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -22,6 +23,7 @@ from app.services.review_service import ReviewService
 from app.services.shop_service import ShopService
 from app.services.legal_document_service import LegalDocumentService, LEGAL_DOCUMENT_TITLES
 from app.services.product_attr_service import ProductAttrService
+from app.services.channel_attribution_service import ChannelAttributionService
 
 router = APIRouter()
 
@@ -72,6 +74,14 @@ class AddToCartRequest(BaseModel):
     product_id: int
     variant_id: int
     quantity: int = 1
+    source_ref: str | None = Field(default=None, min_length=1, max_length=32)
+
+
+class AttributionEventRequest(BaseModel):
+    product_id: int
+    source_ref: str = Field(min_length=1, max_length=32)
+    event_type: Literal["product_open", "add_to_cart"]
+    event_key: str = Field(min_length=1, max_length=64)
 
 
 class ChangeQuantityRequest(BaseModel):
@@ -252,10 +262,29 @@ async def add_to_cart(req: AddToCartRequest, user: dict = Depends(get_current_us
         product_id=req.product_id,
         variant_id=req.variant_id,
         quantity=req.quantity,
+        source_ref_token=req.source_ref,
     )
     if error:
         raise HTTPException(status_code=400, detail=error)
     return {"ok": True}
+
+
+@router.post("/attribution/events")
+@limiter.limit("60/minute", key_func=user_or_ip_key)
+async def record_attribution_event(
+    request: Request,
+    req: AttributionEventRequest,
+    user: dict = Depends(get_current_user),
+):
+    recorded = await ChannelAttributionService.record_event(
+        user["shop_id"],
+        user["id"],
+        req.product_id,
+        req.source_ref,
+        req.event_type,
+        req.event_key,
+    )
+    return {"ok": True, "recorded": recorded}
 
 
 @router.post("/cart/inc/{cart_item_id}")
