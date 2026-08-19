@@ -42,6 +42,9 @@ import app.services.product_attr_service as product_attr_service
 import app.services.offer_agreement_service as offer_agreement_service
 import app.services.legal_document_service as legal_document_service
 import app.services.platform_settings_service as platform_settings_service
+import app.services.channel_import_service as channel_import_service
+import app.services.channel_import_worker as channel_import_worker
+import app.services.channel_backfill_service as channel_backfill_service
 from app.services.admin_auth_service import AdminAuthService
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
@@ -112,6 +115,9 @@ _PATCH_TARGETS = [
     offer_agreement_service,
     legal_document_service,
     platform_settings_service,
+    channel_import_service,
+    channel_import_worker,
+    channel_backfill_service,
 ]
 
 

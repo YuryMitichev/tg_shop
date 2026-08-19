@@ -19,6 +19,7 @@ import {
   Globe,
   CreditCard,
   Layers,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription, isRouteBlocked } from "@/lib/subscription-context";
@@ -26,6 +27,7 @@ import { useSubscription, isRouteBlocked } from "@/lib/subscription-context";
 const navItems = [
   { href: "/dashboard", label: "Дашборд", icon: LayoutDashboard },
   { href: "/products", label: "Товары", icon: Package },
+  { href: "/channel-import", label: "AI-импорт", icon: Sparkles },
   { href: "/categories", label: "Категории", icon: FolderTree },
   { href: "/orders", label: "Заказы", icon: ShoppingCart },
   { href: "/users", label: "Пользователи", icon: Users },

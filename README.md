@@ -161,6 +161,7 @@ docker image prune -f
 | Аутентификация    | `JWT_SECRET`, `CORS_ORIGINS`, `ENCRYPTION_KEY`                               |
 | Платежи           | `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`, `TINKOFF_TERMINAL_KEY`, `TINKOFF_PASSWORD`, `PAYMENT_CARD_NUMBER`, `PAYMENT_RECIPIENT_NAME` |
 | Мониторинг        | `SENTRY_DSN`                                                                |
+| AI-импорт         | `CHANNEL_IMPORT_ENABLED`, `CHANNEL_IMPORT_PILOT_SHOP_ID`, `OPENAI_API_KEY`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_SESSION` |
 
 ---
 
