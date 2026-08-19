@@ -77,6 +77,21 @@ class Settings(BaseSettings):
     # заблокирован. Форматы: http://host:port, socks5://host:port
     bot_proxy: str | None = Field(default=None, alias="BOT_PROXY")
 
+    # AI-импорт товаров из Telegram-канала. Функция выключена по умолчанию
+    # и включается отдельно для пилотного магазина.
+    channel_import_enabled: bool = Field(default=False, alias="CHANNEL_IMPORT_ENABLED")
+    channel_import_pilot_shop_id: int | None = Field(
+        default=None, alias="CHANNEL_IMPORT_PILOT_SHOP_ID"
+    )
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    openai_model: str = Field(
+        default="gpt-5.4-mini-2026-03-17", alias="OPENAI_CHANNEL_IMPORT_MODEL"
+    )
+    channel_import_budget_usd: float = Field(default=2.0, alias="CHANNEL_IMPORT_BUDGET_USD")
+    telegram_api_id: int | None = Field(default=None, alias="TELEGRAM_API_ID")
+    telegram_api_hash: str | None = Field(default=None, alias="TELEGRAM_API_HASH")
+    telegram_session: str | None = Field(default=None, alias="TELEGRAM_SESSION")
+
     app_name: str = "TG Shop"
 
     shop_name: str = Field(default="Магазин по умолчанию", alias="SHOP_NAME")

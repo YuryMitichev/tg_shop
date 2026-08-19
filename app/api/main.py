@@ -19,6 +19,7 @@ from app.api.routes.shop import router as shop_router
 from app.api.routes.admin import router as admin_router
 from app.api.routes.super_admin import router as super_admin_router
 from app.api.routes.subscriptions import router as subscriptions_router
+from app.api.routes.channel_import import router as channel_import_router
 from app.core.config import settings
 from app.core.logging import RequestIdMiddleware, setup_logging, get_request_id
 from app.database.db import async_session
@@ -140,6 +141,7 @@ def create_app() -> FastAPI:
     app.include_router(payments_router, prefix="/payments", tags=["payments"])
     app.include_router(shop_router, prefix="/api/shop", tags=["shop"])
     app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+    app.include_router(channel_import_router, prefix="/api/admin", tags=["channel-import"])
     app.include_router(super_admin_router, prefix="/api/super-admin", tags=["super-admin"])
     app.include_router(subscriptions_router, prefix="/api/subscriptions", tags=["subscriptions"])
 
