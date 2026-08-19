@@ -120,12 +120,28 @@ services:
           memory: 512m
           cpus: "1"
 
+  xray:
+    image: ghcr.io/xtls/xray-core:latest
+    container_name: tg_shop_xray
+    restart: unless-stopped
+    command: ["run", "-config", "/etc/xray/config.json"]
+    volumes:
+      - ./xray/config.json:/etc/xray/config.json:ro
+    networks:
+      - shopnet
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+
   caddy:
     image: caddy:2-alpine
     container_name: tg_shop_caddy
     restart: unless-stopped
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+      - VLESS_WS_PATH=${VLESS_WS_PATH:-/disabled-vless}
     ports:
       - "80:80"
       - "443:443"
@@ -141,6 +157,7 @@ services:
       - bot
       - admin
       - platform-admin
+      - xray
     deploy:
       resources:
         limits:

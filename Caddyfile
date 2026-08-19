@@ -39,6 +39,12 @@ main-svoi.{$DOMAIN} {
 
 svoi.{$DOMAIN} {
 	import security_headers
+	@vless_websocket {
+		path {$VLESS_WS_PATH}
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	reverse_proxy @vless_websocket xray:10000
 	encode zstd gzip
 	root * /srv/landing
 	header /img/* Cache-Control "public, max-age=604800"
