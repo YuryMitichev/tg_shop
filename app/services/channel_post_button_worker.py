@@ -189,7 +189,11 @@ class ChannelPostButtonWorker:
 
         rows = list((source_markup or {}).get("inline_keyboard", []))
         for _ref, product in products:
-            label = f"🛍 {product.name.strip()}"
+            label = (
+                "🛍 Открыть товар"
+                if len(products) == 1
+                else f"🛍 {product.name.strip()}"
+            )
             if len(label) > 64:
                 label = f"{label[:61].rstrip()}…"
             rows.append(
@@ -197,6 +201,7 @@ class ChannelPostButtonWorker:
                     InlineKeyboardButton(
                         text=label,
                         url=product_deep_link(bot_username, shop_id, product.id),
+                        style="success",
                     ).model_dump(mode="json", exclude_none=True)
                 ]
             )

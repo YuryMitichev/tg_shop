@@ -89,12 +89,33 @@ async def test_worker_preserves_source_buttons_and_adds_one_per_product(
     rows = markup["inline_keyboard"]
     assert rows[0][0]["text"] == "Доставка"
     assert [row[0]["text"] for row in rows[1:]] == ["🛍 Кашемир", "🛍 Диффузор Кашемир"]
+    assert [row[0]["style"] for row in rows[1:]] == ["success", "success"]
     assert rows[1][0]["url"].endswith("?startapp=shop_1_product_1")
     assert rows[2][0]["url"].endswith("?startapp=shop_1_product_3")
 
     async with db_session() as session:
         job = await session.get(ChannelPostButtonJob, job_id)
         assert job.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_single_product_uses_open_product_label(db_session, seed_data, monkeypatch):
+    monkeypatch.setattr(settings, "channel_product_buttons_enabled", True)
+    monkeypatch.setattr(settings, "channel_product_buttons_pilot_shop_id", None)
+    post_id = await _create_post(db_session)
+    await ChannelPostButtonService.add_link(1, post_id, 1)
+
+    fake_bot = _FakeBot()
+    monkeypatch.setattr("app.bot.bot.get_bot", lambda shop_id: fake_bot)
+    worker = ChannelPostButtonWorker()
+    job_id = await worker.claim_job("test-worker")
+    assert job_id is not None
+    await worker.process_job(job_id)
+
+    markup = fake_bot.edits[0]["reply_markup"].model_dump(mode="json", exclude_none=True)
+    product_button = markup["inline_keyboard"][1][0]
+    assert product_button["text"] == "🛍 Открыть товар"
+    assert product_button["style"] == "success"
 
 
 @pytest.mark.asyncio
