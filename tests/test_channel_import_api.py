@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import AsyncMock
 from sqlalchemy import select
 from httpx import ASGITransport, AsyncClient
 
@@ -7,6 +8,7 @@ from app.models.channel_import import CatalogImportCandidate
 from app.models.channel_import import ChannelPost
 from app.core.config import settings
 from app.services.channel_import_service import ChannelImportService
+from app.services.channel_storefront_service import ChannelStorefrontService
 
 
 @pytest.mark.asyncio
@@ -57,6 +59,47 @@ async def test_admin_can_approve_complete_candidate(
 
     assert response.status_code == 200
     assert response.json()["product_id"] > 0
+
+
+@pytest.mark.asyncio
+async def test_admin_can_sync_pinned_storefront(
+    db_session,
+    seed_data,
+    active_subscription,
+    admin_cookie,
+    mock_admin_auth,
+    monkeypatch,
+):
+    await ChannelImportService.connect_channel(
+        1,
+        channel_id=-100443,
+        channel_title="Pinned storefront channel",
+        channel_username=None,
+        connected_by=1,
+    )
+    sync = AsyncMock(
+        return_value={
+            "message_id": 901,
+            "status": "active",
+            "error_code": None,
+            "error": None,
+            "updated_at": "2026-08-20T00:00:00",
+        }
+    )
+    monkeypatch.setattr(ChannelStorefrontService, "sync", sync)
+
+    app = create_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/admin/channel-import/storefront-pin/sync",
+            cookies=admin_cookie,
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "active"
+    sync.assert_awaited_once_with(1)
 
 
 @pytest.mark.asyncio

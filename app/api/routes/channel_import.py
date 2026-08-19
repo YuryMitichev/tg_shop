@@ -14,6 +14,7 @@ from app.database.db import async_session
 from app.models.channel_import import ChannelPost, ChannelPostMedia
 from app.services.channel_import_service import ChannelImportService
 from app.services.channel_post_button_service import ChannelPostButtonService
+from app.services.channel_storefront_service import ChannelStorefrontService
 
 
 router = APIRouter(prefix="/channel-import")
@@ -80,6 +81,10 @@ def _connection_dict(connection) -> dict:
             if connection
             else False
         ),
+        "storefront_message_id": connection.storefront_message_id if connection else None,
+        "storefront_status": connection.storefront_status if connection else "not_created",
+        "storefront_error_code": connection.storefront_error_code if connection else None,
+        "storefront_error": connection.storefront_error if connection else None,
     }
 
 
@@ -163,6 +168,18 @@ async def run_backfill(admin: dict = Depends(require_active_subscription)):
         raise HTTPException(status_code=404, detail="Канал ещё не подключён")
     asyncio.create_task(_run_backfill_safely(admin["shop_id"]))
     return {"ok": True, "status": "started"}
+
+
+@router.post("/storefront-pin/sync")
+async def sync_storefront_pin(
+    admin: dict = Depends(require_active_subscription),
+):
+    try:
+        return await ChannelStorefrontService.sync(admin["shop_id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/candidates")

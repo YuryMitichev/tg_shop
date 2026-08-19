@@ -27,6 +27,11 @@ def product_start_param(shop_id: int, product_id: int) -> str:
     return f"shop_{shop_id}_product_{product_id}"
 
 
+def shop_deep_link(bot_username: str, shop_id: int) -> str:
+    username = bot_username.lstrip("@")
+    return f"https://t.me/{username}?startapp=shop_{shop_id}"
+
+
 def product_deep_link(bot_username: str, shop_id: int, product_id: int) -> str:
     username = bot_username.lstrip("@")
     return f"https://t.me/{username}?startapp={product_start_param(shop_id, product_id)}"

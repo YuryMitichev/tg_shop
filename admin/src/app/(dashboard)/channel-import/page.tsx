@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { Bot, Check, Copy, Link2, Plus, RefreshCw, Save, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Check, Copy, Link2, Pin, Plus, RefreshCw, Save, Sparkles, Trash2, X } from "lucide-react";
 
 import { api, channelImportMediaUrl } from "@/lib/api";
 import { fetcher } from "@/lib/swr";
@@ -58,6 +58,10 @@ type ImportSettings = {
   can_edit_messages: boolean | null;
   buttons_ready: boolean;
   buttons_error: string | null;
+  storefront_message_id: number | null;
+  storefront_status: "not_created" | "syncing" | "active" | "needs_action";
+  storefront_error_code: string | null;
+  storefront_error: string | null;
 };
 
 type ProductLink = {
@@ -112,6 +116,7 @@ const statusLabel: Record<string, string> = {
 export default function ChannelImportPage() {
   const [filter, setFilter] = useState("open");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [storefrontSyncing, setStorefrontSyncing] = useState(false);
   const { data: settings, mutate: mutateSettings } = useSWR<ImportSettings>(
     "/channel-import/settings",
     fetcher,
@@ -159,6 +164,20 @@ export default function ChannelImportPage() {
       await mutateSettings();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось запустить импорт");
+    }
+  }
+
+  async function syncStorefront() {
+    setStorefrontSyncing(true);
+    try {
+      await api.post("/channel-import/storefront-pin/sync", undefined, 35000);
+      toast.success("Кнопка магазина создана и закреплена");
+      await mutateSettings();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось закрепить магазин");
+      await mutateSettings();
+    } finally {
+      setStorefrontSyncing(false);
     }
   }
 
@@ -223,14 +242,40 @@ export default function ChannelImportPage() {
                   {settings.backfill_error && <div className="mt-1 text-destructive">{settings.backfill_error}</div>}
                 </div>
                 {settings.buttons_feature_enabled && (
-                  <div className={`rounded-md border p-3 text-xs ${settings.buttons_ready ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
-                    <div className="font-medium">
-                      Кнопки товаров: {settings.buttons_ready ? "готовы" : "нужна настройка"}
+                  <div className="space-y-3">
+                    <div className={`rounded-md border p-3 text-xs ${settings.buttons_ready ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
+                      <div className="font-medium">
+                        Кнопки товаров: {settings.buttons_ready ? "готовы" : "нужна настройка"}
+                      </div>
+                      <div className="mt-1 text-muted-foreground">
+                        Main Mini App: {settings.main_app_ready ? "да" : "нет"} · редактирование канала: {settings.can_edit_messages ? "да" : "нет"}
+                      </div>
+                      {settings.buttons_error && <div className="mt-1 text-amber-700 dark:text-amber-300">{settings.buttons_error}</div>}
                     </div>
-                    <div className="mt-1 text-muted-foreground">
-                      Main Mini App: {settings.main_app_ready ? "да" : "нет"} · редактирование канала: {settings.can_edit_messages ? "да" : "нет"}
+                    <div className={`rounded-md border p-3 text-xs ${settings.storefront_status === "active" ? "border-emerald-500/40 bg-emerald-500/5" : "border-border"}`}>
+                      <div className="flex items-center gap-2 font-medium">
+                        <Pin className="h-3.5 w-3.5" />
+                        Магазин в закреплении: {settings.storefront_status === "active" ? "активен" : "не установлен"}
+                      </div>
+                      {settings.storefront_error && (
+                        <div className="mt-1 text-amber-700 dark:text-amber-300">{settings.storefront_error}</div>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="mt-3 w-full"
+                        onClick={syncStorefront}
+                        disabled={!settings.buttons_ready || storefrontSyncing}
+                      >
+                        <Pin className="mr-2 h-4 w-4" />
+                        {storefrontSyncing
+                          ? "Устанавливаю..."
+                          : settings.storefront_status === "active"
+                            ? "Обновить закрепление"
+                            : "Создать и закрепить"}
+                      </Button>
                     </div>
-                    {settings.buttons_error && <div className="mt-1 text-amber-700 dark:text-amber-300">{settings.buttons_error}</div>}
                   </div>
                 )}
               </>

@@ -46,6 +46,7 @@ import app.services.channel_import_service as channel_import_service
 import app.services.channel_import_worker as channel_import_worker
 import app.services.channel_post_button_service as channel_post_button_service
 import app.services.channel_post_button_worker as channel_post_button_worker
+import app.services.channel_storefront_service as channel_storefront_service
 import app.services.channel_backfill_service as channel_backfill_service
 from app.services.admin_auth_service import AdminAuthService
 from app.database.db import Base
@@ -121,6 +122,7 @@ _PATCH_TARGETS = [
     channel_import_worker,
     channel_post_button_service,
     channel_post_button_worker,
+    channel_storefront_service,
     channel_backfill_service,
 ]
 

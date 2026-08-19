@@ -37,6 +37,13 @@ class ChannelConnection(Base):
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     backfill_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     backfill_error: Mapped[str | None] = mapped_column(Text)
+    storefront_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    storefront_status: Mapped[str] = mapped_column(
+        String(32), default="not_created", nullable=False
+    )
+    storefront_error_code: Mapped[str | None] = mapped_column(String(64))
+    storefront_error: Mapped[str | None] = mapped_column(Text)
+    storefront_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False

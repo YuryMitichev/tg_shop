@@ -112,6 +112,7 @@ class ChannelImportService:
                 )
                 session.add(connection)
             else:
+                channel_changed = connection.channel_id != channel_id
                 connection.channel_id = channel_id
                 connection.channel_title = channel_title
                 connection.channel_username = channel_username
@@ -122,6 +123,12 @@ class ChannelImportService:
                     else "not_configured"
                 )
                 connection.backfill_error = None
+                if channel_changed:
+                    connection.storefront_message_id = None
+                    connection.storefront_status = "not_created"
+                    connection.storefront_error_code = None
+                    connection.storefront_error = None
+                    connection.storefront_updated_at = None
             await session.commit()
             await session.refresh(connection)
             return connection
