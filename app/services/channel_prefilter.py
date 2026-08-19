@@ -2,7 +2,7 @@ import re
 from dataclasses import asdict, dataclass
 
 
-PREFILTER_VERSION = "rules-1.0"
+PREFILTER_VERSION = "rules-1.1"
 
 
 @dataclass(frozen=True)
@@ -44,12 +44,51 @@ _PRODUCT_WORDS = (
 )
 
 _NON_PRODUCT_PATTERNS = (
-    re.compile(r"\bпоздравля(?:ем|ю)|с праздником|доброе утро\b", re.IGNORECASE),
-    re.compile(r"\bваканси(?:я|и)|ищем сотрудник|требуется\b", re.IGNORECASE),
-    re.compile(r"\bрасписани(?:е|я)|режим работы|технические работы\b", re.IGNORECASE),
-    re.compile(r"\bопрос|голосовани(?:е|я)\b", re.IGNORECASE),
-    re.compile(r"\bконкурс|розыгрыш|победител(?:ь|я|и)\b", re.IGNORECASE),
-    re.compile(r"\bновост(?:ь|и)|важная информация|организационн\w+\s+(?:вопрос|новост)\b", re.IGNORECASE),
+    (
+        "greeting",
+        re.compile(
+            r"\b(?:поздравля(?:ем|ю)|с праздником|доброе утро|добрый вечер|хороших выходных)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "vacancy",
+        re.compile(r"\b(?:ваканси(?:я|и)|ищем сотрудник|требуется)\b", re.IGNORECASE),
+    ),
+    (
+        "schedule",
+        re.compile(
+            r"\b(?:расписани(?:е|я)|режим работы|график работы|технические работы|"
+            r"временно не работаем|магазин закрыт)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "poll",
+        re.compile(r"\b(?:опрос|голосовани(?:е|я)|проголосуйте)\b", re.IGNORECASE),
+    ),
+    (
+        "contest",
+        re.compile(r"\b(?:конкурс|розыгрыш|победител(?:ь|я|и))\b", re.IGNORECASE),
+    ),
+    (
+        "news",
+        re.compile(
+            r"\b(?:новост(?:ь|и)|важная информация|организационн\w+\s+(?:вопрос|новост)|"
+            r"объявлени(?:е|я))\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "event_invitation",
+        re.compile(
+            r"\b(?:приглаша(?:ем|ю|ет)|жд[её]м вас)\b.{0,100}\b(?:открыти(?:е|я)|"
+            r"мероприяти(?:е|я)|встреч(?:у|а|и)|мастер-класс|презентаци(?:ю|я|и)|эфир)\b|"
+            r"\b(?:открыти(?:е|я)\s+(?:нашего\s+)?магазина|день открытых дверей|"
+            r"прямой эфир)\b",
+            re.IGNORECASE,
+        ),
+    ),
 )
 
 
@@ -80,7 +119,7 @@ def classify_post(text: str | None, *, has_photos: bool) -> PrefilterDecision:
     sku = bool(_SKU_RE.search(clean))
     size = bool(_SIZE_RE.search(clean))
     product_words = [word for word in _PRODUCT_WORDS if word in lowered]
-    non_product = [pattern.pattern for pattern in _NON_PRODUCT_PATTERNS if pattern.search(clean)]
+    non_product = [name for name, pattern in _NON_PRODUCT_PATTERNS if pattern.search(clean)]
     product_score = int(price) * 3 + int(sku) * 2 + int(size) + min(len(product_words), 3)
     if has_photos and product_words:
         product_score += 1
