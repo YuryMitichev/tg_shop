@@ -760,16 +760,49 @@ class ChannelImportService:
                     .group_by(CatalogImportJob.status)
                 )
             ).all()
+            posts = (
+                await session.execute(
+                    select(ChannelPost.status, func.count())
+                    .where(ChannelPost.shop_id == shop_id)
+                    .group_by(ChannelPost.status)
+                )
+            ).all()
+            ai_runs = (
+                await session.execute(
+                    select(func.count(func.distinct(CatalogAnalysisRun.job_id))).where(
+                        CatalogAnalysisRun.shop_id == shop_id,
+                        CatalogAnalysisRun.run_type == "cloud_ai",
+                    )
+                )
+            ).scalar_one()
+            ai_non_product = (
+                await session.execute(
+                    select(func.count(func.distinct(CatalogAnalysisRun.job_id)))
+                    .join(
+                        CatalogImportJob,
+                        CatalogImportJob.id == CatalogAnalysisRun.job_id,
+                    )
+                    .join(ChannelPost, ChannelPost.id == CatalogImportJob.post_id)
+                    .where(
+                        CatalogAnalysisRun.shop_id == shop_id,
+                        CatalogAnalysisRun.run_type == "cloud_ai",
+                        ChannelPost.status == "non_product",
+                    )
+                )
+            ).scalar_one()
         budget_microusd = int(settings.channel_import_budget_usd * 1_000_000)
         return {
             "candidates": dict(statuses),
             "prefilter": dict(prefilter),
             "jobs": dict(jobs),
+            "posts": dict(posts),
             "ai": {
                 "input_tokens": usage[0],
                 "output_tokens": usage[1],
                 "cost_usd": round(usage[2] / 1_000_000, 6),
                 "budget_usd": settings.channel_import_budget_usd,
+                "runs": ai_runs,
+                "non_product": ai_non_product,
                 "budget_percent": round(usage[2] / budget_microusd * 100, 1)
                 if budget_microusd else 100,
             },
