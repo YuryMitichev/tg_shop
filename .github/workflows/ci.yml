@@ -51,6 +51,8 @@ jobs:
         run: |
           sh -n scripts/backup.sh
           sh -n scripts/verify_backup.sh
+          cp .env.example .env
+          trap 'rm -f .env' EXIT
           docker compose config --quiet
 
       - name: Run tests
