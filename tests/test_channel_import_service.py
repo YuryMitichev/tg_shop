@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import func, select
 import pytest
 
@@ -263,3 +265,37 @@ async def test_stats_expose_cloud_ai_non_product_flow(db_session, seed_data):
     assert stats["posts"]["non_product"] == 1
     assert stats["ai"]["runs"] == 1
     assert stats["ai"]["non_product"] == 1
+
+
+@pytest.mark.asyncio
+async def test_single_album_edit_updates_existing_root_post(db_session, seed_data):
+    await ChannelImportService.connect_channel(
+        1,
+        channel_id=-100113,
+        channel_title="Album channel",
+        channel_username=None,
+        connected_by=1,
+    )
+    await ChannelImportService.ingest_post(
+        1,
+        telegram_message_id=100,
+        text="Альбом",
+        media_group_id="album-1",
+        media=[],
+        raw_data={"reply_markup_known": True, "reply_markup": None},
+    )
+    await ChannelImportService.ingest_post(
+        1,
+        telegram_message_id=102,
+        text="Альбом обновлён",
+        media_group_id="album-1",
+        media=None,
+        edited_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        raw_data={"reply_markup_known": False},
+    )
+
+    async with db_session() as session:
+        posts = (await session.execute(select(ChannelPost))).scalars().all()
+        assert len(posts) == 1
+        assert posts[0].telegram_message_id == 100
+        assert posts[0].version == 2

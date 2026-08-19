@@ -13,6 +13,7 @@ from app.bot.bot import get_bot
 from app.database.db import async_session
 from app.models.channel_import import ChannelPost, ChannelPostMedia
 from app.services.channel_import_service import ChannelImportService
+from app.services.channel_post_button_service import ChannelPostButtonService
 
 
 router = APIRouter(prefix="/channel-import")
@@ -45,6 +46,21 @@ class CandidateUpdate(BaseModel):
     owner_note: str | None = None
 
 
+class ProductLinkCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    product_id: int
+
+
+class ProductLinkUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    product_id: int
+
+
+class ButtonSyncRetry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    allow_replace_unknown: bool = False
+
+
 def _connection_dict(connection) -> dict:
     return {
         "connected": connection is not None,
@@ -59,7 +75,50 @@ def _connection_dict(connection) -> dict:
         "notifications_enabled": connection.notifications_enabled if connection else True,
         "backfill_status": connection.backfill_status if connection else None,
         "backfill_error": connection.backfill_error if connection else None,
+        "buttons_feature_enabled": (
+            ChannelPostButtonService.enabled_for_shop(connection.shop_id)
+            if connection
+            else False
+        ),
     }
+
+
+async def _button_readiness(shop_id: int, connection) -> dict:
+    result = {
+        "main_app_ready": None,
+        "can_edit_messages": None,
+        "buttons_ready": False,
+        "buttons_error": None,
+    }
+    if connection is None or not ChannelPostButtonService.enabled_for_shop(shop_id):
+        return result
+    bot = get_bot(shop_id)
+    if bot is None:
+        result["buttons_error"] = "Бот магазина временно недоступен"
+        return result
+    try:
+        async with asyncio.timeout(8):
+            me = await bot.get_me()
+            member = await bot.get_chat_member(connection.channel_id, me.id)
+        result["main_app_ready"] = bool(me.has_main_web_app)
+        result["can_edit_messages"] = (
+            member.status == "creator"
+            or (
+                member.status == "administrator"
+                and bool(getattr(member, "can_edit_messages", False))
+            )
+        )
+        result["buttons_ready"] = bool(
+            result["main_app_ready"] and result["can_edit_messages"]
+        )
+        if not result["main_app_ready"]:
+            result["buttons_error"] = "Настройте Main Mini App через BotFather"
+        elif not result["can_edit_messages"]:
+            result["buttons_error"] = "Разрешите боту редактировать публикации канала"
+    except Exception as exc:
+        logger.warning("Button readiness check failed for shop_id=%d: %s", shop_id, exc)
+        result["buttons_error"] = "Не удалось проверить настройки Telegram"
+    return result
 
 
 @router.get("/settings")
@@ -68,6 +127,10 @@ async def get_settings(admin: dict = Depends(require_admin)):
     result = _connection_dict(connection)
     if connection is None:
         result["feature_enabled"] = ChannelImportService.enabled_for_shop(admin["shop_id"])
+        result["buttons_feature_enabled"] = ChannelPostButtonService.enabled_for_shop(
+            admin["shop_id"]
+        )
+    result.update(await _button_readiness(admin["shop_id"], connection))
     return result
 
 
@@ -191,6 +254,78 @@ async def retry_job(job_id: int, admin: dict = Depends(require_active_subscripti
 @router.get("/stats")
 async def get_stats(admin: dict = Depends(require_admin)):
     return await ChannelImportService.stats(admin["shop_id"])
+
+
+@router.get("/product-options")
+async def search_product_options(q: str, admin: dict = Depends(require_admin)):
+    return await ChannelPostButtonService.search_products(admin["shop_id"], q)
+
+
+@router.get("/posts/{post_id}/product-links")
+async def get_product_links(post_id: int, admin: dict = Depends(require_admin)):
+    try:
+        return await ChannelPostButtonService.list_links(admin["shop_id"], post_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/posts/{post_id}/product-links")
+async def add_product_link(
+    post_id: int,
+    body: ProductLinkCreate,
+    admin: dict = Depends(require_active_subscription),
+):
+    try:
+        return await ChannelPostButtonService.add_link(
+            admin["shop_id"], post_id, body.product_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.patch("/posts/{post_id}/product-links/{link_id}")
+async def replace_product_link(
+    post_id: int,
+    link_id: int,
+    body: ProductLinkUpdate,
+    admin: dict = Depends(require_active_subscription),
+):
+    try:
+        return await ChannelPostButtonService.replace_link(
+            admin["shop_id"], post_id, link_id, body.product_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/posts/{post_id}/product-links/{link_id}")
+async def delete_product_link(
+    post_id: int,
+    link_id: int,
+    admin: dict = Depends(require_active_subscription),
+):
+    try:
+        return await ChannelPostButtonService.remove_link(
+            admin["shop_id"], post_id, link_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/posts/{post_id}/button-sync/retry")
+async def retry_button_sync(
+    post_id: int,
+    body: ButtonSyncRetry,
+    admin: dict = Depends(require_active_subscription),
+):
+    try:
+        return await ChannelPostButtonService.retry_post(
+            admin["shop_id"],
+            post_id,
+            allow_replace_unknown=body.allow_replace_unknown,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/media/{media_id}")

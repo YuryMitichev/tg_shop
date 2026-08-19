@@ -11,6 +11,8 @@ from aiogram.types import (
     CallbackQuery,
     KeyboardButton,
     KeyboardButtonRequestChat,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     Message,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
@@ -22,6 +24,7 @@ from app.database.db import async_session
 from app.models.channel_import import ChannelConnection
 from app.models.shop import Shop
 from app.services.channel_import_service import ChannelImportService
+from app.services.channel_post_button_service import ChannelPostButtonService
 
 
 _album_messages: defaultdict[tuple[int, str], list[tuple[Message, bool]]] = defaultdict(list)
@@ -30,6 +33,7 @@ _album_tasks: dict[tuple[int, str], asyncio.Task] = {}
 
 class ChannelImportState(StatesGroup):
     waiting_stock = State()
+    waiting_product_search = State()
 
 
 def _next_missing_stock(variants: list[dict], start: int = 0) -> int | None:
@@ -57,6 +61,63 @@ async def _owner_shop(shop_id: int, telegram_id: int) -> Shop | None:
         ).scalar_one_or_none()
 
 
+def _manage_links_markup(post_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔗 Настроить товары",
+                    callback_data=f"cil:show:{post_id}",
+                )
+            ]
+        ]
+    )
+
+
+def _links_markup(post_id: int, links: list[dict]) -> InlineKeyboardMarkup:
+    rows = []
+    for link in links:
+        name = str(link["product_name"])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"✏️ {name[:32]}",
+                    callback_data=f"cil:replace:{post_id}:{link['id']}",
+                ),
+                InlineKeyboardButton(
+                    text="Убрать",
+                    callback_data=f"cil:remove:{post_id}:{link['id']}",
+                ),
+            ]
+        )
+    rows.extend(
+        [
+            [InlineKeyboardButton(text="➕ Добавить товар", callback_data=f"cil:add:{post_id}")],
+            [InlineKeyboardButton(text="🔄 Повторить установку", callback_data=f"cil:retry:{post_id}")],
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _send_links(message: Message, shop_id: int, post_id: int) -> None:
+    data = await ChannelPostButtonService.list_links(shop_id, post_id)
+    links = data["links"]
+    sync = data.get("sync") or {}
+    link_lines = [
+        f"• #{item['product_id']} {item['product_name']}"
+        + (" (выключен)" if not item["is_active"] else "")
+        for item in links
+    ]
+    status = sync.get("status") or "ещё не запускалась"
+    error = f"\nОшибка: {sync['last_error']}" if sync.get("last_error") else ""
+    await message.answer(
+        "<b>Товары под публикацией</b>\n\n"
+        + ("\n".join(link_lines) if link_lines else "Товары пока не прикреплены")
+        + f"\n\nСинхронизация: <code>{status}</code>{error}",
+        reply_markup=_links_markup(post_id, links),
+    )
+
+
 def _photo_data(message: Message) -> list[dict]:
     if not message.photo:
         return []
@@ -77,6 +138,13 @@ async def _ingest_messages(shop_id: int, messages: list[tuple[Message, bool]]) -
     media = [photo for item, _ in ordered for photo in _photo_data(item)]
     edited = any(is_edited for _, is_edited in ordered)
     media_payload = None if edited and root.media_group_id and len(ordered) == 1 else media
+    reply_markup = next(
+        (item.reply_markup for item, _ in ordered if item.reply_markup is not None),
+        None,
+    )
+    reply_markup_known = not (
+        edited and root.media_group_id and len(ordered) == 1 and reply_markup is None
+    )
     await ChannelImportService.ingest_post(
         shop_id,
         telegram_message_id=root.message_id,
@@ -89,6 +157,12 @@ async def _ingest_messages(shop_id: int, messages: list[tuple[Message, bool]]) -
             "source": "bot_api",
             "message_ids": [message.message_id for message, _ in ordered],
             "edited": edited,
+            "reply_markup_known": reply_markup_known,
+            "reply_markup": (
+                reply_markup.model_dump(mode="json", exclude_none=True)
+                if reply_markup
+                else None
+            ),
         },
     )
 
@@ -152,6 +226,19 @@ def setup_router() -> Router:
             member = await bot.get_chat_member(channel_id, bot_user.id)
             if member.status not in {"administrator", "creator"}:
                 raise ValueError
+            from app.services.channel_post_button_service import ChannelPostButtonService
+
+            if (
+                ChannelPostButtonService.enabled_for_shop(shop_id)
+                and member.status == "administrator"
+                and not getattr(member, "can_edit_messages", False)
+            ):
+                await message.answer(
+                    "Разрешите боту редактировать публикации канала, чтобы он мог "
+                    "добавлять кнопки товаров.",
+                    reply_markup=ReplyKeyboardRemove(),
+                )
+                return
         except Exception:
             await message.answer(
                 "Сначала добавьте бота администратором канала и повторите подключение.",
@@ -233,6 +320,12 @@ def setup_router() -> Router:
             return
         _, action, raw_id = callback.data.split(":", 2)
         candidate_id = int(raw_id)
+        if action == "links":
+            if callback.message:
+                await _send_links(callback.message, shop_id, candidate_id)
+            await callback.answer()
+            return
+        post_id: int | None = None
         try:
             if action == "approve":
                 candidate = await ChannelImportService.get_candidate(shop_id, candidate_id)
@@ -256,6 +349,7 @@ def setup_router() -> Router:
                 product_id = await ChannelImportService.approve_candidate(
                     shop_id, candidate_id
                 )
+                post_id = candidate["post"]["id"]
                 text = f"Товар опубликован, ID {product_id}."
             elif action == "reject":
                 await ChannelImportService.set_candidate_status(
@@ -274,7 +368,10 @@ def setup_router() -> Router:
             return
         if callback.message:
             await callback.message.edit_reply_markup(reply_markup=None)
-            await callback.message.answer(text)
+            await callback.message.answer(
+                text,
+                reply_markup=_manage_links_markup(post_id) if post_id else None,
+            )
         await callback.answer()
 
     @router.message(ChannelImportState.waiting_stock)
@@ -335,6 +432,123 @@ def setup_router() -> Router:
                 f"Остаток сохранён, но товар пока нельзя опубликовать: {exc}"
             )
             return
-        await message.answer(f"Товар опубликован, ID {product_id}.")
+        await message.answer(
+            f"Товар опубликован, ID {product_id}.",
+            reply_markup=_manage_links_markup(candidate["post"]["id"]),
+        )
+
+    @router.callback_query(F.data.startswith("cil:"))
+    async def product_link_action(callback: CallbackQuery, state: FSMContext):
+        if not callback.from_user or not callback.data:
+            return
+        shop_id = get_shop_id()
+        if await _owner_shop(shop_id, callback.from_user.id) is None:
+            await callback.answer("Доступно только владельцу", show_alert=True)
+            return
+        parts = callback.data.split(":")
+        action = parts[1]
+        try:
+            if action == "show":
+                post_id = int(parts[2])
+                if callback.message:
+                    await _send_links(callback.message, shop_id, post_id)
+            elif action == "add":
+                post_id = int(parts[2])
+                await state.set_state(ChannelImportState.waiting_product_search)
+                await state.set_data({"link_mode": "add", "post_id": post_id})
+                if callback.message:
+                    await callback.message.answer("Введите ID, SKU или часть названия товара.")
+            elif action == "replace":
+                post_id, link_id = int(parts[2]), int(parts[3])
+                await state.set_state(ChannelImportState.waiting_product_search)
+                await state.set_data(
+                    {"link_mode": "replace", "post_id": post_id, "link_id": link_id}
+                )
+                if callback.message:
+                    await callback.message.answer("Введите ID, SKU или часть названия нового товара.")
+            elif action == "remove":
+                post_id, link_id = int(parts[2]), int(parts[3])
+                await ChannelPostButtonService.remove_link(shop_id, post_id, link_id)
+                if callback.message:
+                    await callback.message.answer("Товар отвязан от публикации.")
+                    await _send_links(callback.message, shop_id, post_id)
+            elif action in {"retry", "force"}:
+                post_id = int(parts[2])
+                try:
+                    await ChannelPostButtonService.retry_post(
+                        shop_id,
+                        post_id,
+                        allow_replace_unknown=action == "force",
+                    )
+                except ValueError as exc:
+                    if "неизвестно" in str(exc).casefold() and callback.message:
+                        await callback.message.answer(
+                            str(exc),
+                            reply_markup=InlineKeyboardMarkup(
+                                inline_keyboard=[
+                                    [
+                                        InlineKeyboardButton(
+                                            text="Заменить исходные кнопки",
+                                            callback_data=f"cil:force:{post_id}",
+                                        )
+                                    ]
+                                ]
+                            ),
+                        )
+                        await callback.answer()
+                        return
+                    raise
+                if callback.message:
+                    await callback.message.answer("Синхронизация поставлена в очередь.")
+            elif action == "choose":
+                product_id = int(parts[2])
+                data = await state.get_data()
+                post_id = int(data.get("post_id", 0))
+                if data.get("link_mode") == "replace":
+                    await ChannelPostButtonService.replace_link(
+                        shop_id, post_id, int(data["link_id"]), product_id
+                    )
+                else:
+                    await ChannelPostButtonService.add_link(shop_id, post_id, product_id)
+                await state.clear()
+                if callback.message:
+                    await callback.message.answer("Привязка сохранена.")
+                    await _send_links(callback.message, shop_id, post_id)
+            else:
+                return
+        except (ValueError, IndexError) as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
+        await callback.answer()
+
+    @router.message(ChannelImportState.waiting_product_search)
+    async def search_link_product(message: Message, state: FSMContext):
+        if not message.from_user:
+            return
+        shop_id = get_shop_id()
+        if await _owner_shop(shop_id, message.from_user.id) is None:
+            await state.clear()
+            return
+        query = (message.text or "").strip()
+        if query.casefold() == "отмена":
+            await state.clear()
+            await message.answer("Выбор товара отменён.")
+            return
+        products = await ChannelPostButtonService.search_products(shop_id, query)
+        if not products:
+            await message.answer("Активные товары не найдены. Попробуйте другой запрос или «отмена».")
+            return
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=f"#{product['id']} {product['name'][:40]}",
+                        callback_data=f"cil:choose:{product['id']}",
+                    )
+                ]
+                for product in products
+            ]
+        )
+        await message.answer("Выберите товар:", reply_markup=keyboard)
 
     return router

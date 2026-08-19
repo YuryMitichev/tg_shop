@@ -21,6 +21,20 @@ def _naive(value: datetime | None) -> datetime | None:
     return value.replace(tzinfo=None) if value.tzinfo else value
 
 
+def _reply_markup(message) -> dict | None:
+    rows = []
+    for row in getattr(getattr(message, "reply_markup", None), "rows", []) or []:
+        buttons = []
+        for button in getattr(row, "buttons", []) or []:
+            url = getattr(button, "url", None)
+            text = getattr(button, "text", None)
+            if url and text:
+                buttons.append({"text": text, "url": url})
+        if buttons:
+            rows.append(buttons)
+    return {"inline_keyboard": rows} if rows else None
+
+
 class ChannelBackfillService:
     @staticmethod
     async def backfill(connection_id: int, *, limit: int = 50) -> int:
@@ -89,7 +103,12 @@ class ChannelBackfillService:
                     media_group_id=str(root.grouped_id) if root.grouped_id else None,
                     published_at=_naive(root.date),
                     edited_at=_naive(root.edit_date),
-                    raw_data={"source": "telethon_backfill", "message_ids": [m.id for m in batch]},
+                    raw_data={
+                        "source": "telethon_backfill",
+                        "message_ids": [m.id for m in batch],
+                        "reply_markup_known": True,
+                        "reply_markup": _reply_markup(root),
+                    },
                 )
                 imported += 1
 

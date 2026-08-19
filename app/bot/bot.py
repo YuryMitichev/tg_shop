@@ -236,6 +236,10 @@ async def start_all_bots() -> None:
 
         asyncio.create_task(ChannelImportWorker(concurrency=2).run_forever())
         asyncio.create_task(_channel_import_cleanup_loop())
+    if settings.channel_product_buttons_enabled:
+        from app.services.channel_post_button_worker import ChannelPostButtonWorker
+
+        asyncio.create_task(ChannelPostButtonWorker(concurrency=1).run_forever())
 
     if settings.platform_bot_token:
         asyncio.create_task(_run_platform_bot())
