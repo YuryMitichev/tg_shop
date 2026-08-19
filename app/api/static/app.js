@@ -280,11 +280,6 @@ const App = {
         html += `<div class="pd-rating">${rating}</div>`;
         html += `<div class="pd-desc">${this.esc(p.description)}</div>`;
 
-        const hasAttrs = this.productAttrs.length > 0;
-        if (hasAttrs) {
-            const labels = this.productAttrs.map(k => this.attrLabels[k] || k).join(" / ");
-            html += `<div class="pd-label">${this.esc(labels)}</div>`;
-        }
         html += `<div class="variants">`;
 
         p.variants.forEach((v, i) => {
@@ -305,15 +300,29 @@ const App = {
                 priceHtml = `<span class="v-price">${v.price} ₽</span>`;
             }
 
-            const attrParts = this.productAttrs
-                .map(k => (v.attributes && v.attributes[k]) || v[k])
-                .filter(val => val);
-            const attrLabel = attrParts.length > 0 ? attrParts.join(" · ") : "—";
+            const attributeRows = this.productAttrs
+                .map(key => ({
+                    label: this.attrLabels[key] || key,
+                    value: (v.attributes && v.attributes[key]) || v[key],
+                }))
+                .filter(attribute => attribute.value !== undefined
+                    && attribute.value !== null
+                    && attribute.value !== "")
+                .map(attribute => `
+                    <span class="v-attribute">
+                        <span class="v-attribute-name">${this.esc(attribute.label)}</span>
+                        <span class="v-attribute-value">${this.esc(String(attribute.value))}</span>
+                    </span>
+                `)
+                .join("");
+            const attributesHtml = attributeRows
+                ? `<span class="v-attributes">${attributeRows}</span>`
+                : `<span class="v-attributes-empty">Характеристики не указаны</span>`;
 
             html += `
                 <button class="variant-btn ${active} ${outOfStock ? 'variant-oos' : ''}" data-vid="${v.id}"
                         onclick="App.selectVariant(${v.id})">
-                    ${this.esc(attrLabel)}
+                    ${attributesHtml}
                     ${priceHtml}
                     ${stockBadge}
                 </button>

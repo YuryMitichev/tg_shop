@@ -318,6 +318,8 @@ body {
 }
 
 .variant-btn {
+    flex: 1 1 100%;
+    min-width: 0;
     padding: 10px 16px;
     border-radius: 12px;
     border: 2px solid var(--section-sep);
@@ -326,6 +328,7 @@ body {
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
+    text-align: left;
     transition: all 0.2s;
 }
 
@@ -338,7 +341,50 @@ body {
 .variant-btn .v-price {
     display: block;
     font-weight: 700;
-    margin-top: 2px;
+    margin-top: 10px;
+    text-align: right;
+}
+
+.v-attributes {
+    display: grid;
+    gap: 6px;
+}
+
+.v-attribute {
+    display: grid;
+    grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1.2fr);
+    gap: 10px;
+    align-items: start;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--secondary-bg);
+    color: var(--text);
+}
+
+.v-attribute-name {
+    color: var(--hint);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.v-attribute-value {
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.v-attributes-empty {
+    display: block;
+    color: var(--hint);
+    font-size: 12px;
+}
+
+@media (max-width: 360px) {
+    .v-attribute {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
 }
 
 .variant-btn .v-burn {
