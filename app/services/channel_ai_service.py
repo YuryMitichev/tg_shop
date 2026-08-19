@@ -7,7 +7,23 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.config import settings
 
 
-PROMPT_VERSION = "channel-catalog-1.0"
+PROMPT_VERSION = "channel-catalog-1.1"
+
+
+class AIAttribute(BaseModel):
+    """Характеристика в форме, совместимой со strict Structured Outputs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    value: str
+
+
+class AIFieldConfidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    confidence: float = Field(ge=0, le=1)
 
 
 class AIVariant(BaseModel):
@@ -17,7 +33,12 @@ class AIVariant(BaseModel):
     price: int | None = None
     currency: str = "RUB"
     stock: int | None = None
-    attributes: dict[str, str] = Field(default_factory=dict)
+    attributes: list[AIAttribute] = Field(default_factory=list)
+
+    def to_catalog_dict(self) -> dict:
+        data = self.model_dump(exclude={"attributes"})
+        data["attributes"] = {item.name: item.value for item in self.attributes}
+        return data
 
 
 class AIProduct(BaseModel):
@@ -29,8 +50,19 @@ class AIProduct(BaseModel):
     category_is_new: bool = False
     sku: str | None = None
     variants: list[AIVariant] = Field(default_factory=list)
-    attributes: dict[str, str] = Field(default_factory=dict)
-    field_confidence: dict[str, float] = Field(default_factory=dict)
+    attributes: list[AIAttribute] = Field(default_factory=list)
+    field_confidence: list[AIFieldConfidence] = Field(default_factory=list)
+
+    def to_catalog_dict(self) -> dict:
+        data = self.model_dump(
+            exclude={"attributes", "field_confidence", "variants"}
+        )
+        data["variants"] = [variant.to_catalog_dict() for variant in self.variants]
+        data["attributes"] = {item.name: item.value for item in self.attributes}
+        data["field_confidence"] = {
+            item.field: item.confidence for item in self.field_confidence
+        }
+        return data
 
 
 class PostAnalysis(BaseModel):

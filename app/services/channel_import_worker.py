@@ -268,7 +268,7 @@ class ChannelImportWorker:
 
         prepared: list[dict] = []
         for position, product in enumerate(products):
-            product_data = product.model_dump()
+            product_data = product.to_catalog_dict()
             matches = await ChannelImportService.find_duplicates(shop_id, product_data)
             best = matches[0] if matches else None
             score = float(best["score"]) if best else 0.0
