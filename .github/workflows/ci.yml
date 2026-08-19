@@ -51,6 +51,8 @@ jobs:
         run: |
           sh -n scripts/backup.sh
           sh -n scripts/verify_backup.sh
+          sh -n scripts/verify_offsite_backup.sh
+          docker build -f backup.Dockerfile -t tg-shop-backup-check .
           cp .env.example .env
           trap 'rm -f .env' EXIT
           docker compose config --quiet
