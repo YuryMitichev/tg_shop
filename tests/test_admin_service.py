@@ -310,12 +310,28 @@ class TestAdminStats:
             address="Адрес",
         )
 
+        # Созданные заказы ещё не являются продажами.
+        unpaid_stats = await StatsService.get_stats(1)
+        assert unpaid_stats["total_orders"] == 2
+        assert unpaid_stats["paid_orders"] == 0
+        assert unpaid_stats["total_revenue"] == 0
+
+        await OrderAdminService.set_order_status(1, 1, "paid")
+        await OrderAdminService.set_order_status(1, 2, "paid")
+
         stats = await StatsService.get_stats(1)
 
         assert stats["total_orders"] == 2
-        assert stats["new_orders"] == 2
+        assert stats["new_orders"] == 0
+        assert stats["paid_orders"] == 2
         assert stats["total_revenue"] == 450 * 2 + 1290
         assert len(stats["top_products"]) == 2
+
+        # Повторная ручная отметка не создаёт вторую продажу.
+        await OrderAdminService.set_order_status(1, 1, "paid")
+        repeated = await StatsService.get_stats(1)
+        assert repeated["paid_orders"] == 2
+        assert repeated["total_revenue"] == 450 * 2 + 1290
 
     async def test_stats_excludes_cancelled_revenue(self, db_session, seed_data):
         from app.services.cart_service import CartService
@@ -329,6 +345,10 @@ class TestAdminStats:
             phone="+7",
             address="Адрес",
         )
+
+        await OrderAdminService.set_order_status(1, created["order_id"], "paid")
+        paid_stats = await StatsService.get_stats(1)
+        assert paid_stats["total_revenue"] == 450
 
         await OrderAdminService.set_order_status(1, created["order_id"], "cancelled")
 

@@ -8,6 +8,7 @@ from app.database.db import async_session
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.product_variant import ProductVariant
+from app.services.sales_service import SalesService
 
 
 class OrderAdminService:
@@ -91,6 +92,14 @@ class OrderAdminService:
             order.status = status
             order.status_updated_at = datetime.now()
 
+            if status == OrderStatus.PAID:
+                SalesService.confirm_order(
+                    order,
+                    source="manual",
+                    reference=f"admin_status:{order_id}",
+                    confirmed_at=order.status_updated_at,
+                )
+
             if old_status != OrderStatus.CANCELLED and status == OrderStatus.CANCELLED:
                 for item in order.items:
                     if item.variant_id:
@@ -105,6 +114,7 @@ class OrderAdminService:
                             variant.stock += item.quantity
 
             await session.commit()
+            SalesService.invalidate_analytics()
 
     # ==========================
     # Заказы (расширенные)

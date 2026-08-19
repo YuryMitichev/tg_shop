@@ -240,6 +240,10 @@ async def start_all_bots() -> None:
         from app.services.channel_post_button_worker import ChannelPostButtonWorker
 
         asyncio.create_task(ChannelPostButtonWorker(concurrency=1).run_forever())
+    if settings.channel_attribution_enabled:
+        from app.services.channel_metrics_service import ChannelMetricsService
+
+        asyncio.create_task(ChannelMetricsService.run_forever())
 
     if settings.platform_bot_token:
         asyncio.create_task(_run_platform_bot())

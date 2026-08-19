@@ -28,6 +28,7 @@ from app.services.channel_post_button_service import (
     product_deep_link,
     strip_managed_product_buttons,
 )
+from app.services.channel_attribution_service import ChannelAttributionService
 
 
 logger = logging.getLogger(__name__)
@@ -200,7 +201,14 @@ class ChannelPostButtonWorker:
                 [
                     InlineKeyboardButton(
                         text=label,
-                        url=product_deep_link(bot_username, shop_id, product.id),
+                        url=product_deep_link(
+                            bot_username,
+                            shop_id,
+                            product.id,
+                            _ref.public_token
+                            if ChannelAttributionService.enabled_for_shop(shop_id)
+                            else None,
+                        ),
                         style="success",
                     ).model_dump(mode="json", exclude_none=True)
                 ]

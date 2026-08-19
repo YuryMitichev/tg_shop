@@ -15,7 +15,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
-import { TrendingUp, ShoppingCart, PackageX, Wallet } from "lucide-react";
+import { TrendingUp, ShoppingCart, CircleCheckBig, Wallet, XCircle, Percent } from "lucide-react";
 
 export default function DashboardPage() {
   const { data: stats, isLoading } = useSWR<Stats>("/stats", fetcher);
@@ -35,16 +35,28 @@ export default function DashboardPage() {
       color: "text-blue-600",
     },
     {
-      title: "Всего заказов",
+      title: "Создано заказов",
       value: stats?.total_orders ?? "—",
       icon: ShoppingCart,
       color: "text-purple-600",
     },
     {
-      title: "Новых заказов",
-      value: stats?.new_orders ?? "—",
-      icon: PackageX,
+      title: "Оплачено заказов",
+      value: stats?.paid_orders ?? "—",
+      icon: CircleCheckBig,
       color: "text-amber-600",
+    },
+    {
+      title: "Отменено заказов",
+      value: stats?.cancelled_orders ?? "—",
+      icon: XCircle,
+      color: "text-red-600",
+    },
+    {
+      title: "Конверсия заказ → оплата",
+      value: stats ? `${stats.payment_conversion_rate}%` : "—",
+      icon: Percent,
+      color: "text-cyan-600",
     },
   ];
 
@@ -52,7 +64,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Дашборд</h1>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
           <Card key={card.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

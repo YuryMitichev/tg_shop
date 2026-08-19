@@ -8,6 +8,7 @@ from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.order import Order
 from app.services.tinkoff_client import TinkoffClient, verify_token
+from app.services.sales_service import SalesService
 from app.core.config import settings
 
 NotificationResult = Literal["paid", "ignored", "invalid_token", "not_found"]
@@ -106,9 +107,23 @@ class PaymentService:
                 return "not_found"
 
             if status == "CONFIRMED":
-                if order.status not in (OrderStatus.PAID, OrderStatus.DONE, OrderStatus.CANCELLED):
+                changed = SalesService.confirm_order(
+                    order,
+                    source="online",
+                    reference=str(data.get("PaymentId") or order.payment_id or ""),
+                )
+                if order.status not in (
+                    OrderStatus.PAID,
+                    OrderStatus.SHIPPED,
+                    OrderStatus.DONE,
+                    OrderStatus.CANCELLED,
+                ):
                     order.status = OrderStatus.PAID
+                    order.status_updated_at = datetime.now()
+                    changed = True
+                if changed:
                     await session.commit()
+                    SalesService.invalidate_analytics()
                     logger.info("Заказ %s оплачен", order_id)
                     return "paid"
 

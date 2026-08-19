@@ -15,6 +15,8 @@ const App = {
     company: null,
     botUsername: null,
     currentRating: 0,
+    sourceRefToken: null,
+    sourceProductId: null,
 
     _tgStub() {
         return {
@@ -42,6 +44,8 @@ const App = {
         const startParam = this.tg.initDataUnsafe?.start_param || "";
         const launchTarget = this.parseLaunchTarget(startParam, params);
         this.shopId = launchTarget.shopId;
+        this.sourceRefToken = launchTarget.sourceRef;
+        this.sourceProductId = launchTarget.productId;
 
         await Promise.all([
             this.loadShopConfig(),
@@ -50,19 +54,42 @@ const App = {
             this.loadOffers(),
         ]);
         if (launchTarget.productId) {
-            await this.openProduct(launchTarget.productId, true);
+            const opened = await this.openProduct(launchTarget.productId, true);
+            if (opened && launchTarget.sourceRef) {
+                await this.recordAttribution("product_open", launchTarget.productId);
+            }
         }
     },
 
     parseLaunchTarget(startParam, params = new URLSearchParams()) {
-        const match = /^shop_(\d+)(?:_product_(\d+))?$/.exec(startParam || "");
+        const match = /^shop_(\d+)(?:_product_(\d+)(?:_ref_([A-Za-z0-9_-]{1,32}))?)?$/.exec(startParam || "");
         const queryShopId = parseInt(params.get("shop"));
         const shopId = match ? parseInt(match[1]) : (queryShopId > 0 ? queryShopId : 1);
         const productId = match && match[2] ? parseInt(match[2]) : null;
         return {
             shopId: shopId > 0 ? shopId : 1,
             productId: productId && productId > 0 ? productId : null,
+            sourceRef: match && match[3] ? match[3] : null,
         };
+    },
+
+    eventKey() {
+        if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+        return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    },
+
+    async recordAttribution(eventType, productId) {
+        if (!this.sourceRefToken || productId !== this.sourceProductId) return;
+        try {
+            await this.api("POST", "/attribution/events", {
+                product_id: productId,
+                source_ref: this.sourceRefToken,
+                event_type: eventType,
+                event_key: this.eventKey(),
+            });
+        } catch (_) {
+            // Сбой аналитики не должен мешать покупке.
+        }
     },
 
     // ==========================
@@ -531,7 +558,9 @@ const App = {
             await this.api("POST", "/cart/add", {
                 product_id: productId,
                 variant_id: variantId,
+                source_ref: productId === this.sourceProductId ? this.sourceRefToken : null,
             });
+            await this.recordAttribution("add_to_cart", productId);
 
             this.toast("Добавлено в корзину ✅");
             this.tg.HapticFeedback?.notificationOccurred("success");

@@ -110,6 +110,8 @@ class OrderService:
                     variant_volume=item["volume"],
                     price=item["price"],
                     quantity=item["quantity"],
+                    source_ref_id=item.get("source_ref_id"),
+                    source_post_id=item.get("source_post_id"),
                 )
                 for item in items
             ]

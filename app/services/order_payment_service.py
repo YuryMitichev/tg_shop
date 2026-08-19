@@ -11,6 +11,7 @@ from app.models.order import Order
 from app.models.payment import Payment
 from app.services.shop_service import ShopService
 from app.services.yookassa_client import YooKassaClient
+from app.services.sales_service import SalesService
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +261,7 @@ class OrderPaymentService:
             return False
 
         if event == "payment.succeeded":
+            should_notify = False
             async with async_session() as session:
                 order = await session.get(Order, order_id)
                 if order is None:
@@ -281,18 +283,45 @@ class OrderPaymentService:
                     )
                     return False
 
-                if order.status not in (OrderStatus.PAID, OrderStatus.DONE, OrderStatus.CANCELLED):
-                    order.status = OrderStatus.PAID
-                    order.payment_id = payment_id
-                    order.status_updated_at = datetime.now()
-                    await session.commit()
-                    logger.info("ЮKassa webhook: заказ %d оплачен", order_id)
+                if order.shop_id != shop_id:
+                    logger.warning(
+                        "ЮKassa webhook: магазин заказа %d не совпадает с metadata", order_id
+                    )
+                    return False
 
+                if order.status not in (
+                    OrderStatus.PAID,
+                    OrderStatus.SHIPPED,
+                    OrderStatus.DONE,
+                    OrderStatus.CANCELLED,
+                ):
+                    order.status = OrderStatus.PAID
+                    order.status_updated_at = datetime.now()
+                    should_notify = True
+
+                order.payment_id = payment_id
+                SalesService.confirm_order(
+                    order,
+                    source="online",
+                    reference=payment_id,
+                )
+                payment = (
+                    await session.execute(
+                        select(Payment).where(Payment.provider_payment_id == payment_id)
+                    )
+                ).scalar_one_or_none()
+                if payment is not None:
+                    payment.status = "succeeded"
+                    payment.updated_at = datetime.now()
+
+                await session.commit()
+                SalesService.invalidate_analytics()
+                logger.info("ЮKassa webhook: заказ %d оплачен", order_id)
+
+                if should_notify:
                     await OrderPaymentService._notify_user(
                         shop_id, order.telegram_user_id, order_id, order.total_amount
                     )
-
-            await OrderPaymentService._mark_payment_status(payment_id, "succeeded")
 
         elif event == "payment.canceled":
             logger.info("ЮKassa webhook: платёж заказа %d отменён", order_id)

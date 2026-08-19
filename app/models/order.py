@@ -36,6 +36,12 @@ class Order(Base):
     # manual | yookassa
     payment_method: Mapped[str] = mapped_column(default="manual")
 
+    # Единый факт подтверждённой продажи. Заполняется успешным webhook
+    # провайдера или явным действием менеджера.
+    payment_confirmed_at: Mapped[datetime | None] = mapped_column(nullable=True, index=True)
+    payment_confirmation_source: Mapped[str | None] = mapped_column(nullable=True)
+    payment_confirmation_ref: Mapped[str | None] = mapped_column(nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     status_updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
 

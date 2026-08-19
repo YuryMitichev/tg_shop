@@ -20,6 +20,7 @@ import {
   CreditCard,
   Layers,
   Sparkles,
+  MousePointerClick,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription, isRouteBlocked } from "@/lib/subscription-context";
@@ -33,6 +34,7 @@ const navItems = [
   { href: "/users", label: "Пользователи", icon: Users },
   { href: "/broadcasts", label: "Рассылки", icon: Megaphone },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
+  { href: "/publication-analytics", label: "Эффективность публикаций", icon: MousePointerClick },
   { href: "/promos", label: "Промокоды", icon: Ticket },
   { href: "/reviews", label: "Отзывы", icon: Star },
   { href: "/admins", label: "Админы", icon: Shield },

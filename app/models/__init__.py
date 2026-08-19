@@ -30,6 +30,7 @@ from app.models.channel_import import (
     CatalogImportCandidate,
     CatalogAnalysisRun,
     ProductSourceRef,
+    ChannelAttributionEvent,
     ChannelPostButtonJob,
     PrefilterFeedback,
 )
@@ -67,6 +68,7 @@ __all__ = [
     "CatalogImportCandidate",
     "CatalogAnalysisRun",
     "ProductSourceRef",
+    "ChannelAttributionEvent",
     "ChannelPostButtonJob",
     "PrefilterFeedback",
 ]

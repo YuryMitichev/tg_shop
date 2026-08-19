@@ -117,6 +117,8 @@ class TestYooKassaWebhookOrder:
             assert order.status == "paid"
             assert order.payment_id == "pay-123"
             assert order.status_updated_at is not None
+            assert order.payment_confirmed_at is not None
+            assert order.payment_confirmation_source == "online"
 
     async def test_order_already_paid(
         self, db_session, seed_data, yookassa_enabled, paid_order

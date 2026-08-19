@@ -15,6 +15,7 @@ class CartService:
         product_id: int,
         variant_id: int,
         quantity: int = 1,
+        source_ref_token: str | None = None,
     ) -> str | None:
         """Добавить товар в корзину (или увеличить количество, если уже есть).
 
@@ -42,6 +43,21 @@ class CartService:
             )
             item = result.scalar_one_or_none()
 
+            source_ref_id = None
+            source_post_id = None
+            if source_ref_token:
+                from app.services.channel_attribution_service import (
+                    ChannelAttributionService,
+                )
+
+                resolved = await ChannelAttributionService.resolve_source(
+                    session, shop_id, product_id, source_ref_token
+                )
+                if resolved is not None:
+                    source_ref, source_post = resolved
+                    source_ref_id = source_ref.id
+                    source_post_id = source_post.id
+
             new_quantity = (item.quantity if item else 0) + quantity
 
             if variant and variant.stock > 0 and new_quantity > variant.stock:
@@ -49,6 +65,10 @@ class CartService:
 
             if item:
                 item.quantity += quantity
+                if source_ref_id is not None:
+                    # Последний прямой переход получает атрибуцию всей позиции.
+                    item.source_ref_id = source_ref_id
+                    item.source_post_id = source_post_id
             else:
                 session.add(CartItem(
                     shop_id=shop_id,
@@ -56,6 +76,8 @@ class CartService:
                     product_id=product_id,
                     variant_id=variant_id,
                     quantity=quantity,
+                    source_ref_id=source_ref_id,
+                    source_post_id=source_post_id,
                 ))
 
             await session.commit()
@@ -140,6 +162,8 @@ class CartService:
                     "quantity": cart_item.quantity,
                     "stock": variant.stock,
                     "subtotal": price * cart_item.quantity,
+                    "source_ref_id": cart_item.source_ref_id,
+                    "source_post_id": cart_item.source_post_id,
                 })
 
             return items

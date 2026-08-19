@@ -170,15 +170,15 @@ export default function AnalyticsPage() {
           isLoading={ovLoading}
         />
         <KpiCard
-          title="Заказов"
-          value={String(overview?.orders || 0)}
+          title="Создано заказов"
+          value={String(overview?.created_orders || 0)}
           growth={overview?.orders_growth}
           isLoading={ovLoading}
         />
         <KpiCard
-          title="Клиентов"
-          value={String(overview?.unique_customers || 0)}
-          growth={overview?.customers_growth}
+          title="Оплачено заказов"
+          value={String(overview?.paid_orders || 0)}
+          growth={overview?.paid_orders_growth}
           isLoading={ovLoading}
         />
       </div>
@@ -188,17 +188,17 @@ export default function AnalyticsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Конверсия в завершённые
+              Конверсия заказ → оплата
             </CardTitle>
           </CardHeader>
           <CardContent>
             {ovLoading ? (
               <Skeleton className="h-7 w-20" />
             ) : (
-              <div className="text-2xl font-bold">{overview?.completion_rate || 0}%</div>
+              <div className="text-2xl font-bold">{overview?.order_to_payment_rate || 0}%</div>
             )}
             <div className="mt-1 text-xs text-muted-foreground">
-              {overview?.completed_orders || 0} из {overview?.orders || 0} заказов
+              {overview?.paid_orders || 0} из {overview?.created_orders || 0} заказов
             </div>
           </CardContent>
         </Card>
@@ -288,7 +288,8 @@ export default function AnalyticsPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(v) => v.slice(5)} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Bar dataKey="orders" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="created_orders" name="Создано" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="paid_orders" name="Оплачено" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
