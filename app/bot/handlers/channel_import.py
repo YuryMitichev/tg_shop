@@ -24,6 +24,7 @@ from app.database.db import async_session
 from app.models.channel_import import ChannelConnection
 from app.models.shop import Shop
 from app.services.channel_import_service import ChannelImportService
+from app.services.channel_manual_backfill_service import ChannelManualBackfillService
 from app.services.channel_post_button_service import ChannelPostButtonService
 from app.services.channel_storefront_service import ChannelStorefrontService
 from app.utils.escape import esc
@@ -231,6 +232,30 @@ def setup_router() -> Router:
             else "Установка закрепления запущена."
         )
 
+    @router.message(Command("import_history"))
+    async def import_history_command(message: Message, bot: Bot):
+        if not message.from_user or message.chat.type != "private":
+            return
+        shop_id = get_shop_id()
+        if await _owner_shop(shop_id, message.from_user.id) is None:
+            await message.answer("Добавлять товары из истории может только владелец магазина.")
+            return
+        try:
+            session_id, _ = await ChannelManualBackfillService.create_session(
+                shop_id, "phone"
+            )
+            delivery = await ChannelManualBackfillService.deliver_instructions(
+                session_id, bot
+            )
+        except ValueError as exc:
+            await message.answer(str(exc))
+            return
+        if not delivery["instruction_sent"]:
+            await message.answer(
+                "Не удалось отправить инструкцию. Убедитесь, что бот не заблокирован, "
+                "и повторите /import_history."
+            )
+
     @router.message(F.chat_shared)
     async def channel_shared(message: Message, bot: Bot):
         if not message.from_user or not message.chat_shared:
@@ -286,8 +311,9 @@ def setup_router() -> Router:
             )
         else:
             await message.answer(
-                "Канал подключён в режиме realtime. Новые публикации будут "
-                "обрабатываться автоматически. Импорт старых постов пока отключён.",
+                "Канал подключён. Новые публикации будут обрабатываться "
+                "автоматически. Чтобы добавить выбранные товары из старых "
+                "публикаций, используйте /import_history или админ-панель.",
                 reply_markup=ReplyKeyboardRemove(),
             )
         async def start_backfill():
@@ -343,6 +369,84 @@ def setup_router() -> Router:
     @router.edited_channel_post()
     async def edited_channel_post(message: Message):
         await handle_channel_post(message, edited=True)
+
+    @router.message(F.forward_origin)
+    async def manual_backfill_forward(message: Message, bot: Bot):
+        if not message.from_user or message.chat.type != "private":
+            return
+        shop_id = get_shop_id()
+        result = await ChannelManualBackfillService.accept_forward(
+            shop_id, message.from_user.id, message
+        )
+        if result is None:
+            return
+        if not result.get("accepted"):
+            reason = result.get("reason")
+            messages = {
+                "expired": "Сессия импорта истекла. Запустите /import_history заново.",
+                "wrong_channel": (
+                    "Эта публикация не из подключённого канала. Выберите товары "
+                    "именно из канала магазина."
+                ),
+                "missing_source_id": "Telegram не передал исходный ID публикации.",
+                "unsupported_content": (
+                    "В публикации нет поддерживаемого текста или фотографии."
+                ),
+                "publication_limit": (
+                    "Уже выбрано 50 публикаций. Нажмите «Завершить выбор»."
+                ),
+                "message_limit": (
+                    "Достигнут технический лимит сообщений. Завершите текущий импорт."
+                ),
+            }
+            await message.answer(messages.get(reason, "Публикацию не удалось добавить."))
+            return
+        if result.get("duplicate"):
+            return
+        received_messages = int(result["received_messages"])
+        received_publications = int(result["received_publications"])
+        if (
+            received_messages == 1
+            or received_messages % 5 == 0
+            or received_publications >= 50
+        ):
+            await ChannelManualBackfillService.refresh_instruction(
+                int(result["session_id"]), bot
+            )
+
+    @router.callback_query(F.data.startswith("cib:"))
+    async def manual_backfill_action(callback: CallbackQuery):
+        if not callback.from_user or not callback.data:
+            return
+        shop_id = get_shop_id()
+        if await _owner_shop(shop_id, callback.from_user.id) is None:
+            await callback.answer("Доступно только владельцу", show_alert=True)
+            return
+        _, action, raw_session_id = callback.data.split(":", 2)
+        session_id = int(raw_session_id)
+        try:
+            if action == "finish":
+                result = await ChannelManualBackfillService.queue_processing(
+                    shop_id, callback.from_user.id, session_id
+                )
+                text = (
+                    "Выбор завершён. Передаю публикации на обработку AI. "
+                    f"Найдено публикаций: {result['received_publications']}."
+                )
+            elif action == "cancel":
+                await ChannelManualBackfillService.cancel(
+                    shop_id, callback.from_user.id, session_id
+                )
+                text = "Импорт выбранных публикаций отменён."
+            else:
+                return
+        except ValueError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
+        if callback.message:
+            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.answer(text)
+        await callback.answer()
 
     @router.callback_query(F.data.startswith("ci:"))
     async def candidate_action(callback: CallbackQuery, state: FSMContext):

@@ -102,6 +102,91 @@ class ChannelPostMedia(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
 
+class ChannelManualBackfillSession(Base):
+    __tablename__ = "channel_manual_backfill_sessions"
+    __table_args__ = (
+        Index(
+            "ix_channel_manual_backfill_claim",
+            "status",
+            "available_at",
+            "locked_until",
+        ),
+        Index(
+            "ix_channel_manual_backfill_shop_status",
+            "shop_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shop_id: Mapped[int] = mapped_column(
+        ForeignKey("shops.id", ondelete="CASCADE"), index=True
+    )
+    connection_id: Mapped[int] = mapped_column(
+        ForeignKey("channel_connections.id", ondelete="CASCADE"), index=True
+    )
+    owner_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="collecting", nullable=False)
+    delivery_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    instruction_status: Mapped[str] = mapped_column(
+        String(32), default="pending", nullable=False
+    )
+    instruction_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    requested_limit: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    received_messages: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    received_publications: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rejected_messages: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    imported_publications: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    locked_by: Mapped[str | None] = mapped_column(String(128))
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class ChannelManualBackfillItem(Base):
+    __tablename__ = "channel_manual_backfill_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id",
+            "source_message_id",
+            name="uq_channel_manual_backfill_source",
+        ),
+        Index(
+            "ix_channel_manual_backfill_item_group",
+            "session_id",
+            "group_key",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("channel_manual_backfill_sessions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    source_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source_media_group_id: Mapped[str | None] = mapped_column(String(255))
+    group_key: Mapped[str] = mapped_column(String(320), nullable=False)
+    destination_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    text: Mapped[str | None] = mapped_column(Text)
+    media: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
 class CatalogImportJob(Base):
     __tablename__ = "catalog_import_jobs"
     __table_args__ = (

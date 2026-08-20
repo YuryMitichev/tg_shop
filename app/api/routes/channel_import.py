@@ -13,15 +13,18 @@ from app.api.admin_auth import (
     require_active_subscription,
     require_admin,
     require_catalog_access,
+    require_owner,
 )
 from app.bot.bot import get_bot
 from app.database.db import async_session
 from app.models.channel_import import ChannelPost, ChannelPostMedia
+from app.models.shop import Shop
 from app.services.channel_import_service import ChannelImportService
 from app.services.channel_post_button_service import ChannelPostButtonService
 from app.services.channel_storefront_service import ChannelStorefrontService
 from app.services.channel_attribution_service import ChannelAttributionService
 from app.services.channel_metrics_service import ChannelMetricsService
+from app.services.channel_manual_backfill_service import ChannelManualBackfillService
 
 
 router = APIRouter(prefix="/channel-import")
@@ -69,6 +72,11 @@ class ButtonSyncRetry(BaseModel):
     allow_replace_unknown: bool = False
 
 
+class ManualBackfillStart(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    device: Literal["browser", "phone"]
+
+
 def _connection_dict(connection) -> dict:
     return {
         "connected": connection is not None,
@@ -83,6 +91,7 @@ def _connection_dict(connection) -> dict:
         "notifications_enabled": connection.notifications_enabled if connection else True,
         "backfill_status": connection.backfill_status if connection else None,
         "backfill_error": connection.backfill_error if connection else None,
+        "manual_backfill_available": connection is not None,
         "buttons_feature_enabled": (
             ChannelPostButtonService.enabled_for_shop(connection.shop_id)
             if connection
@@ -175,6 +184,85 @@ async def run_backfill(admin: dict = Depends(require_catalog_access)):
         raise HTTPException(status_code=404, detail="Канал ещё не подключён")
     asyncio.create_task(_run_backfill_safely(admin["shop_id"]))
     return {"ok": True, "status": "started"}
+
+
+async def _shop_owner_id(shop_id: int) -> int:
+    async with async_session() as session:
+        shop = await session.get(Shop, shop_id)
+        if shop is None or not shop.owner_telegram_id:
+            raise HTTPException(status_code=400, detail="Владелец магазина не настроен")
+        return shop.owner_telegram_id
+
+
+@router.post("/manual-backfill")
+async def start_manual_backfill(
+    body: ManualBackfillStart,
+    admin: dict = Depends(require_owner),
+):
+    bot = get_bot(admin["shop_id"])
+    if bot is None:
+        raise HTTPException(status_code=503, detail="Бот магазина временно недоступен")
+    try:
+        session_id, raw_token = await ChannelManualBackfillService.create_session(
+            admin["shop_id"], body.device
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    delivery = await ChannelManualBackfillService.deliver_instructions(
+        session_id, bot
+    )
+    payload = await ChannelManualBackfillService.latest(admin["shop_id"])
+    username = (delivery.get("bot_username") or "").lstrip("@")
+    if username and not username.replace("_", "").isalnum():
+        username = ""
+    return {
+        **(payload or {}),
+        **delivery,
+        "telegram_web_url": (
+            f"https://web.telegram.org/k/#@{username}" if username else None
+        ),
+        "telegram_deep_link": (
+            f"https://t.me/{username}?start=history_{raw_token}"
+            if username
+            else None
+        ),
+    }
+
+
+@router.get("/manual-backfill")
+async def get_manual_backfill(admin: dict = Depends(require_catalog_access)):
+    return await ChannelManualBackfillService.latest(admin["shop_id"])
+
+
+@router.post("/manual-backfill/{session_id}/finish")
+async def finish_manual_backfill(
+    session_id: int,
+    admin: dict = Depends(require_owner),
+):
+    try:
+        return await ChannelManualBackfillService.queue_processing(
+            admin["shop_id"],
+            await _shop_owner_id(admin["shop_id"]),
+            session_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/manual-backfill/{session_id}")
+async def cancel_manual_backfill(
+    session_id: int,
+    admin: dict = Depends(require_owner),
+):
+    try:
+        return await ChannelManualBackfillService.cancel(
+            admin["shop_id"],
+            await _shop_owner_id(admin["shop_id"]),
+            session_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/storefront-pin/sync")

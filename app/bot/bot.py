@@ -269,8 +269,12 @@ async def start_all_bots() -> None:
         asyncio.create_task(_product_lifecycle_loop())
     if settings.channel_import_enabled:
         from app.services.channel_import_worker import ChannelImportWorker
+        from app.services.channel_manual_backfill_worker import (
+            ChannelManualBackfillWorker,
+        )
 
         asyncio.create_task(ChannelImportWorker(concurrency=2).run_forever())
+        asyncio.create_task(ChannelManualBackfillWorker().run_forever())
         asyncio.create_task(_channel_import_cleanup_loop())
     if settings.channel_product_buttons_enabled:
         from app.services.channel_post_button_worker import ChannelPostButtonWorker

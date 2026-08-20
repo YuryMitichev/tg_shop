@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { Bot, Check, Copy, Link2, Pin, Plus, RefreshCw, Save, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Check, Copy, Link2, Monitor, Pin, Plus, RefreshCw, Save, Smartphone, Sparkles, Trash2, X } from "lucide-react";
 
 import { api, channelImportMediaUrl } from "@/lib/api";
 import { fetcher } from "@/lib/swr";
@@ -15,6 +15,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Variant = {
   title?: string;
@@ -54,6 +61,7 @@ type ImportSettings = {
   notifications_enabled: boolean;
   backfill_status: string | null;
   backfill_error: string | null;
+  manual_backfill_available: boolean;
   buttons_feature_enabled: boolean;
   main_app_ready: boolean | null;
   can_edit_messages: boolean | null;
@@ -63,6 +71,24 @@ type ImportSettings = {
   storefront_status: "not_created" | "syncing" | "active" | "needs_action";
   storefront_error_code: string | null;
   storefront_error: string | null;
+};
+
+type ManualBackfill = {
+  id: number;
+  status: "collecting" | "queued" | "processing" | "completed" | "expired" | "cancelled" | "failed";
+  delivery_mode: "browser" | "phone";
+  instruction_status: "pending" | "sent" | "failed";
+  requested_limit: number;
+  received_messages: number;
+  received_publications: number;
+  rejected_messages: number;
+  imported_publications: number;
+  expires_at: string | null;
+  completed_at: string | null;
+  last_error: string | null;
+  instruction_sent?: boolean;
+  telegram_web_url?: string | null;
+  telegram_deep_link?: string | null;
 };
 
 type ProductLink = {
@@ -118,6 +144,9 @@ export default function ChannelImportPage() {
   const [filter, setFilter] = useState("open");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [storefrontSyncing, setStorefrontSyncing] = useState(false);
+  const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
+  const [manualBackfillStarting, setManualBackfillStarting] = useState(false);
+  const [telegramFallbackLink, setTelegramFallbackLink] = useState<string | null>(null);
   const { data: settings, mutate: mutateSettings } = useSWR<ImportSettings>(
     "/channel-import/settings",
     fetcher,
@@ -125,6 +154,14 @@ export default function ChannelImportPage() {
   const { data: stats, mutate: mutateStats } = useSWR<ImportStats>(
     "/channel-import/stats",
     fetcher,
+  );
+  const { data: manualBackfill, mutate: mutateManualBackfill } = useSWR<ManualBackfill | null>(
+    settings?.connected ? "/channel-import/manual-backfill" : null,
+    fetcher,
+    {
+      refreshInterval: (data) =>
+        data && ["collecting", "queued", "processing"].includes(data.status) ? 2000 : 0,
+    },
   );
   const { data: allCandidates, mutate: mutateCandidates } = useSWR<Candidate[]>(
     "/channel-import/candidates",
@@ -158,13 +195,57 @@ export default function ChannelImportPage() {
     }
   }
 
-  async function backfill() {
+  async function startManualBackfill(device: "browser" | "phone") {
+    const telegramWindow = device === "browser" ? window.open("about:blank", "_blank") : null;
+    setManualBackfillStarting(true);
     try {
-      await api.post("/channel-import/backfill");
-      toast.success("Импорт последних 50 постов запущен");
-      await mutateSettings();
+      const result = await api.post<ManualBackfill>("/channel-import/manual-backfill", { device });
+      setDeviceDialogOpen(false);
+      setTelegramFallbackLink(result.telegram_deep_link ?? null);
+      await Promise.all([mutateManualBackfill(), mutateSettings()]);
+      if (device === "browser") {
+        const target = result.telegram_web_url || result.telegram_deep_link;
+        if (telegramWindow && target) {
+          telegramWindow.location.href = target;
+        } else {
+          telegramWindow?.close();
+          toast.error("Не удалось открыть Telegram Web. Используйте ссылку в блоке импорта.");
+        }
+      } else {
+        telegramWindow?.close();
+        if (result.instruction_sent) {
+          toast.success("Инструкция отправлена в бот на телефоне");
+        } else {
+          toast.error("Бот не смог написать владельцу. Откройте его по ссылке.");
+        }
+      }
     } catch (error) {
+      telegramWindow?.close();
       toast.error(error instanceof Error ? error.message : "Не удалось запустить импорт");
+    } finally {
+      setManualBackfillStarting(false);
+    }
+  }
+
+  async function finishManualBackfill() {
+    if (!manualBackfill) return;
+    try {
+      await api.post(`/channel-import/manual-backfill/${manualBackfill.id}/finish`);
+      await mutateManualBackfill();
+      toast.success("Выбранные публикации переданы на обработку");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось завершить выбор");
+    }
+  }
+
+  async function cancelManualBackfill() {
+    if (!manualBackfill) return;
+    try {
+      await api.delete(`/channel-import/manual-backfill/${manualBackfill.id}`);
+      await mutateManualBackfill();
+      toast.success("Импорт отменён");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось отменить импорт");
     }
   }
 
@@ -183,7 +264,7 @@ export default function ChannelImportPage() {
   }
 
   async function refreshAll() {
-    await Promise.all([mutateCandidates(), mutateDetail(), mutateStats(), mutateSettings()]);
+    await Promise.all([mutateCandidates(), mutateDetail(), mutateStats(), mutateSettings(), mutateManualBackfill()]);
   }
 
   return (
@@ -231,17 +312,17 @@ export default function ChannelImportPage() {
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={backfill}
-                  disabled={settings.backfill_status === "not_configured"}
+                  onClick={() => setDeviceDialogOpen(true)}
+                  disabled={manualBackfillStarting || ["collecting", "queued", "processing"].includes(manualBackfill?.status ?? "")}
                 >
-                  Повторить импорт 50 постов
+                  Добавить товары из публикаций канала
                 </Button>
-                <div className="text-xs text-muted-foreground">
-                  Backfill: {settings.backfill_status === "not_configured"
-                    ? "не настроен — realtime работает"
-                    : settings.backfill_status || "не запускался"}
-                  {settings.backfill_error && <div className="mt-1 text-destructive">{settings.backfill_error}</div>}
-                </div>
+                <ManualBackfillProgress
+                  session={manualBackfill}
+                  fallbackLink={telegramFallbackLink}
+                  onFinish={() => void finishManualBackfill()}
+                  onCancel={() => void cancelManualBackfill()}
+                />
                 {settings.buttons_feature_enabled && (
                   <div className="space-y-3">
                     <div className={`rounded-md border p-3 text-xs ${settings.buttons_ready ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
@@ -323,6 +404,44 @@ export default function ChannelImportPage() {
         </Card>
       </div>
 
+      <Dialog open={deviceDialogOpen} onOpenChange={setDeviceDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Где открыть Telegram?</DialogTitle>
+            <DialogDescription>
+              Выберите публикации именно с теми товарами, которые хотите добавить в каталог.
+              Можно пересылать их несколькими партиями, альбомы — целиком.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button
+              variant="outline"
+              className="h-auto flex-col items-start gap-2 p-4 text-left"
+              onClick={() => void startManualBackfill("browser")}
+              disabled={manualBackfillStarting}
+            >
+              <Monitor className="h-6 w-6" />
+              <span className="font-semibold">На этом компьютере</span>
+              <span className="whitespace-normal text-xs text-muted-foreground">
+                Откроем чат с ботом в Telegram Web.
+              </span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto flex-col items-start gap-2 p-4 text-left"
+              onClick={() => void startManualBackfill("phone")}
+              disabled={manualBackfillStarting}
+            >
+              <Smartphone className="h-6 w-6" />
+              <span className="font-semibold">На телефоне</span>
+              <span className="whitespace-normal text-xs text-muted-foreground">
+                Пришлём владельцу инструкцию в бот.
+              </span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="grid min-h-[640px] gap-4 lg:grid-cols-[340px_1fr]">
         <Card>
           <CardHeader className="border-b">
@@ -369,6 +488,68 @@ export default function ChannelImportPage() {
           <Card><CardContent className="flex h-full items-center justify-center text-muted-foreground">Выберите черновик</CardContent></Card>
         )}
       </div>
+    </div>
+  );
+}
+
+function ManualBackfillProgress({
+  session,
+  fallbackLink,
+  onFinish,
+  onCancel,
+}: {
+  session: ManualBackfill | null | undefined;
+  fallbackLink: string | null;
+  onFinish: () => void;
+  onCancel: () => void;
+}) {
+  if (!session) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        MTProto не требуется: владелец сам выбирает нужные товарные публикации.
+      </p>
+    );
+  }
+
+  const statusText: Record<ManualBackfill["status"], string> = {
+    collecting: "ожидаем публикации",
+    queued: "готовим обработку",
+    processing: "передаём публикации в AI",
+    completed: "импорт завершён",
+    expired: "время выбора истекло",
+    cancelled: "импорт отменён",
+    failed: "ошибка импорта",
+  };
+  const active = session.status === "collecting";
+
+  return (
+    <div className="space-y-3 rounded-md border p-3 text-xs">
+      <div className="font-medium">Выбранные публикации: {statusText[session.status]}</div>
+      <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+        <span>Сообщений: {session.received_messages}</span>
+        <span>Публикаций: {session.received_publications} из {session.requested_limit}</span>
+        {session.rejected_messages > 0 && <span>Пропущено: {session.rejected_messages}</span>}
+        {session.status === "completed" && <span>Передано в AI: {session.imported_publications}</span>}
+      </div>
+      {session.last_error && <div className="text-destructive">{session.last_error}</div>}
+      {session.instruction_status === "failed" && fallbackLink && (
+        <a
+          href={fallbackLink}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block text-primary underline underline-offset-4"
+        >
+          Открыть бот вручную
+        </a>
+      )}
+      {active && (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button size="sm" onClick={onFinish} disabled={session.received_publications === 0}>
+            <Check className="mr-2 h-4 w-4" />Завершить и обработать
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onCancel}>Отменить</Button>
+        </div>
+      )}
     </div>
   );
 }
