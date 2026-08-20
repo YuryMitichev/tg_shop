@@ -25,6 +25,7 @@ import app.services.review_admin_service as review_admin_service
 import app.services.stats_service as stats_service
 import app.services.admin_user_service as admin_user_service
 import app.services.cart_service as cart_service
+import app.services.favorite_service as favorite_service
 import app.services.catalog_service as catalog_service
 import app.services.crm_service as crm_service
 import app.services.order_service as order_service
@@ -54,6 +55,7 @@ from app.services.admin_auth_service import AdminAuthService
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
     CartItem,
+    Favorite,
     Category,
     Order,
     OrderItem,
@@ -99,6 +101,7 @@ _PATCH_TARGETS = [
     db_module,
     catalog_service,
     cart_service,
+    favorite_service,
     order_service,
     catalog_admin_service,
     order_admin_service,

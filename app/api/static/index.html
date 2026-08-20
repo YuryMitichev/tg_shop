@@ -6,7 +6,7 @@
     <title>Магазин</title>
     <script src="diag.js?v=1"></script>
     <script src="telegram-web-app.js?v=1"></script>
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -14,6 +14,14 @@
 <div id="view-catalog" class="view active">
     <div id="categories" class="categories"></div>
     <div id="products" class="products-grid"></div>
+</div>
+
+<!-- Избранное -->
+<div id="view-favorites" class="view">
+    <div class="header">
+        <h2>♥ Избранное</h2>
+    </div>
+    <div id="favorite-products" class="products-grid"></div>
 </div>
 
 <!-- Карточка товара -->
@@ -99,21 +107,25 @@
 
 <!-- Bottom nav -->
 <div id="bottom-nav" class="bottom-nav">
-    <button class="nav-btn active" data-action="show-catalog">
+    <button class="nav-btn active" data-action="show-catalog" data-nav="catalog">
         <span class="nav-icon">🛍</span>
         <span class="nav-label">Каталог</span>
     </button>
-    <button class="nav-btn" data-action="show-cart">
+    <button class="nav-btn" data-action="show-favorites" data-nav="favorites">
+        <span class="nav-icon">♥</span>
+        <span class="nav-label">Избранное</span>
+    </button>
+    <button class="nav-btn" data-action="show-cart" data-nav="cart">
         <span class="nav-icon">🛒</span>
         <span class="nav-label">Корзина</span>
         <span id="cart-badge" class="cart-badge" style="display:none">0</span>
     </button>
-    <button class="nav-btn" data-action="show-orders">
+    <button class="nav-btn" data-action="show-orders" data-nav="orders">
         <span class="nav-icon">📦</span>
         <span class="nav-label">Заказы</span>
     </button>
 </div>
 
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

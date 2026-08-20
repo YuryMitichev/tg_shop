@@ -17,6 +17,7 @@ const App = {
     currentRating: 0,
     sourceRefToken: null,
     sourceProductId: null,
+    currentView: "catalog",
 
     _tgStub() {
         return {
@@ -72,6 +73,7 @@ const App = {
             if (element.tagName === "A") event.preventDefault();
             switch (action) {
                 case "show-catalog": this.showCatalog(); break;
+                case "show-favorites": this.showFavorites(); break;
                 case "show-cart": this.showCart(); break;
                 case "show-orders": this.showOrders(); break;
                 case "show-checkout": this.showCheckout(); break;
@@ -87,6 +89,10 @@ const App = {
                 case "select-variant": this.selectVariant(number("variantId")); break;
                 case "scroll-slide": this.scrollToSlide(number("slide")); break;
                 case "add-to-cart": this.addToCart(number("productId")); break;
+                case "toggle-favorite": this.toggleFavorite(
+                    number("productId"),
+                    element.dataset.favorite === "true",
+                ); break;
                 case "toggle-review": this.toggleReviewForm(); break;
                 case "toggle-manager": this.toggleManagerForm(); break;
                 case "set-rating": this.setRating(number("rating")); break;
@@ -228,6 +234,7 @@ const App = {
         document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
 
         document.getElementById("view-" + viewId).classList.add("active");
+        this.currentView = viewId;
 
         const showNav = !["product", "checkout", "success", "privacy", "out-of-stock"].includes(viewId);
         document.getElementById("bottom-nav").style.display = showNav ? "flex" : "none";
@@ -235,6 +242,10 @@ const App = {
         window.scrollTo(0, 0);
 
         document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.remove("active"));
+    },
+
+    setActiveNav(name) {
+        document.querySelector(`.nav-btn[data-nav="${name}"]`)?.classList.add("active");
     },
 
     // ==========================
@@ -317,27 +328,7 @@ const App = {
                 return;
             }
 
-            grid.innerHTML = products.map(p => {
-                const photo = this.photoUrl(p.photo_id);
-                const rating = p.rating ? `⭐ ${p.rating.avg} (${p.rating.count})` : "";
-                const offerBadge = p.has_offer ? `<div class="offer-badge">🔥 Персональная скидка</div>` : "";
-
-                return `
-                    <div class="product-card" data-action="open-product" data-product-id="${p.id}">
-                        ${offerBadge}
-                        ${photo
-                            ? `<img src="${photo}" loading="lazy" data-image-fallback="next">
-                               <div class="placeholder" style="display:none">${this.esc(this.catEmoji())}</div>`
-                            : `<div class="placeholder">${this.esc(this.catEmoji())}</div>`
-                        }
-                        <div class="info">
-                            <div class="name">${this.esc(p.name)}</div>
-                            <div class="price">от ${p.price_from} ₽</div>
-                            ${rating ? `<div class="rating">${rating}</div>` : ""}
-                        </div>
-                    </div>
-                `;
-            }).join("");
+            grid.innerHTML = products.map(p => this.renderProductCard(p)).join("");
         } catch (e) {
             grid.innerHTML = `<div class="error-msg">Ошибка загрузки</div>`;
         }
@@ -395,7 +386,17 @@ const App = {
             html += `<div class="gallery-placeholder">${this.esc(this.catEmoji())}</div>`;
         }
 
-        html += `<div class="pd-title">${this.esc(p.name)}</div>`;
+        const favoriteLabel = p.is_favorite ? "Удалить из избранного" : "Добавить в избранное";
+        html += `<div class="pd-title-row">
+            <div class="pd-title">${this.esc(p.name)}</div>
+            <button type="button"
+                    class="favorite-btn favorite-btn-detail${p.is_favorite ? " active" : ""}"
+                    data-action="toggle-favorite"
+                    data-product-id="${p.id}"
+                    data-favorite="${p.is_favorite ? "true" : "false"}"
+                    aria-label="${favoriteLabel}"
+                    title="${favoriteLabel}">${p.is_favorite ? "♥" : "♡"}</button>
+        </div>`;
         html += `<div class="pd-rating">${rating}</div>`;
         html += `<div class="pd-desc">${this.esc(p.description)}</div>`;
 
@@ -644,9 +645,60 @@ const App = {
         }
     },
 
+    async toggleFavorite(productId, isFavorite) {
+        try {
+            await this.api(isFavorite ? "DELETE" : "PUT", `/favorites/${productId}`);
+            const nowFavorite = !isFavorite;
+            const label = nowFavorite ? "Удалить из избранного" : "Добавить в избранное";
+
+            document.querySelectorAll(`.favorite-btn[data-product-id="${productId}"]`).forEach(button => {
+                button.classList.toggle("active", nowFavorite);
+                button.dataset.favorite = nowFavorite ? "true" : "false";
+                button.textContent = nowFavorite ? "♥" : "♡";
+                button.setAttribute("aria-label", label);
+                button.title = label;
+            });
+
+            this.tg.HapticFeedback?.notificationOccurred("success");
+            this.toast(nowFavorite ? "Добавлено в избранное" : "Удалено из избранного");
+
+            if (this.currentView === "favorites" && !nowFavorite) {
+                await this.showFavorites();
+            }
+        } catch (e) {
+            this.toast(e.message);
+        }
+    },
+
     showCatalog() {
         this.showView("catalog");
-        document.querySelector('.nav-btn')?.classList.add("active");
+        this.setActiveNav("catalog");
+    },
+
+    async showFavorites() {
+        this.showView("favorites");
+        this.setActiveNav("favorites");
+
+        const grid = document.getElementById("favorite-products");
+        grid.innerHTML = `<div class="loading favorites-message">Загрузка...</div>`;
+
+        try {
+            const products = await this.api("GET", "/favorites");
+            if (products.length === 0) {
+                grid.innerHTML = `
+                    <div class="favorites-empty">
+                        <div class="emoji">♡</div>
+                        <div class="favorites-empty-title">Здесь пока пусто</div>
+                        <div class="favorites-empty-text">Нажимайте на сердечко у товаров, которые хотите сохранить.</div>
+                        <button class="btn-primary" data-action="show-catalog">Перейти в каталог</button>
+                    </div>
+                `;
+                return;
+            }
+            grid.innerHTML = products.map(p => this.renderProductCard(p)).join("");
+        } catch (e) {
+            grid.innerHTML = `<div class="error-msg favorites-message">Ошибка: ${this.esc(e.message)}</div>`;
+        }
     },
 
     // ==========================
@@ -655,7 +707,7 @@ const App = {
 
     async showCart() {
         this.showView("cart");
-        document.querySelectorAll(".nav-btn")[1]?.classList.add("active");
+        this.setActiveNav("cart");
 
         const container = document.getElementById("cart-items");
         const footer = document.getElementById("cart-footer");
@@ -1016,7 +1068,7 @@ const App = {
 
     async showOrders() {
         this.showView("orders");
-        document.querySelectorAll(".nav-btn")[2]?.classList.add("active");
+        this.setActiveNav("orders");
 
         const list = document.getElementById("orders-list");
         list.innerHTML = `<div class="loading">Загрузка...</div>`;
@@ -1108,6 +1160,39 @@ const App = {
         const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
+    },
+
+    renderProductCard(p) {
+        const photo = this.photoUrl(p.photo_id);
+        const placeholderEmoji = this.currentView === "favorites" ? "📦" : this.catEmoji();
+        const rating = p.rating ? `⭐ ${p.rating.avg} (${p.rating.count})` : "";
+        const offerBadge = p.has_offer
+            ? `<div class="offer-badge">🔥 Персональная скидка</div>`
+            : "";
+        const favoriteLabel = p.is_favorite ? "Удалить из избранного" : "Добавить в избранное";
+
+        return `
+            <div class="product-card" data-action="open-product" data-product-id="${p.id}">
+                ${offerBadge}
+                <button type="button"
+                        class="favorite-btn${p.is_favorite ? " active" : ""}"
+                        data-action="toggle-favorite"
+                        data-product-id="${p.id}"
+                        data-favorite="${p.is_favorite ? "true" : "false"}"
+                        aria-label="${favoriteLabel}"
+                        title="${favoriteLabel}">${p.is_favorite ? "♥" : "♡"}</button>
+                ${photo
+                    ? `<img src="${photo}" loading="lazy" data-image-fallback="next">
+                       <div class="placeholder" style="display:none">${this.esc(placeholderEmoji)}</div>`
+                    : `<div class="placeholder">${this.esc(placeholderEmoji)}</div>`
+                }
+                <div class="info">
+                    <div class="name">${this.esc(p.name)}</div>
+                    <div class="price">от ${p.price_from} ₽</div>
+                    ${rating ? `<div class="rating">${rating}</div>` : ""}
+                </div>
+            </div>
+        `;
     },
 
     safeHttpsUrl(value) {
