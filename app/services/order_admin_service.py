@@ -93,6 +93,7 @@ class OrderAdminService:
             order.status_updated_at = datetime.now()
 
             if status == OrderStatus.PAID:
+                order.stock_reserved_until = None
                 SalesService.confirm_order(
                     order,
                     source="manual",
@@ -100,7 +101,11 @@ class OrderAdminService:
                     confirmed_at=order.status_updated_at,
                 )
 
-            if old_status != OrderStatus.CANCELLED and status == OrderStatus.CANCELLED:
+            if (
+                old_status != OrderStatus.CANCELLED
+                and status == OrderStatus.CANCELLED
+                and order.stock_released_at is None
+            ):
                 for item in order.items:
                     if item.variant_id:
                         result_v = await session.execute(
@@ -112,6 +117,7 @@ class OrderAdminService:
                         variant = result_v.scalar_one_or_none()
                         if variant:
                             variant.stock += item.quantity
+                order.stock_released_at = order.status_updated_at
 
             await session.commit()
             SalesService.invalidate_analytics()

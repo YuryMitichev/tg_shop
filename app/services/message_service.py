@@ -2,6 +2,7 @@ from sqlalchemy import select
 
 from app.database.db import async_session
 from app.models.system_message import SystemMessage
+from app.utils.escape import sanitize_telegram_html
 
 DEFAULT_MESSAGES = {
     "welcome": (
@@ -65,7 +66,9 @@ class MessageService:
             )
             content = result.scalar_one_or_none()
 
-        return content if content is not None else DEFAULT_MESSAGES.get(key, "")
+        return sanitize_telegram_html(
+            content if content is not None else DEFAULT_MESSAGES.get(key, "")
+        )
 
     @staticmethod
     async def get_all(shop_id: int) -> list[dict]:
@@ -83,7 +86,7 @@ class MessageService:
             messages.append({
                 "key": key,
                 "label": MESSAGE_LABELS.get(key, key),
-                "content": db_messages.get(key, DEFAULT_MESSAGES[key]),
+                "content": sanitize_telegram_html(db_messages.get(key, DEFAULT_MESSAGES[key])),
                 "is_default": key not in db_messages,
             })
 
@@ -107,13 +110,18 @@ class MessageService:
         return {
             "key": key,
             "label": MESSAGE_LABELS.get(key, key),
-            "content": content if content is not None else DEFAULT_MESSAGES[key],
+            "content": sanitize_telegram_html(
+                content if content is not None else DEFAULT_MESSAGES[key]
+            ),
             "is_default": content is None,
         }
 
     @staticmethod
     async def update(shop_id: int, key: str, content: str) -> None:
         """Обновить или создать сообщение."""
+        if key not in DEFAULT_MESSAGES:
+            raise ValueError("Неизвестный ключ системного сообщения")
+        content = sanitize_telegram_html(content)
         async with async_session() as session:
             result = await session.execute(
                 select(SystemMessage).where(

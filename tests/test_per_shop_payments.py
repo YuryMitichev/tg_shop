@@ -16,7 +16,13 @@ from app.utils.crypto import encrypt
 _YK_SHOP_ID = "123456"
 _YK_SECRET = "live_abcdef1234567890"
 
-_ADMIN_DICT = {"admin_id": 123456, "shop_id": 1, "is_super_admin": False}
+_ADMIN_DICT = {
+    "admin_id": 123456,
+    "shop_id": 1,
+    "is_super_admin": False,
+    "role": "owner",
+    "authenticated_at": int(datetime.now(timezone.utc).timestamp()),
+}
 
 
 @pytest.fixture

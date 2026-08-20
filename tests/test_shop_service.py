@@ -126,7 +126,7 @@ class TestShopService:
                 AdminUser(id=100, shop_id=2, telegram_user_id=55),
                 CommunicationLog(id=100, shop_id=2, telegram_user_id=55),
                 SystemMessage(id=100, shop_id=2, key="k", content="c"),
-                LoginToken(id=100, token="tok-2", shop_id=2, telegram_user_id=55, expires_at=now),
+                LoginToken(id=100, token_hash="a" * 64, shop_id=2, telegram_user_id=55, expires_at=now),
                 Broadcast(id=100, shop_id=2, product_id=100, product_name="P", original_price=10, discounted_price=5),
                 UserOffer(id=100, shop_id=2, telegram_user_id=55, product_id=100, discount_percent=10),
                 ShopOfferAcceptance(shop_id=2, telegram_user_id=55),

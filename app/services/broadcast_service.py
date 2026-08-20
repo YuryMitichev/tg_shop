@@ -1,4 +1,5 @@
 from datetime import datetime
+from html import escape
 from typing import Sequence
 import asyncio
 
@@ -14,6 +15,7 @@ from app.models.order import Order
 from app.models.product import Product
 from app.models.product_variant import ProductVariant
 from app.models.product_photo import ProductPhoto
+from app.services.sales_service import SalesService
 
 
 AUTO_TAGS = {
@@ -53,7 +55,7 @@ class BroadcastService:
                     ).where(
                         Order.shop_id == shop_id,
                         Order.telegram_user_id == p.telegram_user_id,
-                        Order.status != OrderStatus.CANCELLED,
+                        SalesService.confirmed_condition(),
                     )
                 )
                 row = stats.one()
@@ -109,7 +111,14 @@ class BroadcastService:
         expires_at: datetime | None = None,
     ) -> Broadcast:
         async with async_session() as session:
-            product = await session.get(Product, product_id)
+            product = (
+                await session.execute(
+                    select(Product).where(
+                        Product.id == product_id,
+                        Product.shop_id == shop_id,
+                    )
+                )
+            ).scalar_one_or_none()
             if product is None:
                 raise ValueError("Товар не найден")
 
@@ -117,14 +126,26 @@ class BroadcastService:
             variant_volume = None
 
             if variant_id:
-                variant = await session.get(ProductVariant, variant_id)
-                if variant and variant.product_id == product_id:
-                    original_price = variant.price
-                    variant_volume = variant.volume
+                variant = (
+                    await session.execute(
+                        select(ProductVariant).where(
+                            ProductVariant.id == variant_id,
+                            ProductVariant.shop_id == shop_id,
+                            ProductVariant.product_id == product_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if variant is None:
+                    raise ValueError("Вариант товара не найден")
+                original_price = variant.price
+                variant_volume = variant.volume
             else:
                 variants_result = await session.execute(
                     select(ProductVariant)
-                    .where(ProductVariant.product_id == product_id)
+                    .where(
+                        ProductVariant.product_id == product_id,
+                        ProductVariant.shop_id == shop_id,
+                    )
                     .order_by(ProductVariant.price.asc())
                     .limit(1)
                 )
@@ -166,12 +187,18 @@ class BroadcastService:
         from app.services.offer_service import OfferService
 
         async with async_session() as session:
-            broadcast = await session.get(Broadcast, broadcast_id)
+            broadcast = (
+                await session.execute(
+                    select(Broadcast)
+                    .where(Broadcast.id == broadcast_id, Broadcast.shop_id == shop_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
             if broadcast is None:
                 return {"ok": False, "error": "Рассылка не найдена"}
 
-            if broadcast.status == "sent":
-                return {"ok": False, "error": "Рассылка уже отправлена"}
+            if broadcast.status in {"sending", "sent"}:
+                return {"ok": False, "error": "Рассылка уже отправляется или отправлена"}
 
             broadcast.status = "sending"
             await session.commit()
@@ -185,7 +212,10 @@ class BroadcastService:
 
             photo = await session.execute(
                 select(ProductPhoto.file_id)
-                .where(ProductPhoto.product_id == broadcast.product_id)
+                .where(
+                    ProductPhoto.product_id == broadcast.product_id,
+                    ProductPhoto.shop_id == shop_id,
+                )
                 .order_by(ProductPhoto.position)
                 .limit(1)
             )
@@ -201,14 +231,14 @@ class BroadcastService:
 
             custom_text = ""
             if broadcast.message_text:
-                custom_text = f"\n\n💬 {broadcast.message_text}"
+                custom_text = f"\n\n💬 {escape(broadcast.message_text)}"
 
             text = (
                 f"🔥 <b>Специальное предложение!</b>\n\n"
-                f"📦 <b>{broadcast.product_name}</b>"
+                f"📦 <b>{escape(broadcast.product_name)}</b>"
             )
             if broadcast.variant_volume:
-                text += f" ({broadcast.variant_volume})"
+                text += f" ({escape(broadcast.variant_volume)})"
             text += discount_info
             text += custom_text
             if broadcast.expires_at:

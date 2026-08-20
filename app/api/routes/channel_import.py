@@ -3,12 +3,17 @@ from __future__ import annotations
 import asyncio
 import logging
 from io import BytesIO
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
-from app.api.admin_auth import require_active_subscription, require_admin
+from app.api.admin_auth import (
+    require_active_subscription,
+    require_admin,
+    require_catalog_access,
+)
 from app.bot.bot import get_bot
 from app.database.db import async_session
 from app.models.channel_import import ChannelPost, ChannelPostMedia
@@ -38,25 +43,25 @@ class SettingsUpdate(BaseModel):
 
 class CandidateUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str | None = None
-    description: str | None = None
-    category_name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=5_000)
+    category_name: str | None = Field(default=None, max_length=100)
     proposed_category: bool | None = None
-    sku: str | None = None
-    currency: str | None = None
-    variants: list[dict] | None = None
-    attributes: dict | None = None
-    owner_note: str | None = None
+    sku: str | None = Field(default=None, max_length=100)
+    currency: str | None = Field(default=None, min_length=3, max_length=8)
+    variants: list[dict] | None = Field(default=None, max_length=100)
+    attributes: dict | None = Field(default=None, max_length=50)
+    owner_note: str | None = Field(default=None, max_length=2_000)
 
 
 class ProductLinkCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    product_id: int
+    product_id: int = Field(gt=0)
 
 
 class ProductLinkUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    product_id: int
+    product_id: int = Field(gt=0)
 
 
 class ButtonSyncRetry(BaseModel):
@@ -129,7 +134,7 @@ async def _button_readiness(shop_id: int, connection) -> dict:
 
 
 @router.get("/settings")
-async def get_settings(admin: dict = Depends(require_admin)):
+async def get_settings(admin: dict = Depends(require_catalog_access)):
     connection = await ChannelImportService.get_connection(admin["shop_id"])
     result = _connection_dict(connection)
     if connection is None:
@@ -143,7 +148,7 @@ async def get_settings(admin: dict = Depends(require_admin)):
 
 @router.put("/settings")
 async def update_settings(
-    body: SettingsUpdate, admin: dict = Depends(require_active_subscription)
+    body: SettingsUpdate, admin: dict = Depends(require_catalog_access)
 ):
     try:
         connection = await ChannelImportService.update_settings(
@@ -157,7 +162,7 @@ async def update_settings(
 
 
 @router.post("/backfill")
-async def run_backfill(admin: dict = Depends(require_active_subscription)):
+async def run_backfill(admin: dict = Depends(require_catalog_access)):
     if not ChannelImportService.enabled_for_shop(admin["shop_id"]):
         raise HTTPException(status_code=403, detail="AI-импорт не включён для магазина")
     if not ChannelImportService.mtproto_configured():
@@ -174,7 +179,7 @@ async def run_backfill(admin: dict = Depends(require_active_subscription)):
 
 @router.post("/storefront-pin/sync")
 async def sync_storefront_pin(
-    admin: dict = Depends(require_active_subscription),
+    admin: dict = Depends(require_catalog_access),
 ):
     try:
         return await ChannelStorefrontService.sync(admin["shop_id"])
@@ -191,7 +196,7 @@ async def get_publication_analytics(admin: dict = Depends(require_admin)):
 
 @router.post("/publication-analytics/views/refresh")
 async def refresh_publication_views(
-    admin: dict = Depends(require_active_subscription),
+    admin: dict = Depends(require_catalog_access),
 ):
     try:
         updated = await ChannelMetricsService.refresh_shop(admin["shop_id"])
@@ -204,13 +209,16 @@ async def refresh_publication_views(
 
 @router.get("/candidates")
 async def list_candidates(
-    status: str | None = None, admin: dict = Depends(require_admin)
+    status: Literal[
+        "pending_review", "approved", "rejected", "duplicate_skipped", "failed"
+    ] | None = None,
+    admin: dict = Depends(require_catalog_access),
 ):
     return await ChannelImportService.list_candidates(admin["shop_id"], status=status)
 
 
 @router.get("/candidates/{candidate_id}")
-async def get_candidate(candidate_id: int, admin: dict = Depends(require_admin)):
+async def get_candidate(candidate_id: int, admin: dict = Depends(require_catalog_access)):
     candidate = await ChannelImportService.get_candidate(admin["shop_id"], candidate_id)
     if candidate is None:
         raise HTTPException(status_code=404, detail="Черновик не найден")
@@ -221,7 +229,7 @@ async def get_candidate(candidate_id: int, admin: dict = Depends(require_admin))
 async def update_candidate(
     candidate_id: int,
     body: CandidateUpdate,
-    admin: dict = Depends(require_active_subscription),
+    admin: dict = Depends(require_catalog_access),
 ):
     try:
         return await ChannelImportService.update_candidate(
@@ -233,7 +241,7 @@ async def update_candidate(
 
 @router.post("/candidates/{candidate_id}/approve")
 async def approve_candidate(
-    candidate_id: int, admin: dict = Depends(require_active_subscription)
+    candidate_id: int, admin: dict = Depends(require_catalog_access)
 ):
     try:
         product_id = await ChannelImportService.approve_candidate(admin["shop_id"], candidate_id)
@@ -244,7 +252,7 @@ async def approve_candidate(
 
 @router.post("/candidates/{candidate_id}/reject")
 async def reject_candidate(
-    candidate_id: int, admin: dict = Depends(require_active_subscription)
+    candidate_id: int, admin: dict = Depends(require_catalog_access)
 ):
     try:
         await ChannelImportService.set_candidate_status(
@@ -257,7 +265,7 @@ async def reject_candidate(
 
 @router.post("/candidates/{candidate_id}/mark-duplicate")
 async def mark_duplicate(
-    candidate_id: int, admin: dict = Depends(require_active_subscription)
+    candidate_id: int, admin: dict = Depends(require_catalog_access)
 ):
     try:
         await ChannelImportService.set_candidate_status(
@@ -270,7 +278,7 @@ async def mark_duplicate(
 
 @router.post("/candidates/{candidate_id}/reanalyze")
 async def reanalyze_candidate(
-    candidate_id: int, admin: dict = Depends(require_active_subscription)
+    candidate_id: int, admin: dict = Depends(require_catalog_access)
 ):
     try:
         job_id = await ChannelImportService.reanalyze_candidate(admin["shop_id"], candidate_id)
@@ -280,7 +288,7 @@ async def reanalyze_candidate(
 
 
 @router.post("/jobs/{job_id}/retry")
-async def retry_job(job_id: int, admin: dict = Depends(require_active_subscription)):
+async def retry_job(job_id: int, admin: dict = Depends(require_catalog_access)):
     try:
         await ChannelImportService.retry_job(admin["shop_id"], job_id)
     except ValueError as exc:
@@ -294,12 +302,16 @@ async def get_stats(admin: dict = Depends(require_admin)):
 
 
 @router.get("/product-options")
-async def search_product_options(q: str, admin: dict = Depends(require_admin)):
+async def search_product_options(
+    q: str = "",
+    admin: dict = Depends(require_catalog_access),
+):
+    q = q.strip()[:100]
     return await ChannelPostButtonService.search_products(admin["shop_id"], q)
 
 
 @router.get("/posts/{post_id}/product-links")
-async def get_product_links(post_id: int, admin: dict = Depends(require_admin)):
+async def get_product_links(post_id: int, admin: dict = Depends(require_catalog_access)):
     try:
         return await ChannelPostButtonService.list_links(admin["shop_id"], post_id)
     except ValueError as exc:
@@ -310,7 +322,7 @@ async def get_product_links(post_id: int, admin: dict = Depends(require_admin)):
 async def add_product_link(
     post_id: int,
     body: ProductLinkCreate,
-    admin: dict = Depends(require_active_subscription),
+    admin: dict = Depends(require_catalog_access),
 ):
     try:
         return await ChannelPostButtonService.add_link(
@@ -325,7 +337,7 @@ async def replace_product_link(
     post_id: int,
     link_id: int,
     body: ProductLinkUpdate,
-    admin: dict = Depends(require_active_subscription),
+    admin: dict = Depends(require_catalog_access),
 ):
     try:
         return await ChannelPostButtonService.replace_link(
@@ -339,7 +351,7 @@ async def replace_product_link(
 async def delete_product_link(
     post_id: int,
     link_id: int,
-    admin: dict = Depends(require_active_subscription),
+    admin: dict = Depends(require_catalog_access),
 ):
     try:
         return await ChannelPostButtonService.remove_link(
@@ -353,7 +365,7 @@ async def delete_product_link(
 async def retry_button_sync(
     post_id: int,
     body: ButtonSyncRetry,
-    admin: dict = Depends(require_active_subscription),
+    admin: dict = Depends(require_catalog_access),
 ):
     try:
         return await ChannelPostButtonService.retry_post(
@@ -366,7 +378,7 @@ async def retry_button_sync(
 
 
 @router.get("/media/{media_id}")
-async def get_media(media_id: int, admin: dict = Depends(require_admin)):
+async def get_media(media_id: int, admin: dict = Depends(require_catalog_access)):
     async with async_session() as session:
         media = (
             await session.execute(

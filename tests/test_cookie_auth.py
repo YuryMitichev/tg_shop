@@ -1,5 +1,6 @@
 import time
 from datetime import datetime, timedelta, timezone
+import hashlib
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -26,10 +27,10 @@ class TestVerifyTokenCookie:
     """Проверка, что /verify-token выставляет httpOnly-cookie."""
 
     async def test_verify_token_sets_cookie(self, db_session, seed_data):
-        token = "test-cookie-token"
+        token = "test-cookie-token-0123456789abcdef"
         async with db_session() as session:
             session.add(LoginToken(
-                token=token,
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),
                 telegram_user_id=123456,
                 shop_id=1,
                 is_super_admin=False,
@@ -59,17 +60,17 @@ class TestVerifyTokenCookie:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/admin/auth/verify-token",
-                json={"token": "bad-token"},
+                json={"token": "bad-token-that-is-long-enough-for-validation"},
             )
 
         assert resp.status_code == 200
         assert resp.json()["ok"] is False
 
     async def test_verify_token_does_not_return_token_in_json(self, db_session, seed_data):
-        token = "test-no-json-token"
+        token = "test-no-json-token-0123456789abcdef"
         async with db_session() as session:
             session.add(LoginToken(
-                token=token,
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),
                 telegram_user_id=123456,
                 shop_id=1,
                 is_super_admin=False,
@@ -105,7 +106,13 @@ class TestCookieAuth:
         with patch(
             "app.services.admin_auth_service.AdminAuthService.verify_token",
             new_callable=AsyncMock,
-            return_value={"admin_id": 123456, "shop_id": 1, "is_super_admin": False},
+            return_value={
+                "admin_id": 123456,
+                "shop_id": 1,
+                "is_super_admin": False,
+                "role": "owner",
+                "authenticated_at": int(datetime.now(timezone.utc).timestamp()),
+            },
         ):
             app = create_app()
             transport = ASGITransport(app=app)

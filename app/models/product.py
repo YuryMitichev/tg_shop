@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.db import Base
@@ -6,6 +6,9 @@ from app.database.db import Base
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        UniqueConstraint("id", "shop_id", name="uq_products_id_shop"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"), index=True, default=1)
@@ -19,6 +22,7 @@ class Product(Base):
 
     variants: Mapped[list["ProductVariant"]] = relationship(
         back_populates="product",
+        foreign_keys="[ProductVariant.product_id, ProductVariant.shop_id]",
         order_by="ProductVariant.id",
         cascade="all, delete-orphan",
     )

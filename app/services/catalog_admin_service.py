@@ -399,6 +399,16 @@ class CatalogAdminService:
         attributes: dict | None = None,
     ) -> int | None:
         async with async_session() as session:
+            product = (
+                await session.execute(
+                    select(Product).where(
+                        Product.id == product_id,
+                        Product.shop_id == shop_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if product is None:
+                return None
             variant = ProductVariant(
                 shop_id=shop_id,
                 product_id=product_id,
@@ -431,6 +441,16 @@ class CatalogAdminService:
     @staticmethod
     async def add_photo(shop_id: int, product_id: int, file_id: str) -> int | None:
         async with async_session() as session:
+            product = (
+                await session.execute(
+                    select(Product).where(
+                        Product.id == product_id,
+                        Product.shop_id == shop_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if product is None:
+                return None
             result = await session.execute(
                 select(func.count())
                 .select_from(ProductPhoto)
@@ -561,11 +581,19 @@ class CatalogAdminService:
 
         Возвращает {updates: [{variant_id, stock}], errors: [str]}.
         """
+        from app.services.catalog_import_service import _validate_xlsx_archive
+
+        _validate_xlsx_archive(file_bytes)
         wb = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
         ws = wb.active
 
-        rows = list(ws.iter_rows(min_row=1, values_only=True))
+        rows = list(
+            ws.iter_rows(min_row=1, max_row=5_002, max_col=20, values_only=True)
+        )
         wb.close()
+
+        if len(rows) > 5_001:
+            raise ValueError("В файле остатков допускается не более 5000 строк")
 
         if not rows:
             return {"updates": [], "errors": ["Файл пустой"]}
@@ -613,7 +641,10 @@ class CatalogAdminService:
                 errors.append(f"Строка {row_num}: остаток «{raw_stock}» не является числом")
                 continue
 
-            updates.append({"variant_id": variant_id, "stock": max(0, stock)})
+            if stock < 0 or stock > 1_000_000:
+                errors.append(f"Строка {row_num}: остаток должен быть от 0 до 1000000")
+                continue
+            updates.append({"variant_id": variant_id, "stock": stock})
 
         return {"updates": updates, "errors": errors}
 

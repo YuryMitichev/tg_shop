@@ -23,6 +23,7 @@ from app.models.channel_import import (
 from app.models.shop import Shop
 from app.services.channel_ai_service import ChannelAIService, PROMPT_VERSION
 from app.services.channel_import_service import ChannelImportService, product_fingerprint
+from app.utils.escape import esc
 from app.services.channel_prefilter import PREFILTER_VERSION, classify_post
 from app.services.subscription_service import SubscriptionService
 
@@ -473,8 +474,8 @@ class ChannelImportWorker:
             await bot.send_message(
                 owner_id,
                 "🧠 <b>Новый AI-черновик</b>\n\n"
-                f"{candidate.get('name') or 'Нужно заполнить вручную'}\n"
-                f"Статус: <code>{candidate['status']}</code>",
+                f"{esc(candidate.get('name') or 'Нужно заполнить вручную')}\n"
+                f"Статус: <code>{esc(candidate['status'])}</code>",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             )
         except Exception:

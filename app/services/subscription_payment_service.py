@@ -1,4 +1,5 @@
 import logging
+from html import escape
 
 from app.core.config import settings
 from app.services.platform_settings_service import PlatformSettingsService
@@ -16,6 +17,7 @@ class SubscriptionPaymentService:
     async def create_payment(
         shop_id: int,
         plan_id: int,
+        idempotency_key: str | None = None,
     ) -> dict | None:
         """
         Создаёт платёж для оплаты подписки.
@@ -79,6 +81,11 @@ class SubscriptionPaymentService:
             shop_id=creds[0],
             secret_key=creds[1],
             receipt=receipt,
+            idempotency_key=(
+                f"subscription:{shop_id}:{plan_id}:{idempotency_key}"
+                if idempotency_key
+                else None
+            ),
         )
 
         if result is None:
@@ -184,7 +191,7 @@ class SubscriptionPaymentService:
             await bot.send_message(
                 shop["owner_telegram_id"],
                 f"✅ <b>Подписка оплачена!</b>\n\n"
-                f"Тариф: «{plan_name}»\n"
+                f"Тариф: «{escape(plan_name)}»\n"
                 f"Действует до: {expires_at[:10]}\n\n"
                 f"Спасибо за оплату! 🎉",
             )

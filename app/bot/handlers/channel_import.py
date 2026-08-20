@@ -26,6 +26,7 @@ from app.models.shop import Shop
 from app.services.channel_import_service import ChannelImportService
 from app.services.channel_post_button_service import ChannelPostButtonService
 from app.services.channel_storefront_service import ChannelStorefrontService
+from app.utils.escape import esc
 
 
 _album_messages: defaultdict[tuple[int, str], list[tuple[Message, bool]]] = defaultdict(list)
@@ -48,7 +49,7 @@ def _stock_prompt(variant: dict, index: int, total: int) -> str:
     title = variant.get("title") or variant.get("volume") or "—"
     suffix = f" ({index + 1}/{total})" if total > 1 else ""
     return (
-        f"Укажите остаток товара{suffix} для варианта «{title}» — "
+        f"Укажите остаток товара{suffix} для варианта «{esc(title)}» — "
         "целое число от 0. Для отмены отправьте «отмена»."
     )
 
@@ -105,12 +106,12 @@ async def _send_links(message: Message, shop_id: int, post_id: int) -> None:
     links = data["links"]
     sync = data.get("sync") or {}
     link_lines = [
-        f"• #{item['product_id']} {item['product_name']}"
+        f"• #{item['product_id']} {esc(item['product_name'])}"
         + (" (выключен)" if not item["is_active"] else "")
         for item in links
     ]
-    status = sync.get("status") or "ещё не запускалась"
-    error = f"\nОшибка: {sync['last_error']}" if sync.get("last_error") else ""
+    status = esc(sync.get("status") or "ещё не запускалась")
+    error = f"\nОшибка: {esc(sync['last_error'])}" if sync.get("last_error") else ""
     await message.answer(
         "<b>Товары под публикацией</b>\n\n"
         + ("\n".join(link_lines) if link_lines else "Товары пока не прикреплены")

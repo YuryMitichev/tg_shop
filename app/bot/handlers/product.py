@@ -11,6 +11,7 @@ from app.services.cart_service import CartService
 from app.services.order_service import OrderService
 from app.services.review_service import ReviewService
 from app.services.shop_service import ShopService
+from app.utils.escape import esc
 
 
 def setup_router() -> Router:
@@ -238,14 +239,14 @@ def setup_router() -> Router:
             return
 
         user = callback.from_user
-        user_link = f"@{user.username}" if user.username else user.full_name
+        user_link = esc(f"@{user.username}" if user.username else user.full_name)
 
         product = await CatalogService.get_product(get_shop_id(), product_id) if product_id else None
 
         if product:
             variant = CatalogService.get_variant(product, variant_id) if variant_id else None
-            price_line = f"\n🏷 {variant['volume']} — {variant['price']} ₽" if variant else ""
-            product_line = f"📦 <b>{product['name']}</b> (ID: <code>{product['id']}</code>){price_line}"
+            price_line = f"\n🏷 {esc(variant['volume'])} — {variant['price']} ₽" if variant else ""
+            product_line = f"📦 <b>{esc(product['name'])}</b> (ID: <code>{product['id']}</code>){price_line}"
         else:
             product_line = "📦 Информация о товаре недоступна"
 

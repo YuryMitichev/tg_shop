@@ -5,6 +5,7 @@
 после импорта.
 """
 from io import BytesIO
+from zipfile import BadZipFile, ZipFile
 from typing import Any, Literal
 
 from openpyxl import load_workbook
@@ -57,6 +58,35 @@ _MATCHED_FIELDS = list(_COLUMN_KEYWORDS.keys())
 HEADER_SCAN_ROWS = 5
 
 PREVIEW_ROW_LIMIT = 500
+MAX_XLSX_ENTRIES = 2_000
+MAX_XLSX_UNCOMPRESSED_SIZE = 50 * 1024 * 1024
+MAX_XLSX_MEMBER_SIZE = 20 * 1024 * 1024
+MAX_XLSX_COLUMNS = 200
+
+
+def _validate_xlsx_archive(file_bytes: bytes) -> None:
+    """Reject malformed/encrypted ZIP bombs before openpyxl parses XML."""
+    try:
+        with ZipFile(BytesIO(file_bytes)) as archive:
+            members = archive.infolist()
+            if not members or len(members) > MAX_XLSX_ENTRIES:
+                raise ValueError("Некорректная структура XLSX")
+            total_size = 0
+            for member in members:
+                if member.flag_bits & 0x1:
+                    raise ValueError("Зашифрованные XLSX не поддерживаются")
+                normalized = member.filename.replace("\\", "/")
+                if normalized.startswith("/") or "../" in normalized:
+                    raise ValueError("Некорректный путь внутри XLSX")
+                if member.file_size > MAX_XLSX_MEMBER_SIZE:
+                    raise ValueError("Слишком большой XML-файл внутри XLSX")
+                total_size += member.file_size
+                if total_size > MAX_XLSX_UNCOMPRESSED_SIZE:
+                    raise ValueError("Распакованный XLSX слишком большой")
+                if member.compress_size and member.file_size / member.compress_size > 250:
+                    raise ValueError("Подозрительно высокий коэффициент сжатия XLSX")
+    except BadZipFile as exc:
+        raise ValueError("Файл не является корректным XLSX") from exc
 
 
 def _match_column(header: str, source: MarketplaceSource) -> str | None:
@@ -95,11 +125,17 @@ class CatalogImportService:
             rows: [{row_number, name, description, recognized}],
             unmapped_columns: [str]
         """
+        _validate_xlsx_archive(file_bytes)
         wb = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
         ws = wb.active
 
         candidate_rows = list(
-            ws.iter_rows(min_row=1, max_row=HEADER_SCAN_ROWS, values_only=True)
+            ws.iter_rows(
+                min_row=1,
+                max_row=HEADER_SCAN_ROWS,
+                max_col=MAX_XLSX_COLUMNS,
+                values_only=True,
+            )
         )
         if not candidate_rows:
             wb.close()
@@ -144,7 +180,11 @@ class CatalogImportService:
         truncated = False
 
         for row_num, row in enumerate(
-            ws.iter_rows(min_row=header_row_num + 1, values_only=True),
+            ws.iter_rows(
+                min_row=header_row_num + 1,
+                max_col=MAX_XLSX_COLUMNS,
+                values_only=True,
+            ),
             start=header_row_num + 1,
         ):
             if row is None or all(c is None or str(c).strip() == "" for c in row):

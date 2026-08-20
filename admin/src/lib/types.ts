@@ -333,6 +333,7 @@ export interface Admin {
   id: number;
   telegram_user_id: number;
   display_name: string | null;
+  role: "owner" | "manager" | "content" | "support";
   created_at: string | null;
   is_super: boolean;
 }

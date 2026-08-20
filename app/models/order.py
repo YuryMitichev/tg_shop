@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import CheckConstraint, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.enums import OrderStatus
@@ -9,6 +9,13 @@ from app.database.db import Base
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (
+        CheckConstraint("total_amount > 0", name="ck_orders_positive_total"),
+        CheckConstraint(
+            "payment_method IN ('manual', 'yookassa')",
+            name="ck_orders_payment_method",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
@@ -41,6 +48,10 @@ class Order(Base):
     payment_confirmed_at: Mapped[datetime | None] = mapped_column(nullable=True, index=True)
     payment_confirmation_source: Mapped[str | None] = mapped_column(nullable=True)
     payment_confirmation_ref: Mapped[str | None] = mapped_column(nullable=True)
+
+    # Остаток временно зарезервирован до оплаты/подтверждения.
+    stock_reserved_until: Mapped[datetime | None] = mapped_column(nullable=True, index=True)
+    stock_released_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     status_updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
