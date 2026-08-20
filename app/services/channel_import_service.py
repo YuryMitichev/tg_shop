@@ -786,7 +786,10 @@ class ChannelImportService:
                         func.coalesce(func.sum(CatalogAnalysisRun.input_tokens), 0),
                         func.coalesce(func.sum(CatalogAnalysisRun.output_tokens), 0),
                         func.coalesce(func.sum(CatalogAnalysisRun.cost_microusd), 0),
-                    ).where(CatalogAnalysisRun.created_at >= month_start)
+                    ).where(
+                        CatalogAnalysisRun.shop_id == shop_id,
+                        CatalogAnalysisRun.created_at >= month_start,
+                    )
                 )
             ).one()
             jobs = (

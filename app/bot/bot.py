@@ -222,6 +222,20 @@ async def start_all_bots() -> None:
 
     await init_db()
 
+    logger.info(
+        "Feature rollout version=channel-release-v1 "
+        "channel_import=%s import_scope=%s product_buttons=%s buttons_scope=%s "
+        "attribution=%s attribution_scope=%s public_metrics=%s product_lifecycle=%s",
+        settings.channel_import_enabled,
+        settings.channel_import_pilot_shop_id or "all",
+        settings.channel_product_buttons_enabled,
+        settings.channel_product_buttons_pilot_shop_id or "all",
+        settings.channel_attribution_enabled,
+        settings.channel_attribution_pilot_shop_id or "all",
+        settings.channel_public_metrics_enabled,
+        settings.product_lifecycle_enabled,
+    )
+
     try:
         cancelled = await OrderService.auto_cancel_stale_orders(minutes=20)
         if cancelled:
