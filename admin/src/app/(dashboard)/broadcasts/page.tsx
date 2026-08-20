@@ -38,7 +38,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Megaphone, Send, Users, Clock } from "lucide-react";
+import { Megaphone, Send, Users } from "lucide-react";
 import { formatPrice, formatDate } from "@/lib/format";
 import type {
   Product,
@@ -178,7 +178,7 @@ export default function BroadcastsPage() {
       setExpiresAt("");
       setPreviewCount(null);
       mutate();
-    } catch (e) {
+    } catch {
       toast.error("Ошибка при отправке");
     } finally {
       setSending(false);

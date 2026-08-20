@@ -58,6 +58,13 @@ export interface Order {
   telegram_user_id?: number;
 }
 
+export interface OrdersResponse {
+  orders: Order[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 export interface OrderDetail extends Order {
   address?: string;
   comment?: string | null;

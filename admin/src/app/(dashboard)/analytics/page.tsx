@@ -17,14 +17,12 @@ import {
   Pie,
   Cell,
   Legend,
-  RadialBarChart,
-  RadialBar,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Star, TrendingUp, TrendingDown, Users, ShoppingCart, Ticket } from "lucide-react";
-import { formatPrice, formatDate } from "@/lib/format";
+import { Star, TrendingUp, TrendingDown, Users, Ticket } from "lucide-react";
+import { formatPrice } from "@/lib/format";
 import type {
   Stats,
   RevenueChartItem,
@@ -90,7 +88,7 @@ function KpiCard({
 export default function AnalyticsPage() {
   const [days, setDays] = useState(30);
 
-  const { data: stats, isLoading: statsLoading } = useSWR<Stats>("/stats", fetcher);
+  const { data: stats } = useSWR<Stats>("/stats", fetcher);
   const { data: chart } = useSWR<RevenueChartItem[]>(`/analytics/revenue?days=${days}`, fetcher);
   const { data: overview, isLoading: ovLoading } = useSWR<AnalyticsOverview>(
     `/analytics/overview?days=${days}`,

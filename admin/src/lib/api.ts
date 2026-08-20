@@ -47,7 +47,7 @@ async function request<T>(
 
   if (res.status === 401) {
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.href = "/login";
+      window.location.assign(new URL("/login", window.location.origin));
     }
     throw new Error("Не авторизован");
   }
@@ -77,7 +77,7 @@ async function downloadFile(
 
   if (res.status === 401) {
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.href = "/login";
+      window.location.assign(new URL("/login", window.location.origin));
     }
     throw new Error("Не авторизован");
   }
