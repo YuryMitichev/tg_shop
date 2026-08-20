@@ -119,6 +119,35 @@ class CatalogService:
             return _product_to_dict(product) if product else None
 
     @staticmethod
+    async def get_products_by_ids(shop_id: int, product_ids: list[int]) -> list[dict]:
+        """Получить видимые товары магазина по списку ID."""
+        if not product_ids:
+            return []
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(Product)
+                .options(
+                    selectinload(Product.variants),
+                    selectinload(Product.photos),
+                )
+                .where(
+                    Product.shop_id == shop_id,
+                    Product.id.in_(product_ids),
+                    Product.is_active == True,  # noqa: E712
+                )
+            )
+            products = {
+                product.id: _product_to_dict(product)
+                for product in result.scalars().all()
+            }
+            return [
+                products[product_id]
+                for product_id in product_ids
+                if product_id in products
+            ]
+
+    @staticmethod
     async def get_first_product(shop_id: int, category_id: int) -> dict | None:
         """Первый товар категории."""
         products = await CatalogService.get_products(shop_id, category_id)

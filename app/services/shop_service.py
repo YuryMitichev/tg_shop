@@ -6,6 +6,7 @@ from app.database.db import async_session
 from app.models.admin_user import AdminUser
 from app.models.broadcast import Broadcast
 from app.models.cart_item import CartItem
+from app.models.favorite import Favorite
 from app.models.category import Category
 from app.models.communication_log import CommunicationLog
 from app.models.login_token import LoginToken
@@ -258,6 +259,9 @@ class ShopService:
 
             await session.execute(
                 delete(CartItem).where(CartItem.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(Favorite).where(Favorite.shop_id == shop_id)
             )
             await session.execute(
                 delete(OrderItem).where(OrderItem.shop_id == shop_id)

@@ -15,6 +15,7 @@ from app.models.product import Product
 from app.models.product_photo import ProductPhoto
 from app.services.catalog_service import CatalogService
 from app.services.cart_service import CartService
+from app.services.favorite_service import FavoriteService
 from app.services.offer_service import OfferService
 from app.services.order_payment_service import OrderPaymentService
 from app.services.order_service import OrderService
@@ -107,6 +108,42 @@ class ContactManagerRequest(BaseModel):
     message: str = Field(min_length=3, max_length=500)
 
 
+async def _product_summary(
+    product: dict,
+    shop_id: int,
+    telegram_user_id: int | None,
+    *,
+    is_favorite: bool,
+) -> dict:
+    prices = [variant["price"] for variant in product["variants"]]
+    rating = await ReviewService.get_rating_summary(shop_id, product["id"])
+
+    has_offer = False
+    if telegram_user_id:
+        for variant in product["variants"]:
+            offer = await OfferService.get_best_offer(
+                shop_id,
+                telegram_user_id,
+                product["id"],
+                variant["id"],
+            )
+            if offer and offer.discount_percent > 0:
+                has_offer = True
+                break
+
+    return {
+        "id": product["id"],
+        "name": product["name"],
+        "description": product["description"],
+        "price_from": min(prices) if prices else 0,
+        "price_to": max(prices) if prices else 0,
+        "photo_id": product["photos"][0]["id"] if product.get("photos") else None,
+        "rating": rating,
+        "has_offer": has_offer,
+        "is_favorite": is_favorite,
+    }
+
+
 # ==========================
 # Каталог
 # ==========================
@@ -126,32 +163,21 @@ async def list_products(
     sid = user["shop_id"] if user else shop_id
     products = await CatalogService.get_products(sid, category_id)
     tg_id = user.get("id") if user else None
+    favorite_ids = (
+        await FavoriteService.product_ids(sid, tg_id, [p["id"] for p in products])
+        if tg_id
+        else set()
+    )
 
-    result = []
-    for p in products:
-        prices = [v["price"] for v in p["variants"]]
-        summary = await ReviewService.get_rating_summary(sid, p["id"])
-
-        has_offer = False
-        if tg_id:
-            for v in p["variants"]:
-                offer = await OfferService.get_best_offer(sid, tg_id, p["id"], v["id"])
-                if offer and offer.discount_percent > 0:
-                    has_offer = True
-                    break
-
-        result.append({
-            "id": p["id"],
-            "name": p["name"],
-            "description": p["description"],
-            "price_from": min(prices) if prices else 0,
-            "price_to": max(prices) if prices else 0,
-            "photo_id": p["photos"][0]["id"] if p.get("photos") else None,
-            "rating": summary,
-            "has_offer": has_offer,
-        })
-
-    return result
+    return [
+        await _product_summary(
+            product,
+            sid,
+            tg_id,
+            is_favorite=product["id"] in favorite_ids,
+        )
+        for product in products
+    ]
 
 
 @router.get("/products/{product_id}")
@@ -175,11 +201,59 @@ async def get_product_detail(
             sid, tg_id, product_id, product["variants"]
         )
 
+    is_favorite = bool(
+        tg_id
+        and await FavoriteService.product_ids(sid, tg_id, [product_id])
+    )
+
     return {
         **product,
         "rating": summary,
         "reviews": reviews,
+        "is_favorite": is_favorite,
     }
+
+
+# ==========================
+# Избранное
+# ==========================
+
+@router.get("/favorites")
+async def list_favorites(user: dict = Depends(get_current_user)):
+    shop_id = user["shop_id"]
+    telegram_user_id = user["id"]
+    product_ids = await FavoriteService.list_product_ids(shop_id, telegram_user_id)
+    products = await CatalogService.get_products_by_ids(shop_id, product_ids)
+
+    return [
+        await _product_summary(
+            product,
+            shop_id,
+            telegram_user_id,
+            is_favorite=True,
+        )
+        for product in products
+    ]
+
+
+@router.put("/favorites/{product_id}")
+async def add_favorite(product_id: int, user: dict = Depends(get_current_user)):
+    if product_id <= 0:
+        raise HTTPException(status_code=422, detail="Invalid product id")
+
+    added = await FavoriteService.add(user["shop_id"], user["id"], product_id)
+    if not added:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"product_id": product_id, "is_favorite": True}
+
+
+@router.delete("/favorites/{product_id}")
+async def remove_favorite(product_id: int, user: dict = Depends(get_current_user)):
+    if product_id <= 0:
+        raise HTTPException(status_code=422, detail="Invalid product id")
+
+    await FavoriteService.remove(user["shop_id"], user["id"], product_id)
+    return {"product_id": product_id, "is_favorite": False}
 
 
 # ==========================

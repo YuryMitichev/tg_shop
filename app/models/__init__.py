@@ -6,6 +6,7 @@ from app.models.product_attribute_def import ProductAttributeDef
 from app.models.offer_acceptance import OfferAcceptance
 from app.models.product_photo import ProductPhoto
 from app.models.cart_item import CartItem
+from app.models.favorite import Favorite
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
@@ -44,6 +45,7 @@ __all__ = [
     "OfferAcceptance",
     "ProductPhoto",
     "CartItem",
+    "Favorite",
     "Order",
     "OrderItem",
     "Payment",
