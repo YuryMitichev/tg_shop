@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { fetcher } from "@/lib/swr";
 import { api, photoUrl } from "@/lib/api";
 import { toast } from "sonner";
@@ -175,12 +176,15 @@ export default function ProductsPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {products?.map((product) => (
             <Card key={product.id} size="sm" className={`overflow-hidden ${lifecycleCardClass(product)}`}>
-              <div className="aspect-square bg-muted">
+              <div className="relative aspect-square bg-muted">
                 {product.photos[0] ? (
-                  <img
+                  <Image
                     src={photoUrl(product.photos[0].id)}
                     alt={product.name}
-                    className="h-full w-full object-cover"
+                    fill
+                    unoptimized
+                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 17vw"
+                    className="object-cover"
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-muted-foreground">

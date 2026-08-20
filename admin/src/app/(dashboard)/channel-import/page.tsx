@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { Bot, Check, Copy, Link2, Pin, Plus, RefreshCw, Save, Sparkles, Trash2, X } from "lucide-react";
@@ -450,7 +451,15 @@ function CandidateEditor({ candidate, onChanged, buttonsEnabled }: { candidate: 
         {(candidate.photos?.length ?? 0) > 0 && (
           <div className="flex gap-3 overflow-x-auto">
             {candidate.photos?.map((photo) => (
-              <img key={photo.id} src={channelImportMediaUrl(photo.id)} alt="Фото из поста" className="h-40 w-40 shrink-0 rounded-lg object-cover" />
+              <Image
+                key={photo.id}
+                src={channelImportMediaUrl(photo.id)}
+                alt="Фото из поста"
+                width={160}
+                height={160}
+                unoptimized
+                className="h-40 w-40 shrink-0 rounded-lg object-cover"
+              />
             ))}
           </div>
         )}

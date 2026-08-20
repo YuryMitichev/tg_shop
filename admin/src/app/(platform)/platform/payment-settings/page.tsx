@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,25 +15,24 @@ import { superAdminFetcher } from "@/lib/swr";
 import type { PlatformPaymentSettings } from "@/lib/types";
 
 export default function PlatformPaymentSettingsPage() {
-  const { data, isLoading, mutate } = useSWR<PlatformPaymentSettings>(
-    "/payment-settings",
-    superAdminFetcher,
-  );
-
   const [yookassaEnabled, setYookassaEnabled] = useState(false);
   const [yookassaShopId, setYookassaShopId] = useState("");
   const [yookassaSecretKey, setYookassaSecretKey] = useState("");
   const [yookassaSecretTouched, setYookassaSecretTouched] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (data) {
-      setYookassaEnabled(data.yookassa_enabled);
-      setYookassaShopId(data.yookassa_shop_id || "");
-      setYookassaSecretKey("");
-      setYookassaSecretTouched(false);
-    }
-  }, [data]);
+  const { data, isLoading, mutate } = useSWR<PlatformPaymentSettings>(
+    "/payment-settings",
+    superAdminFetcher,
+    {
+      onSuccess: (nextSettings) => {
+        setYookassaEnabled(nextSettings.yookassa_enabled);
+        setYookassaShopId(nextSettings.yookassa_shop_id || "");
+        setYookassaSecretKey("");
+        setYookassaSecretTouched(false);
+      },
+    },
+  );
 
   async function handleSave() {
     setSaving(true);

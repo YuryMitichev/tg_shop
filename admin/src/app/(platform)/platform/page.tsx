@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { superAdminFetcher } from "@/lib/swr";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Store, TrendingUp, Clock, AlertCircle, PlusCircle, Wallet } from "lucide-react";
 import { formatPrice } from "@/lib/format";
