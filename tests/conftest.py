@@ -26,6 +26,7 @@ import app.services.stats_service as stats_service
 import app.services.admin_user_service as admin_user_service
 import app.services.cart_service as cart_service
 import app.services.favorite_service as favorite_service
+import app.services.product_lifecycle_service as product_lifecycle_service
 import app.services.catalog_service as catalog_service
 import app.services.crm_service as crm_service
 import app.services.order_service as order_service
@@ -102,6 +103,7 @@ _PATCH_TARGETS = [
     catalog_service,
     cart_service,
     favorite_service,
+    product_lifecycle_service,
     order_service,
     catalog_admin_service,
     order_admin_service,

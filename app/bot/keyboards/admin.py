@@ -159,7 +159,13 @@ def get_admin_products_keyboard(category_id: int, products: list[dict]) -> Inlin
     builder = InlineKeyboardBuilder()
 
     for product in products:
-        mark = "👁" if product["is_active"] else "🙈"
+        lifecycle_status = product.get("lifecycle_status")
+        if lifecycle_status == "out_of_stock_visible":
+            mark = "⚠️"
+        elif lifecycle_status in {"out_of_stock_hidden", "out_of_stock_manual_hidden"}:
+            mark = "🛑"
+        else:
+            mark = "👁" if product["is_active"] else "🙈"
 
         builder.button(
             text=f"{mark} {product['name']}",

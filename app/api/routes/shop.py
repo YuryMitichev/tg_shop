@@ -141,6 +141,9 @@ async def _product_summary(
         "rating": rating,
         "has_offer": has_offer,
         "is_favorite": is_favorite,
+        "is_out_of_stock": not any(
+            variant.get("stock", 0) > 0 for variant in product["variants"]
+        ),
     }
 
 
@@ -211,6 +214,9 @@ async def get_product_detail(
         "rating": summary,
         "reviews": reviews,
         "is_favorite": is_favorite,
+        "is_out_of_stock": not any(
+            variant.get("stock", 0) > 0 for variant in product["variants"]
+        ),
     }
 
 

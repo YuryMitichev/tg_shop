@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +19,9 @@ class Product(Base):
     name: Mapped[str] = mapped_column(nullable=False)
     description: Mapped[str] = mapped_column(nullable=False)
     is_active: Mapped[bool] = mapped_column(default=True)
+    out_of_stock_since: Mapped[datetime | None] = mapped_column(nullable=True)
+    auto_hidden_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    lifecycle_deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     category: Mapped["Category"] = relationship(back_populates="products")
 

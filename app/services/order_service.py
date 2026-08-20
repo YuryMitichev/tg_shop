@@ -13,6 +13,7 @@ from app.models.shop import Shop
 from app.services.cart_service import CartService
 from app.services.offer_service import OfferService
 from app.services.promo_service import PromoCodeService
+from app.services.product_lifecycle_service import ProductLifecycleService
 
 
 class OrderService:
@@ -214,6 +215,12 @@ class OrderService:
 
             order_id = order.id
 
+        await ProductLifecycleService.reconcile_safely_if_enabled(
+            trigger="order_stock_reserved",
+            shop_id=shop_id,
+            product_ids={item["product_id"] for item in items},
+        )
+
         for item in items:
             if item.get("discount_percent", 0) > 0:
                 await OfferService.mark_used(
@@ -362,6 +369,7 @@ class OrderService:
                 )
             )
             stale = result.scalars().all()
+            restored_product_ids: set[int] = set()
 
             for order in stale:
                 order.status = OrderStatus.CANCELLED
@@ -369,6 +377,8 @@ class OrderService:
                 order.stock_released_at = now
 
                 for item in order.items:
+                    if item.product_id:
+                        restored_product_ids.add(item.product_id)
                     if item.variant_id:
                         await session.execute(
                             update(ProductVariant)
@@ -379,4 +389,11 @@ class OrderService:
             if stale:
                 await session.commit()
 
-            return len(stale)
+            stale_count = len(stale)
+
+        if restored_product_ids:
+            await ProductLifecycleService.reconcile_safely_if_enabled(
+                trigger="stale_order_stock_released",
+                product_ids=restored_product_ids,
+            )
+        return stale_count

@@ -958,6 +958,37 @@ body {
     z-index: 1;
 }
 
+.product-badges {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    max-width: calc(100% - 58px);
+}
+
+.product-badges .offer-badge {
+    position: static;
+}
+
+.stock-badge,
+.pd-stock-status {
+    background: #6b7280;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 8px;
+}
+
+.pd-stock-status {
+    display: inline-block;
+    margin: 2px 0 8px;
+}
+
 .product-card {
     position: relative;
 }

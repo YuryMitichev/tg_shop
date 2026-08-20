@@ -94,6 +94,7 @@ class CatalogService:
                     Product.shop_id == shop_id,
                     Product.category_id == category_id,
                     Product.is_active == True,  # noqa: E712
+                    Product.lifecycle_deleted_at.is_(None),
                 )
                 .order_by(Product.id)
             )
@@ -113,6 +114,7 @@ class CatalogService:
                     Product.shop_id == shop_id,
                     Product.id == product_id,
                     Product.is_active == True,  # noqa: E712
+                    Product.lifecycle_deleted_at.is_(None),
                 )
             )
             product = result.scalar_one_or_none()
@@ -135,6 +137,7 @@ class CatalogService:
                     Product.shop_id == shop_id,
                     Product.id.in_(product_ids),
                     Product.is_active == True,  # noqa: E712
+                    Product.lifecycle_deleted_at.is_(None),
                 )
             )
             products = {
