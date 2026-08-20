@@ -2,7 +2,6 @@
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
 		-X-Powered-By
@@ -13,6 +12,7 @@
 	header {
 		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://{$DOMAIN}; worker-src 'self' blob:; frame-src 'none'; upgrade-insecure-requests"
 		Cross-Origin-Opener-Policy "same-origin"
+		Referrer-Policy "no-referrer"
 	}
 }
 
@@ -36,19 +36,18 @@
 admin.{$DOMAIN} {
 	import security_headers
 	import admin_security_headers
-	header Referrer-Policy "no-referrer"
 	reverse_proxy admin:3000
 }
 
 main-svoi.{$DOMAIN} {
 	import security_headers
 	import admin_security_headers
-	header Referrer-Policy "no-referrer"
 	reverse_proxy platform-admin:3000
 }
 
 svoi.{$DOMAIN} {
 	import security_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
 	@vless_websocket {
 		path {$VLESS_WS_PATH}
 		header Connection *Upgrade*
