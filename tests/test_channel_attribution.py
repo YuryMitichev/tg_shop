@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 
 from sqlalchemy import select
@@ -16,6 +17,8 @@ from app.services.cart_service import CartService
 from app.services.channel_attribution_service import ChannelAttributionService
 from app.services.channel_post_button_service import product_start_param
 from app.services.channel_metrics_service import ChannelMetricsService
+from app.services.channel_metrics_service import _fetch_public_views
+from app.services.channel_metrics_service import parse_public_views_html
 from app.services.order_admin_service import OrderAdminService
 from app.services.order_service import OrderService
 
@@ -154,3 +157,104 @@ async def test_view_refresh_fails_safely_without_mtproto(
 
     with pytest.raises(RuntimeError, match="MTProto"):
         await ChannelMetricsService.refresh_shop(1)
+
+
+def test_public_views_parser_supports_telegram_abbreviations():
+    template = '<span class="tgme_widget_message_views">{}</span>'
+    assert parse_public_views_html(template.format("1")) == 1
+    assert parse_public_views_html(template.format("3.42K")) == 3420
+    assert parse_public_views_html(template.format("1,2M")) == 1_200_000
+
+
+def test_public_views_parser_rejects_missing_or_unbounded_values():
+    import pytest
+
+    with pytest.raises(ValueError):
+        parse_public_views_html("<html></html>")
+    with pytest.raises(ValueError):
+        parse_public_views_html(
+            '<span class="tgme_widget_message_views">99B</span>'
+        )
+
+
+async def test_public_metrics_rejects_untrusted_username_before_request():
+    import pytest
+
+    with pytest.raises(ValueError, match="публичная ссылка"):
+        await _fetch_public_views(None, "evil.example", 77)
+
+
+async def test_public_metrics_fallback_updates_views_without_mtproto(
+    db_session, seed_data, monkeypatch
+):
+    import app.services.channel_metrics_service as metrics_module
+
+    _enable(monkeypatch)
+    post_id, _ = await _source(db_session)
+    monkeypatch.setattr(settings, "telegram_api_id", None)
+    monkeypatch.setattr(settings, "telegram_api_hash", None)
+    monkeypatch.setattr(settings, "telegram_session", None)
+    monkeypatch.setattr(settings, "channel_public_metrics_enabled", True)
+
+    async def fake_fetch(http, username, message_id):
+        assert username == "test_channel"
+        assert message_id == 77
+        return 125
+
+    monkeypatch.setattr(metrics_module, "_fetch_public_views", fake_fetch)
+
+    assert await ChannelMetricsService.refresh_shop(1) == 1
+    async with db_session() as session:
+        post = await session.get(ChannelPost, post_id)
+        assert post.telegram_views == 125
+        assert post.metrics_updated_at is not None
+
+
+async def test_public_metrics_failure_preserves_last_known_views(
+    db_session, seed_data, monkeypatch
+):
+    import pytest
+    import app.services.channel_metrics_service as metrics_module
+
+    _enable(monkeypatch)
+    post_id, _ = await _source(db_session)
+    monkeypatch.setattr(settings, "telegram_api_id", None)
+    monkeypatch.setattr(settings, "telegram_api_hash", None)
+    monkeypatch.setattr(settings, "telegram_session", None)
+    monkeypatch.setattr(settings, "channel_public_metrics_enabled", True)
+
+    async def failed_fetch(http, username, message_id):
+        raise TimeoutError("Telegram unavailable")
+
+    monkeypatch.setattr(metrics_module, "_fetch_public_views", failed_fetch)
+
+    with pytest.raises(RuntimeError, match="temporarily unavailable"):
+        await ChannelMetricsService.refresh_shop(1)
+    async with db_session() as session:
+        assert (await session.get(ChannelPost, post_id)).telegram_views == 100
+
+
+async def test_public_metrics_deadline_is_bounded_and_preserves_views(
+    db_session, seed_data, monkeypatch
+):
+    import pytest
+    import app.services.channel_metrics_service as metrics_module
+
+    _enable(monkeypatch)
+    post_id, _ = await _source(db_session)
+    monkeypatch.setattr(settings, "telegram_api_id", None)
+    monkeypatch.setattr(settings, "telegram_api_hash", None)
+    monkeypatch.setattr(settings, "telegram_session", None)
+    monkeypatch.setattr(settings, "channel_public_metrics_enabled", True)
+    monkeypatch.setattr(metrics_module, "_PUBLIC_REFRESH_DEADLINE_SECONDS", 0.01)
+
+    async def slow_fetch(http, username, message_id):
+        await asyncio.sleep(1)
+        return 999
+
+    monkeypatch.setattr(metrics_module, "_fetch_public_views", slow_fetch)
+
+    with pytest.raises(RuntimeError, match="temporarily unavailable"):
+        await ChannelMetricsService.refresh_shop(1)
+    async with db_session() as session:
+        assert (await session.get(ChannelPost, post_id)).telegram_views == 100
