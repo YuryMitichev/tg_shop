@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     telegram_api_id: int | None = Field(default=None, alias="TELEGRAM_API_ID")
     telegram_api_hash: str | None = Field(default=None, alias="TELEGRAM_API_HASH")
     telegram_session: str | None = Field(default=None, alias="TELEGRAM_SESSION")
+    channel_public_metrics_enabled: bool = Field(
+        default=False, alias="CHANNEL_PUBLIC_METRICS_ENABLED"
+    )
 
     app_name: str = "TG Shop"
 
