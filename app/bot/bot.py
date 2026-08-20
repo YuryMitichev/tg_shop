@@ -16,6 +16,7 @@ from app.services.crm_service import CrmService
 from app.services.broadcast_service import BroadcastService
 from app.services.order_service import OrderService
 from app.services.shop_service import ShopService
+from app.utils.escape import esc
 
 logger = logging.getLogger(__name__)
 
@@ -186,13 +187,13 @@ async def restart_shop_bot(shop_id: int) -> None:
 
 
 async def _auto_cancel_loop() -> None:
-    """Фоновая задача: авто-отмена заказов без смены статуса 14 дней."""
+    """Фоновая задача: освобождение просроченных 20-минутных резервов."""
     while True:
         await asyncio.sleep(3600)
         try:
-            cancelled = await OrderService.auto_cancel_stale_orders(days=14)
+            cancelled = await OrderService.auto_cancel_stale_orders(minutes=20)
             if cancelled:
-                logger.info("Авто-отмена: отменено заказов старше 14 дней: %d", cancelled)
+                logger.info("Авто-отмена: освобождено просроченных резервов: %d", cancelled)
         except Exception:
             logger.exception("Авто-отмена: ошибка")
 
@@ -203,7 +204,7 @@ async def start_all_bots() -> None:
     await init_db()
 
     try:
-        cancelled = await OrderService.auto_cancel_stale_orders(days=14)
+        cancelled = await OrderService.auto_cancel_stale_orders(minutes=20)
         if cancelled:
             logger.info("Авто-отмена при запуске: отменено %d заказов", cancelled)
     except Exception:
@@ -363,7 +364,7 @@ async def _send_trial_ending_notice(
         await bot.send_message(
             owner_telegram_id,
             f"⏰ <b>Триал заканчивается!</b>\n\n"
-            f"Магазин «{shop_name}» — бесплатный период истекает <b>{expires_at}</b>.\n\n"
+            f"Магазин «{esc(shop_name)}» — бесплатный период истекает <b>{esc(expires_at)}</b>.\n\n"
             f"Чтобы бот продолжил работать, оплатите подписку.\n"
             f"Откройте платформенного бота → «💳 Подписка».",
         )

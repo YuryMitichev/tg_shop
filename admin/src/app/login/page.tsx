@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -19,7 +19,6 @@ import { Loader2, Lock, CheckCircle2 } from "lucide-react";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tokenFromUrl = searchParams.get("token");
   const shopIdFromUrl = searchParams.get("shop_id");
 
   const [step, setStep] = useState<"id" | "waiting" | "verifying">("id");
@@ -27,19 +26,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (tokenFromUrl) {
-      setStep("verifying");
-      verifyToken(tokenFromUrl);
-    } else {
-      api
-        .get("/auth/me")
-        .then(() => router.replace("/dashboard"))
-        .catch(() => {});
-    }
-  }, [tokenFromUrl, router]);
-
-  async function verifyToken(t: string) {
+  const verifyToken = useCallback(async (t: string) => {
     try {
       const res = await api.post<{ ok: boolean; error?: string }>(
         "/auth/verify-token",
@@ -58,7 +45,30 @@ function LoginForm() {
       setVerifyError("Ошибка запроса");
       setStep("id");
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const tokenFromUrl = hashParams.get("token") || searchParams.get("token");
+    if (tokenFromUrl) {
+      const cleanUrl = shopIdFromUrl ? `/login?shop_id=${encodeURIComponent(shopIdFromUrl)}` : "/login";
+      window.history.replaceState({}, "", cleanUrl);
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setStep("verifying");
+        void verifyToken(tokenFromUrl);
+      });
+    } else {
+      api
+        .get("/auth/me")
+        .then(() => router.replace("/dashboard"))
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [router, searchParams, shopIdFromUrl, verifyToken]);
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();

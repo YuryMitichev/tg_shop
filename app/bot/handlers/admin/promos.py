@@ -12,6 +12,7 @@ from app.bot.keyboards.admin import (
 from app.bot.shop_context import get_shop_id
 from app.bot.states.admin_product import AdminPromoState
 from app.services.promo_service import PromoCodeService
+from app.utils.escape import esc
 
 
 def setup_promos_router() -> Router:
@@ -53,7 +54,7 @@ def setup_promos_router() -> Router:
         status = "✅ Активен" if promo["is_active"] else "🚫 Выключен"
 
         await callback.message.edit_text(
-            f"🎟 <b>Промокод {promo['code']}</b>\n\n"
+            f"🎟 <b>Промокод {esc(promo['code'])}</b>\n\n"
             f"Скидка: {val}\n"
             f"Использовано: {uses}\n"
             f"Статус: {status}",
@@ -174,7 +175,7 @@ def setup_promos_router() -> Router:
         msg = event.message if isinstance(event, CallbackQuery) else event
 
         await msg.answer(
-            f"✅ Промокод <b>{data['code']}</b> создан!\n\n"
+            f"✅ Промокод <b>{esc(data['code'])}</b> создан!\n\n"
             f"Скидка: −{data['discount_value']}{unit}\n"
             f"Лимит: {uses_str} использований",
             reply_markup=get_admin_promos_keyboard(promos),

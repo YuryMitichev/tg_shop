@@ -16,8 +16,16 @@
 	}
 }
 
+(miniapp_security_headers) {
+	header {
+		Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-src 'none'; upgrade-insecure-requests"
+		Referrer-Policy "no-referrer"
+	}
+}
+
 {$DOMAIN}, www.{$DOMAIN} {
 	import security_headers
+	import miniapp_security_headers
 	encode zstd gzip
 	reverse_proxy bot:8000
 	handle_errors 502 503 504 {
@@ -28,12 +36,14 @@
 admin.{$DOMAIN} {
 	import security_headers
 	import admin_security_headers
+	header Referrer-Policy "no-referrer"
 	reverse_proxy admin:3000
 }
 
 main-svoi.{$DOMAIN} {
 	import security_headers
 	import admin_security_headers
+	header Referrer-Policy "no-referrer"
 	reverse_proxy platform-admin:3000
 }
 

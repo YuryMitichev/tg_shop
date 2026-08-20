@@ -14,7 +14,13 @@ from app.services.catalog_admin_service import CatalogAdminService
 from app.utils.crypto import encrypt
 
 
-_ADMIN_DICT = {"admin_id": 123456, "shop_id": 1, "is_super_admin": False}
+_ADMIN_DICT = {
+    "admin_id": 123456,
+    "shop_id": 1,
+    "is_super_admin": False,
+    "role": "owner",
+    "authenticated_at": int(datetime.now(timezone.utc).timestamp()),
+}
 
 
 @pytest.fixture
@@ -172,14 +178,15 @@ class TestParseStockFile:
 
         assert len(result["updates"]) == 1
 
-    def test_negative_stock_clamped_to_zero(self):
+    def test_negative_stock_is_rejected(self):
         xlsx = self._make_xlsx([
             [1, "Товар A", "100г", 5, -3],
         ])
 
         result = CatalogAdminService.parse_stock_file(xlsx)
 
-        assert result["updates"][0]["stock"] == 0
+        assert result["updates"] == []
+        assert any("от 0" in error for error in result["errors"])
 
     def test_missing_id_column(self):
         wb = Workbook()

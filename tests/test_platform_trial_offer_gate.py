@@ -239,7 +239,7 @@ class TestAcceptOfferAndTrial:
         with patch(
             "app.bot.platform.bot.ShopService.get",
             new_callable=AsyncMock,
-            return_value=_shop_dict(shop_id=1),
+            return_value=_shop_dict(shop_id=1, owner_id=600),
         ), patch(
             "app.bot.platform.bot.SubscriptionService.start_trial",
             new_callable=AsyncMock,
@@ -263,7 +263,7 @@ class TestAcceptOfferAndTrial:
         ), patch(
             "app.bot.platform.bot.ShopService.get",
             new_callable=AsyncMock,
-            return_value=_shop_dict(shop_id=1),
+            return_value=_shop_dict(shop_id=1, owner_id=601),
         ), patch(
             "app.bot.platform.bot.SubscriptionService.start_trial",
             new_callable=AsyncMock,
@@ -288,7 +288,7 @@ class TestAcceptOfferAndTrial:
         ), patch(
             "app.bot.platform.bot.ShopService.get",
             new_callable=AsyncMock,
-            return_value=_shop_dict(shop_id=1, name="Cool Shop"),
+            return_value=_shop_dict(shop_id=1, name="Cool Shop", owner_id=602),
         ), patch(
             "app.bot.platform.bot.SubscriptionService.start_trial",
             new_callable=AsyncMock,
@@ -317,7 +317,7 @@ class TestAcceptOfferAndTrial:
         with patch(
             "app.bot.platform.bot.ShopService.get",
             new_callable=AsyncMock,
-            return_value=_shop_dict(shop_id=1),
+            return_value=_shop_dict(shop_id=1, owner_id=603),
         ), patch(
             "app.bot.platform.bot.SubscriptionService.start_trial",
             new_callable=AsyncMock,
@@ -367,7 +367,7 @@ class TestAcceptOfferAndTrial:
         ), patch(
             "app.bot.platform.bot.ShopService.get",
             new_callable=AsyncMock,
-            return_value=_shop_dict(shop_id=1, bot_token="999:XYZ"),
+            return_value=_shop_dict(shop_id=1, owner_id=605, bot_token="999:XYZ"),
         ), patch(
             "app.bot.platform.bot._validate_bot_token",
             new_callable=AsyncMock,

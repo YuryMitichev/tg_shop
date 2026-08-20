@@ -14,6 +14,7 @@ from app.database.db import async_session
 from app.models.channel_import import ChannelConnection
 from app.models.shop import Shop
 from app.services.channel_post_button_service import ChannelPostButtonService, shop_deep_link
+from app.utils.escape import esc
 
 
 logger = logging.getLogger(__name__)
@@ -151,7 +152,7 @@ class ChannelStorefrontService:
                 ]
             )
             text = (
-                f"🛍 {shop.name}\n\n"
+                f"🛍 {esc(shop.name)}\n\n"
                 "Откройте каталог магазина, чтобы посмотреть товары и оформить заказ."
             )
             message_id = connection.storefront_message_id

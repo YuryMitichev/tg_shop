@@ -4,20 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Магазин</title>
-    <script>
-    window.__errs = [];
-    window.addEventListener('error', function (e) {
-        try {
-            window.__errs.push((e.message || 'unknown') + '@' + (e.filename || '').split('/').pop() + ':' + (e.lineno || 0) + ':' + (e.colno || 0));
-        } catch (x) { }
-    });
-    window.addEventListener('unhandledrejection', function (e) {
-        try {
-            var r = e.reason;
-            window.__errs.push('PROMISE:' + (r && r.message ? r.message : String(r)));
-        } catch (x) { }
-    });
-    </script>
+    <script src="diag.js?v=1"></script>
     <script src="telegram-web-app.js?v=1"></script>
     <link rel="stylesheet" href="style.css?v=6">
 </head>
@@ -32,7 +19,7 @@
 <!-- Карточка товара -->
 <div id="view-product" class="view">
     <div class="header">
-        <button class="back-btn" onclick="App.showCatalog()">←</button>
+        <button class="back-btn" data-action="show-catalog">←</button>
     </div>
     <div id="product-detail"></div>
 </div>
@@ -49,10 +36,10 @@
 <!-- Оформление -->
 <div id="view-checkout" class="view">
     <div class="header">
-        <button class="back-btn" onclick="App.showCart()">←</button>
+        <button class="back-btn" data-action="show-cart">←</button>
         <h2>Оформление</h2>
     </div>
-    <form id="checkout-form" onsubmit="App.submitOrder(event)">
+    <form id="checkout-form">
         <label>Имя и фамилия</label>
         <input type="text" id="co-name" required maxlength="100">
         <label>Телефон</label>
@@ -63,7 +50,7 @@
         <label>Промокод (необязательно)</label>
         <div class="promo-row">
             <input type="text" id="co-promo" placeholder="Например: NEW10">
-            <button type="button" class="btn-promo" onclick="App.applyPromo()">Применить</button>
+            <button type="button" class="btn-promo" data-action="apply-promo">Применить</button>
         </div>
         <div id="promo-result"></div>
 
@@ -75,7 +62,7 @@
         <div class="consent-row">
             <label class="consent-label">
                 <input type="checkbox" id="co-consent" checked>
-                <span>Согласен с <a href="#" onclick="App.showPrivacy(); return false;">политикой конфиденциальности</a> и обработкой персональных данных</span>
+                <span>Согласен с <a href="#" data-action="show-privacy">политикой конфиденциальности</a> и обработкой персональных данных</span>
             </label>
         </div>
 
@@ -104,7 +91,7 @@
 <!-- Политика конфиденциальности -->
 <div id="view-privacy" class="view">
     <div class="header">
-        <button class="back-btn" onclick="history.back()">←</button>
+        <button class="back-btn" data-action="history-back">←</button>
         <h2>🔒 Политика конфиденциальности</h2>
     </div>
     <div id="privacy-content" class="privacy-content"></div>
@@ -112,35 +99,21 @@
 
 <!-- Bottom nav -->
 <div id="bottom-nav" class="bottom-nav">
-    <button class="nav-btn active" onclick="App.showCatalog()">
+    <button class="nav-btn active" data-action="show-catalog">
         <span class="nav-icon">🛍</span>
         <span class="nav-label">Каталог</span>
     </button>
-    <button class="nav-btn" onclick="App.showCart()">
+    <button class="nav-btn" data-action="show-cart">
         <span class="nav-icon">🛒</span>
         <span class="nav-label">Корзина</span>
         <span id="cart-badge" class="cart-badge" style="display:none">0</span>
     </button>
-    <button class="nav-btn" onclick="App.showOrders()">
+    <button class="nav-btn" data-action="show-orders">
         <span class="nav-icon">📦</span>
         <span class="nav-label">Заказы</span>
     </button>
 </div>
 
-<script src="app.js?v=12"></script>
-<script>
-(function () {
-    try {
-        var q = [];
-        q.push('app=' + (typeof window.App));
-        q.push('tg=' + (window.Telegram ? (window.Telegram.WebApp ? '1' : '0') : 'none'));
-        q.push('fetch=' + (typeof window.fetch));
-        q.push('json=' + (typeof window.JSON));
-        q.push('e=' + encodeURIComponent(window.__errs.join(' | ').substring(0, 300)));
-        var img = new Image();
-        img.src = '/app/__diag?' + q.join('&');
-    } catch (ex) { }
-})();
-</script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

@@ -8,6 +8,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,6 +56,7 @@ export default function AdminsPage() {
   const [open, setOpen] = useState(false);
   const [telegramId, setTelegramId] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [role, setRole] = useState<"manager" | "content" | "support">("manager");
   const [loading, setLoading] = useState(false);
 
   async function addAdmin() {
@@ -62,12 +70,14 @@ export default function AdminsPage() {
       await api.post("/admins", {
         telegram_user_id: Number(telegramId),
         display_name: displayName.trim() || null,
+        role,
       });
       mutate();
       toast.success("Администратор добавлен");
       setOpen(false);
       setTelegramId("");
       setDisplayName("");
+      setRole("manager");
     } catch {
       toast.error("Ошибка");
     } finally {
@@ -123,6 +133,19 @@ export default function AdminsPage() {
                   placeholder="Иван"
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Роль</Label>
+                <Select value={role} onValueChange={(value) => setRole(value as typeof role)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manager">Менеджер</SelectItem>
+                    <SelectItem value="content">Контент</SelectItem>
+                    <SelectItem value="support">Поддержка</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>Отмена</DialogClose>
@@ -170,7 +193,9 @@ export default function AdminsPage() {
                       {admin.is_super ? (
                         <Badge variant="default">Супер (env)</Badge>
                       ) : (
-                        <Badge variant="secondary">Обычный</Badge>
+                        <Badge variant="secondary">
+                          {{ manager: "Менеджер", content: "Контент", support: "Поддержка", owner: "Владелец" }[admin.role] || admin.role}
+                        </Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right">

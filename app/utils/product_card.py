@@ -1,5 +1,6 @@
 from app.services.catalog_service import CatalogService
 from app.services.review_service import ReviewService
+from app.utils.escape import esc
 
 
 class ProductCard:
@@ -17,7 +18,7 @@ class ProductCard:
 
         lines = []
 
-        lines.append(f"<b>{product['name']}</b>")
+        lines.append(f"<b>{esc(product['name'])}</b>")
         lines.append("")
 
         summary = await ReviewService.get_rating_summary(product["id"])
@@ -26,11 +27,11 @@ class ProductCard:
             lines.append(f"{stars} {summary['avg']} ({summary['count']} отз.)")
             lines.append("")
 
-        lines.append(product["description"])
+        lines.append(esc(product["description"]))
         lines.append("")
         lines.append(f"💰 <b>{variant['price']} ₽</b>")
 
         if variant.get("attributes", {}).get("burn"):
-            lines.append(f"🔥 До {variant['attributes']['burn']}")
+            lines.append(f"🔥 До {esc(variant['attributes']['burn'])}")
 
         return "\n".join(lines)

@@ -64,6 +64,13 @@ class OrderPaymentService:
                 )
                 return None
 
+            if order.payment_method != "yookassa" or order.total_amount <= 0:
+                logger.warning("Отказ в оплате: заказ %d имеет недопустимые параметры", order_id)
+                return None
+            if order.stock_released_at is not None:
+                logger.warning("Отказ в оплате: резерв заказа %d уже освобождён", order_id)
+                return None
+
             amount = order.total_amount
             description = f"Заказ №{order_id}"
             customer_phone = order.phone
@@ -300,6 +307,7 @@ class OrderPaymentService:
                     should_notify = True
 
                 order.payment_id = payment_id
+                order.stock_reserved_until = None
                 SalesService.confirm_order(
                     order,
                     source="online",

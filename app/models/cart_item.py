@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey
+from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.db import Base
@@ -6,6 +6,15 @@ from app.database.db import Base
 
 class CartItem(Base):
     __tablename__ = "cart_items"
+    __table_args__ = (
+        CheckConstraint("quantity BETWEEN 1 AND 100", name="ck_cart_items_quantity"),
+        ForeignKeyConstraint(
+            ["variant_id", "shop_id", "product_id"],
+            ["product_variants.id", "product_variants.shop_id", "product_variants.product_id"],
+            name="fk_cart_variant_tenant_product",
+            ondelete="CASCADE",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 

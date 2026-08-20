@@ -25,6 +25,7 @@ from app.bot.states.admin_product import (
     AdminProductState,
 )
 from app.services.catalog_admin_service import CatalogAdminService
+from app.utils.escape import esc
 
 
 def setup_catalog_router() -> Router:
@@ -137,7 +138,7 @@ def setup_catalog_router() -> Router:
         emoji_line = f"Эмодзи: {category['emoji']}" if category["emoji"] else "Эмодзи: нет"
 
         await callback.message.edit_text(
-            f"✏️ <b>{emoji_display}{category['name']}</b>\n\n"
+            f"✏️ <b>{esc(emoji_display)}{esc(category['name'])}</b>\n\n"
             f"Товаров в категории: {count}\n"
             f"{emoji_line}\n\n"
             "Введите новое название или воспользуйтесь кнопками ниже.",
@@ -238,7 +239,7 @@ def setup_catalog_router() -> Router:
         await callback.answer()
 
     def _render_product_text(product: dict) -> str:
-        lines = [f"🕯 <b>{product['name']}</b>\n", product["description"], ""]
+        lines = [f"🕯 <b>{esc(product['name'])}</b>\n", esc(product["description"]), ""]
 
         for variant in product["variants"]:
             burn_val = variant.get("attributes", {}).get("burn")
@@ -515,7 +516,7 @@ def setup_catalog_router() -> Router:
             return
 
         await callback.message.edit_text(
-            f"✏️ <b>Редактирование: {product['name']}</b>\n\n"
+            f"✏️ <b>Редактирование: {esc(product['name'])}</b>\n\n"
             "Выберите, что изменить:",
             reply_markup=get_admin_edit_keyboard(product_id)
         )

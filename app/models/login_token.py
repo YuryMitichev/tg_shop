@@ -11,7 +11,7 @@ class LoginToken(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    token: Mapped[str] = mapped_column(unique=True, index=True)
+    token_hash: Mapped[str] = mapped_column(unique=True, index=True)
 
     telegram_user_id: Mapped[int] = mapped_column(index=True)
 

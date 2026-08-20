@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
 from app.api.admin_auth import require_super_admin
@@ -30,42 +30,44 @@ def _utcnow() -> datetime:
 # ==========================
 
 class CreateShopRequest(BaseModel):
-    name: str
-    bot_token: str
-    owner_telegram_id: int
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=200)
+    bot_token: str = Field(min_length=20, max_length=256)
+    owner_telegram_id: int = Field(gt=0)
 
 
 class UpdateShopRequest(BaseModel):
-    name: str | None = None
-    bot_token: str | None = None
-    owner_telegram_id: int | None = None
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    bot_token: str | None = Field(default=None, min_length=20, max_length=256)
+    owner_telegram_id: int | None = Field(default=None, gt=0)
     is_active: bool | None = None
 
 
 class ExtendSubscriptionBody(BaseModel):
-    add_days: int
+    add_days: int = Field(ge=1, le=3_650)
 
 
 class CreatePlanBody(BaseModel):
-    name: str
-    description: str | None = None
-    price: float
-    duration_days: int
-    features: list[str] = []
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=2_000)
+    price: float = Field(ge=0, le=100_000_000)
+    duration_days: int = Field(ge=1, le=3_650)
+    features: list[str] = Field(default_factory=list, max_length=100)
 
 
 class UpdatePlanBody(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    price: float | None = None
-    duration_days: int | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=2_000)
+    price: float | None = Field(default=None, ge=0, le=100_000_000)
+    duration_days: int | None = Field(default=None, ge=1, le=3_650)
     is_active: bool | None = None
-    features: list[str] | None = None
+    features: list[str] | None = Field(default=None, max_length=100)
 
 
 class UpdatePlatformPaymentSettingsBody(BaseModel):
-    yookassa_shop_id: str | None = None
-    yookassa_secret_key: str | None = None
+    yookassa_shop_id: str | None = Field(default=None, max_length=64)
+    yookassa_secret_key: str | None = Field(default=None, max_length=256)
     yookassa_enabled: bool | None = None
 
 

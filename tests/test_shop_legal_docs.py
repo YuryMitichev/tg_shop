@@ -12,7 +12,13 @@ from app.services.shop_service import ShopService
 from app.utils.crypto import encrypt
 
 
-_ADMIN_DICT = {"admin_id": 123456, "shop_id": 1, "is_super_admin": False}
+_ADMIN_DICT = {
+    "admin_id": 123456,
+    "shop_id": 1,
+    "is_super_admin": False,
+    "role": "owner",
+    "authenticated_at": int(datetime.now(timezone.utc).timestamp()),
+}
 
 
 @pytest.fixture

@@ -20,4 +20,6 @@ class AdminUser(Base):
 
     display_name: Mapped[str | None] = mapped_column(nullable=True)
 
+    role: Mapped[str] = mapped_column(default="manager", nullable=False)
+
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

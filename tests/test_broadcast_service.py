@@ -7,17 +7,23 @@ from app.services.broadcast_service import BroadcastService, AUTO_TAGS, VIP_THRE
 from app.services.crm_service import CrmService
 from app.services.order_service import OrderService
 from app.services.cart_service import CartService
+from app.services.sales_service import SalesService
+from app.models.order import Order
 
 
 async def _create_order(db_session, tg_id=111, total=450):
     await CartService.add_item(1, tg_id, product_id=1, variant_id=1, quantity=1)
-    await OrderService.create_order(
+    result = await OrderService.create_order(
         shop_id=1,
         telegram_user_id=tg_id,
         full_name="Иван",
         phone="+7999",
         address="ул. Тест, 1",
     )
+    async with db_session() as session:
+        order = await session.get(Order, result["order_id"])
+        SalesService.confirm_order(order, source="manual")
+        await session.commit()
 
 
 class TestParseTags:

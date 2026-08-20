@@ -32,6 +32,7 @@ const App = {
     },
 
     async init() {
+        this.bindEvents();
         this.tg = window.Telegram && window.Telegram.WebApp
             ? window.Telegram.WebApp
             : this._tgStub();
@@ -59,6 +60,76 @@ const App = {
                 await this.recordAttribution("product_open", launchTarget.productId);
             }
         }
+    },
+
+    bindEvents() {
+        document.addEventListener("click", (event) => {
+            const element = event.target.closest("[data-action]");
+            if (!element) return;
+            const action = element.dataset.action;
+            const number = (name) => Number.parseInt(element.dataset[name], 10);
+
+            if (element.tagName === "A") event.preventDefault();
+            switch (action) {
+                case "show-catalog": this.showCatalog(); break;
+                case "show-cart": this.showCart(); break;
+                case "show-orders": this.showOrders(); break;
+                case "show-checkout": this.showCheckout(); break;
+                case "show-privacy": this.showPrivacy(); break;
+                case "history-back": history.back(); break;
+                case "apply-promo": this.applyPromo(); break;
+                case "select-category": {
+                    const category = this.categories.find((item) => item.id === number("categoryId"));
+                    if (category) this.selectCategory(category);
+                    break;
+                }
+                case "open-product": this.openProduct(number("productId")); break;
+                case "select-variant": this.selectVariant(number("variantId")); break;
+                case "scroll-slide": this.scrollToSlide(number("slide")); break;
+                case "add-to-cart": this.addToCart(number("productId")); break;
+                case "toggle-review": this.toggleReviewForm(); break;
+                case "toggle-manager": this.toggleManagerForm(); break;
+                case "set-rating": this.setRating(number("rating")); break;
+                case "submit-review": this.submitReview(number("productId")); break;
+                case "submit-manager": this.submitManagerMessage(number("productId")); break;
+                case "change-qty": this.changeQty(number("itemId"), number("delta")); break;
+                case "open-payment": {
+                    const url = this.safeHttpsUrl(element.dataset.url);
+                    if (url) window.open(url, "_blank", "noopener,noreferrer");
+                    else this.toast("Некорректная ссылка оплаты");
+                    break;
+                }
+                case "contact-manager": {
+                    if (/^[A-Za-z0-9_]{5,32}$/.test(this.botUsername || "")) {
+                        this.tg.openTelegramLink(`https://t.me/${this.botUsername}`);
+                    }
+                    break;
+                }
+                case "close-app": this.tg.close(); break;
+            }
+        });
+
+        document.getElementById("checkout-form").addEventListener("submit", (event) => {
+            this.submitOrder(event);
+        });
+        document.addEventListener("change", (event) => {
+            if (event.target.matches('input[name="payment_method"]')) {
+                this.selectPaymentMethod(event.target.value);
+            }
+        });
+        document.addEventListener("scroll", (event) => {
+            if (event.target.classList?.contains("gallery-track")) this.onGalleryScroll();
+        }, true);
+        document.addEventListener("error", (event) => {
+            const image = event.target;
+            if (!(image instanceof HTMLImageElement)) return;
+            if (image.dataset.imageFallback === "next") {
+                image.style.display = "none";
+                if (image.nextElementSibling) image.nextElementSibling.style.display = "flex";
+            } else if (image.dataset.imageFallback === "parent") {
+                image.parentElement?.style.setProperty("display", "none");
+            }
+        }, true);
     },
 
     parseLaunchTarget(startParam, params = new URLSearchParams()) {
@@ -222,13 +293,16 @@ const App = {
 
     renderCategoryChips() {
         const container = document.getElementById("categories");
-
-        container.innerHTML = this.categories.map(c => `
-            <button class="cat-chip ${c.id === this.currentCategory.id ? 'active' : ''}"
-                    onclick="App.selectCategory(${JSON.stringify(c).replace(/"/g, '&quot;')})">
-                ${this.esc(c.emoji || "")} ${this.esc(c.name)}
-            </button>
-        `).join("");
+        const buttons = this.categories.map((category) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = `cat-chip ${category.id === this.currentCategory.id ? "active" : ""}`;
+            button.dataset.action = "select-category";
+            button.dataset.categoryId = String(category.id);
+            button.textContent = `${category.emoji || ""} ${category.name}`.trim();
+            return button;
+        });
+        container.replaceChildren(...buttons);
     },
 
     async loadProducts(categoryId) {
@@ -249,12 +323,12 @@ const App = {
                 const offerBadge = p.has_offer ? `<div class="offer-badge">🔥 Персональная скидка</div>` : "";
 
                 return `
-                    <div class="product-card" onclick="App.openProduct(${p.id})">
+                    <div class="product-card" data-action="open-product" data-product-id="${p.id}">
                         ${offerBadge}
                         ${photo
-                            ? `<img src="${photo}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-                               <div class="placeholder" style="display:none">${this.catEmoji()}</div>`
-                            : `<div class="placeholder">${this.catEmoji()}</div>`
+                            ? `<img src="${photo}" loading="lazy" data-image-fallback="next">
+                               <div class="placeholder" style="display:none">${this.esc(this.catEmoji())}</div>`
+                            : `<div class="placeholder">${this.esc(this.catEmoji())}</div>`
                         }
                         <div class="info">
                             <div class="name">${this.esc(p.name)}</div>
@@ -304,21 +378,21 @@ const App = {
 
         if (photos.length > 0) {
             const slides = photos.map((src, i) =>
-                `<div class="gallery-slide"><img src="${src}" onerror="this.parentElement.style.display='none'"></div>`
+                `<div class="gallery-slide"><img src="${src}" data-image-fallback="parent"></div>`
             ).join("");
             const dots = photos.map((_, i) =>
-                `<span class="gallery-dot${i === 0 ? ' active' : ''}" onclick="App.scrollToSlide(${i})"></span>`
+                `<span class="gallery-dot${i === 0 ? ' active' : ''}" data-action="scroll-slide" data-slide="${i}"></span>`
             ).join("");
             html += `
                 <div class="gallery" id="product-gallery">
-                    <div class="gallery-track" onscroll="App.onGalleryScroll()">
+                    <div class="gallery-track">
                         ${slides}
                     </div>
                     ${photos.length > 1 ? `<div class="gallery-dots" id="gallery-dots">${dots}</div>` : ''}
                 </div>
             `;
         } else {
-            html += `<div class="gallery-placeholder">${this.catEmoji()}</div>`;
+            html += `<div class="gallery-placeholder">${this.esc(this.catEmoji())}</div>`;
         }
 
         html += `<div class="pd-title">${this.esc(p.name)}</div>`;
@@ -366,7 +440,7 @@ const App = {
 
             html += `
                 <button class="variant-btn ${active} ${outOfStock ? 'variant-oos' : ''}" data-vid="${v.id}"
-                        onclick="App.selectVariant(${v.id})">
+                        data-action="select-variant" data-variant-id="${v.id}">
                     ${attributesHtml}
                     ${priceHtml}
                     ${stockBadge}
@@ -387,24 +461,24 @@ const App = {
         if (allOutOfStock) {
             html += `<button class="btn-primary btn-add" disabled>Нет в наличии</button>`;
         } else {
-            html += `<button class="btn-primary btn-add" onclick="App.addToCart(${p.id})">🛒 Добавить в корзину</button>`;
+            html += `<button class="btn-primary btn-add" data-action="add-to-cart" data-product-id="${p.id}">🛒 Добавить в корзину</button>`;
         }
 
         if (this.botUsername) {
             html += `<div class="pd-actions">`;
-            html += `<button class="btn-primary" onclick="App.toggleReviewForm()">⭐ Оставить отзыв</button>`;
-            html += `<button class="btn-primary" onclick="App.toggleManagerForm()">💬 Написать менеджеру</button>`;
+            html += `<button class="btn-primary" data-action="toggle-review">⭐ Оставить отзыв</button>`;
+            html += `<button class="btn-primary" data-action="toggle-manager">💬 Написать менеджеру</button>`;
             html += `</div>`;
 
             html += `
                 <div id="review-form-wrap" class="pd-form-wrap" style="display:none;">
                     <h3>Оставить отзыв</h3>
                     <div class="stars-input" id="stars-input">
-                        ${[1, 2, 3, 4, 5].map(v => `<span class="star" data-val="${v}" onclick="App.setRating(${v})">★</span>`).join("")}
+                        ${[1, 2, 3, 4, 5].map(v => `<span class="star" data-val="${v}" data-action="set-rating" data-rating="${v}">★</span>`).join("")}
                     </div>
                     <textarea id="review-text" rows="3" maxlength="500" placeholder="Расскажите о своих впечатлениях..."></textarea>
-                    <button class="btn-primary" onclick="App.submitReview(${p.id})">Отправить отзыв</button>
-                    <button class="btn-link" onclick="App.toggleReviewForm()">Отмена</button>
+                    <button class="btn-primary" data-action="submit-review" data-product-id="${p.id}">Отправить отзыв</button>
+                    <button class="btn-link" data-action="toggle-review">Отмена</button>
                 </div>
             `;
 
@@ -412,8 +486,8 @@ const App = {
                 <div id="manager-form-wrap" class="pd-form-wrap" style="display:none;">
                     <h3>Написать менеджеру</h3>
                     <textarea id="manager-text" rows="3" maxlength="500" placeholder="Ваш вопрос..."></textarea>
-                    <button class="btn-primary" onclick="App.submitManagerMessage(${p.id})">Отправить</button>
-                    <button class="btn-link" onclick="App.toggleManagerForm()">Отмена</button>
+                    <button class="btn-primary" data-action="submit-manager" data-product-id="${p.id}">Отправить</button>
+                    <button class="btn-link" data-action="toggle-manager">Отмена</button>
                 </div>
             `;
         }
@@ -627,9 +701,9 @@ const App = {
                         ${stockHint}
                     </div>
                     <div class="ci-controls">
-                        <button class="qty-btn" onclick="App.changeQty(${item.cart_item_id}, -1)">−</button>
+                        <button class="qty-btn" data-action="change-qty" data-item-id="${item.cart_item_id}" data-delta="-1">−</button>
                         <span class="qty-display">${item.quantity}</span>
-                        <button class="qty-btn${atMax ? ' qty-btn-disabled' : ''}" ${atMax ? 'disabled' : ''} onclick="App.changeQty(${item.cart_item_id}, 1)">+</button>
+                        <button class="qty-btn${atMax ? ' qty-btn-disabled' : ''}" ${atMax ? 'disabled' : ''} data-action="change-qty" data-item-id="${item.cart_item_id}" data-delta="1">+</button>
                     </div>
                 </div>
             `}).join("");
@@ -638,7 +712,7 @@ const App = {
 
             footer.innerHTML = `
                 <div class="cart-total">Итого: ${cart.total} ₽</div>
-                <button class="btn-primary" onclick="App.showCheckout()">Оформить заказ</button>
+                <button class="btn-primary" data-action="show-checkout">Оформить заказ</button>
             `;
         } catch (e) {
             container.innerHTML = `<div class="error-msg">Ошибка: ${this.esc(e.message)}</div>`;
@@ -704,8 +778,7 @@ const App = {
 
             container.innerHTML = this.paymentMethods.map((m, i) => `
                 <label class="payment-option ${i === 0 ? 'active' : ''}" data-pm="${m.id}">
-                    <input type="radio" name="payment_method" value="${m.id}" ${i === 0 ? 'checked' : ''}
-                           onchange="App.selectPaymentMethod('${m.id}')">
+                    <input type="radio" name="payment_method" value="${this.esc(m.id)}" ${i === 0 ? 'checked' : ''}>
                     <div class="pm-info">
                         <div class="pm-label">${this.esc(m.label)}</div>
                         <div class="pm-desc">${this.esc(m.description)}</div>
@@ -868,7 +941,7 @@ const App = {
 
         if (result.payment === "yookassa" && result.confirmation_url) {
             paymentInfo = `
-                <button class="btn-primary" onclick="window.open('${result.confirmation_url}', '_blank')">
+                <button class="btn-primary" data-action="open-payment" data-url="${this.esc(result.confirmation_url)}">
                     💳 Оплатить ${result.total} ₽
                 </button>
                 <div class="info">После оплаты статус заказа обновится автоматически.</div>
@@ -904,7 +977,7 @@ const App = {
             }
             <div class="info">Сумма: <b>${result.total} ₽</b></div>
             ${paymentInfo}
-            <button class="btn-primary" onclick="App.showCatalog()">Продолжить покупки</button>
+            <button class="btn-primary" data-action="show-catalog">Продолжить покупки</button>
         `;
     },
 
@@ -923,17 +996,17 @@ const App = {
         ).join("");
 
         const contactBtn = this.botUsername
-            ? `<button class="btn-primary" onclick="App.tg.openTelegramLink('https://t.me/${this.botUsername}')">💬 Связаться с менеджером</button>`
-            : `<button class="btn-primary" onclick="App.tg.close()">💬 Написать менеджеру</button>`;
+            ? `<button class="btn-primary" data-action="contact-manager">💬 Связаться с менеджером</button>`
+            : `<button class="btn-primary" data-action="close-app">💬 Написать менеджеру</button>`;
 
         content.innerHTML = `
             <div class="emoji">😔</div>
             <h2>К сожалению, товар закончился</h2>
             <div class="info">Пока вы оформляли заказ, кто-то успел купить товар раньше.</div>
             <div class="oos-list">${itemsList}</div>
-            <button class="btn-primary" onclick="App.showCart()">🛒 Перейти в корзину</button>
+            <button class="btn-primary" data-action="show-cart">🛒 Перейти в корзину</button>
             ${contactBtn}
-            <button class="btn-secondary" onclick="App.showCatalog()">В каталог</button>
+            <button class="btn-secondary" data-action="show-catalog">В каталог</button>
         `;
     },
 
@@ -1035,6 +1108,15 @@ const App = {
         const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
+    },
+
+    safeHttpsUrl(value) {
+        try {
+            const url = new URL(value);
+            return url.protocol === "https:" ? url.href : null;
+        } catch (_) {
+            return null;
+        }
     },
 };
 

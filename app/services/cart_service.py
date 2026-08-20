@@ -21,16 +21,28 @@ class CartService:
 
         Возвращает None при успехе, либо сообщение об ошибке (нет в наличии).
         """
+        if quantity < 1 or quantity > 100:
+            return "Количество должно быть от 1 до 100"
+
         async with async_session() as session:
             result = await session.execute(
-                select(ProductVariant).where(
+                select(ProductVariant)
+                .join(Product, ProductVariant.product_id == Product.id)
+                .where(
                     ProductVariant.shop_id == shop_id,
                     ProductVariant.id == variant_id,
+                    ProductVariant.product_id == product_id,
+                    Product.shop_id == shop_id,
+                    Product.id == product_id,
+                    Product.is_active.is_(True),
                 )
             )
             variant = result.scalar_one_or_none()
 
-            if variant and variant.stock == 0:
+            if variant is None:
+                return "Товар или вариант недоступен"
+
+            if variant.stock <= 0:
                 return "Этого товара нет в наличии"
 
             result = await session.execute(
@@ -59,6 +71,9 @@ class CartService:
                     source_post_id = source_post.id
 
             new_quantity = (item.quantity if item else 0) + quantity
+
+            if new_quantity > 100:
+                return "В одной позиции можно заказать не более 100 шт."
 
             if variant and variant.stock > 0 and new_quantity > variant.stock:
                 return f"На складе осталось только {variant.stock} шт."
@@ -92,8 +107,17 @@ class CartService:
         async with async_session() as session:
             result = await session.execute(
                 select(CartItem, Product, ProductVariant)
-                .join(Product, CartItem.product_id == Product.id)
-                .join(ProductVariant, CartItem.variant_id == ProductVariant.id)
+                .join(
+                    Product,
+                    (CartItem.product_id == Product.id)
+                    & (CartItem.shop_id == Product.shop_id),
+                )
+                .join(
+                    ProductVariant,
+                    (CartItem.variant_id == ProductVariant.id)
+                    & (CartItem.shop_id == ProductVariant.shop_id)
+                    & (CartItem.product_id == ProductVariant.product_id),
+                )
                 .where(
                     CartItem.shop_id == shop_id,
                     CartItem.telegram_user_id == telegram_user_id,
@@ -103,7 +127,7 @@ class CartService:
             unavailable: list[dict] = []
 
             for cart_item, product, variant in result.all():
-                if variant.stock < cart_item.quantity:
+                if not product.is_active or cart_item.quantity < 1 or variant.stock < cart_item.quantity:
                     unavailable.append({
                         "product_name": product.name,
                         "volume": variant.volume,
@@ -124,11 +148,21 @@ class CartService:
         async with async_session() as session:
             result = await session.execute(
                 select(CartItem, Product, ProductVariant)
-                .join(Product, CartItem.product_id == Product.id)
-                .join(ProductVariant, CartItem.variant_id == ProductVariant.id)
+                .join(
+                    Product,
+                    (CartItem.product_id == Product.id)
+                    & (CartItem.shop_id == Product.shop_id),
+                )
+                .join(
+                    ProductVariant,
+                    (CartItem.variant_id == ProductVariant.id)
+                    & (CartItem.shop_id == ProductVariant.shop_id)
+                    & (CartItem.product_id == ProductVariant.product_id),
+                )
                 .where(
                     CartItem.shop_id == shop_id,
                     CartItem.telegram_user_id == telegram_user_id,
+                    Product.is_active.is_(True),
                 )
                 .order_by(CartItem.id)
             )
@@ -196,7 +230,11 @@ class CartService:
 
             if delta > 0:
                 variant_result = await session.execute(
-                    select(ProductVariant).where(ProductVariant.id == item.variant_id)
+                    select(ProductVariant).where(
+                        ProductVariant.id == item.variant_id,
+                        ProductVariant.shop_id == shop_id,
+                        ProductVariant.product_id == item.product_id,
+                    )
                 )
                 variant = variant_result.scalar_one_or_none()
 
