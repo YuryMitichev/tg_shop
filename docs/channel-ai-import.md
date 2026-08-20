@@ -4,13 +4,14 @@
 магазина. AI получает только текст поста; Telegram-фотографии хранятся как
 `file_id` и прикрепляются к товару после решения владельца.
 
-## Включение пилота
+## Включение и поэтапный rollout
 
 1. Применить миграции: `alembic upgrade head`.
 2. Заполнить `OPENAI_API_KEY`. `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` и
    авторизованная `TELEGRAM_SESSION` нужны для backfill и счётчиков просмотров.
-3. Установить `CHANNEL_IMPORT_ENABLED=True` и
-   `CHANNEL_IMPORT_PILOT_SHOP_ID=<id магазина>`.
+3. Установить `CHANNEL_IMPORT_ENABLED=True`. Для ограниченного rollout также
+   задать `CHANNEL_IMPORT_PILOT_SHOP_ID=<id магазина>`. Для общего релиза не
+   задавать `CHANNEL_IMPORT_PILOT_SHOP_ID`.
 4. Перезапустить bot-контейнер.
 5. В боте магазина выполнить `/connect_channel`, выбрать канал и убедиться,
    что бот является его администратором.
@@ -40,7 +41,9 @@ python scripts/generate_telegram_session.py
 `needs_manual`. При сомнении пост не отбрасывается.
 
 Задания: `queued`, `analyzing`, `completed`, `failed`, `budget_blocked`,
-`superseded`. Черновики: `pending`, `needs_manual`, `possible_duplicate`,
+`subscription_blocked`, `superseded`. Просроченное `analyzing`-задание после
+перезапуска автоматически подхватывается другим worker. Черновики:
+`pending`, `needs_manual`, `possible_duplicate`,
 `approved`, `rejected`, `duplicate_skipped`, `superseded`.
 
 Подтверждение создаёт категорию, определения новых характеристик, товар,
@@ -51,8 +54,9 @@ python scripts/generate_telegram_session.py
 
 - Два AI-задания выполняются одновременно, не более одного на магазин.
 - Timeout — 45 секунд; повторы через 5, 30 и 120 секунд с jitter.
-- Общий месячный бюджет задаёт `CHANNEL_IMPORT_BUDGET_USD`; после исчерпания
-  задания сохраняются как `budget_blocked` и могут быть повторены из админки.
+- Месячный бюджет каждого магазина задаёт `CHANNEL_IMPORT_BUDGET_USD`; расходы
+  и лимит изолированы по `shop_id`. После исчерпания задания сохраняются как
+  `budget_blocked` и могут быть повторены из админки.
 - Сырые данные отклонённых и нетоварных постов очищаются через 90 дней.
 - API расположен под `/api/admin/channel-import`, интерфейс — `/channel-import`.
 
@@ -64,6 +68,10 @@ python scripts/generate_telegram_session.py
 CHANNEL_PRODUCT_BUTTONS_ENABLED=True
 CHANNEL_PRODUCT_BUTTONS_PILOT_SHOP_ID=<id магазина>
 ```
+
+Для общего релиза удалите `CHANNEL_PRODUCT_BUTTONS_PILOT_SHOP_ID`, сохранив
+глобальный feature flag: это откроет настройку всем магазинам, но не изменит
+старые публикации без явного действия владельца.
 
 До включения настройте для бота магазина Main Mini App через BotFather и
 выдайте боту в канале право редактировать публикации. Готовность обоих условий
@@ -112,12 +120,15 @@ rate limit повторяются через 5, 30, 120, 600 и 1800 секун�
   → выручка конкретной публикации
 ```
 
-Атрибуция включается отдельно и может быть ограничена пилотным магазином:
+Атрибуция включается отдельно и может быть ограничена одним магазином на этапе
+rollout:
 
 ```env
 CHANNEL_ATTRIBUTION_ENABLED=True
 CHANNEL_ATTRIBUTION_PILOT_SHOP_ID=<id магазина>
 ```
+
+Для общего релиза удалите `CHANNEL_ATTRIBUTION_PILOT_SHOP_ID`.
 
 Токен ссылки разрешается только на backend и обязан соответствовать магазину,
 товару и `ProductSourceRef`. События имеют уникальность
