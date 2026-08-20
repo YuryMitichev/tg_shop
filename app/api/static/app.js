@@ -397,6 +397,9 @@ const App = {
                     aria-label="${favoriteLabel}"
                     title="${favoriteLabel}">${p.is_favorite ? "♥" : "♡"}</button>
         </div>`;
+        if (p.is_out_of_stock) {
+            html += `<div class="pd-stock-status">Нет в наличии</div>`;
+        }
         html += `<div class="pd-rating">${rating}</div>`;
         html += `<div class="pd-desc">${this.esc(p.description)}</div>`;
 
@@ -1169,11 +1172,14 @@ const App = {
         const offerBadge = p.has_offer
             ? `<div class="offer-badge">🔥 Персональная скидка</div>`
             : "";
+        const stockBadge = p.is_out_of_stock
+            ? `<div class="stock-badge">Нет в наличии</div>`
+            : "";
         const favoriteLabel = p.is_favorite ? "Удалить из избранного" : "Добавить в избранное";
 
         return `
             <div class="product-card" data-action="open-product" data-product-id="${p.id}">
-                ${offerBadge}
+                ${(offerBadge || stockBadge) ? `<div class="product-badges">${stockBadge}${offerBadge}</div>` : ""}
                 <button type="button"
                         class="favorite-btn${p.is_favorite ? " active" : ""}"
                         data-action="toggle-favorite"

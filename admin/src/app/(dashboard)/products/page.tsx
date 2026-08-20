@@ -35,6 +35,46 @@ import {
 
 const PER_PAGE = 18;
 
+function daysUntil(value?: string | null) {
+  if (!value) return null;
+  return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000));
+}
+
+function lifecycleLabel(product: ProductsResponse["products"][number]) {
+  const hideDays = daysUntil(product.auto_hide_at);
+  const deleteDays = daysUntil(product.auto_delete_at);
+
+  if (product.lifecycle_status === "out_of_stock_visible") {
+    return hideDays === null
+      ? "Нет в наличии"
+      : `Нет в наличии · скрытие через ${hideDays} дн.`;
+  }
+  if (product.lifecycle_status === "out_of_stock_hidden") {
+    return deleteDays === null
+      ? "Скрыт автоматически"
+      : `Скрыт автоматически · удаление через ${deleteDays} дн.`;
+  }
+  if (product.lifecycle_status === "out_of_stock_manual_hidden") {
+    return deleteDays === null
+      ? "Нет в наличии · скрыт вручную"
+      : `Нет в наличии · скрыт вручную · удаление через ${deleteDays} дн.`;
+  }
+  return null;
+}
+
+function lifecycleCardClass(product: ProductsResponse["products"][number]) {
+  if (product.lifecycle_status === "out_of_stock_visible") {
+    return "border-amber-400 bg-amber-50/50 dark:bg-amber-950/20";
+  }
+  if (product.lifecycle_status === "out_of_stock_hidden") {
+    return "border-red-400 bg-red-50/50 dark:bg-red-950/20";
+  }
+  if (product.lifecycle_status === "out_of_stock_manual_hidden") {
+    return "border-orange-400 bg-orange-50/50 dark:bg-orange-950/20";
+  }
+  return "";
+}
+
 export default function ProductsPage() {
   const [filter, setFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
@@ -134,7 +174,7 @@ export default function ProductsPage() {
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {products?.map((product) => (
-            <Card key={product.id} size="sm" className="overflow-hidden">
+            <Card key={product.id} size="sm" className={`overflow-hidden ${lifecycleCardClass(product)}`}>
               <div className="aspect-square bg-muted">
                 {product.photos[0] ? (
                   <img
@@ -153,7 +193,7 @@ export default function ProductsPage() {
                 <div className="flex items-start justify-between gap-1">
                   <h3 className="line-clamp-2 text-xs font-semibold leading-tight">{product.name}</h3>
                   <Badge variant={product.is_active ? "default" : "secondary"} className="shrink-0 text-[10px]">
-                    {product.is_active ? "✓" : "✕"}
+                    {product.is_active ? "Виден" : "Скрыт"}
                   </Badge>
                 </div>
 
@@ -161,10 +201,16 @@ export default function ProductsPage() {
                   {product.category_name}
                 </p>
 
+                {lifecycleLabel(product) && (
+                  <Badge variant="outline" className="h-auto whitespace-normal border-current px-2 py-1 text-[10px] leading-tight">
+                    {lifecycleLabel(product)}
+                  </Badge>
+                )}
+
                 <div className="flex flex-wrap gap-1">
                   {product.variants.slice(0, 3).map((v) => (
                     <Badge key={v.id} variant="outline" className="text-[10px]">
-                      {v.volume} — {v.price}₽
+                      {v.volume} — {v.price}₽ · {v.stock ?? 0} шт.
                     </Badge>
                   ))}
                 </div>

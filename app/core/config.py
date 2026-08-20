@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     channel_public_metrics_enabled: bool = Field(
         default=False, alias="CHANNEL_PUBLIC_METRICS_ENABLED"
     )
+    product_lifecycle_enabled: bool = Field(
+        default=False, alias="PRODUCT_LIFECYCLE_ENABLED"
+    )
 
     app_name: str = "TG Shop"
 

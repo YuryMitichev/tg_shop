@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
@@ -7,6 +9,7 @@ from app.models.product import Product
 from app.models.product_variant import ProductVariant
 from app.models.product_photo import ProductPhoto
 from app.services.channel_post_button_service import ChannelPostButtonService
+from app.services.product_lifecycle_service import ProductLifecycleService
 
 from io import BytesIO
 
@@ -21,13 +24,46 @@ def _category_to_dict(category: Category) -> dict:
     }
 
 
+def _iso_utc(value: datetime | None) -> str | None:
+    return f"{value.isoformat(timespec='seconds')}Z" if value else None
+
+
 def _product_to_dict(product: Product) -> dict:
+    total_stock = sum(variant.stock for variant in product.variants)
+    if product.lifecycle_deleted_at is not None:
+        lifecycle_status = "deleted"
+    elif total_stock > 0:
+        lifecycle_status = "in_stock"
+    elif product.auto_hidden_at is not None:
+        lifecycle_status = "out_of_stock_hidden"
+    elif product.is_active:
+        lifecycle_status = "out_of_stock_visible"
+    else:
+        lifecycle_status = "out_of_stock_manual_hidden"
+
+    hide_at = (
+        product.out_of_stock_since + ProductLifecycleService.HIDE_AFTER
+        if product.out_of_stock_since
+        else None
+    )
+    delete_at = (
+        product.out_of_stock_since + ProductLifecycleService.DELETE_AFTER
+        if product.out_of_stock_since
+        else None
+    )
+
     return {
         "id": product.id,
         "category_id": product.category_id,
         "name": product.name,
         "description": product.description,
         "is_active": product.is_active,
+        "total_stock": total_stock,
+        "lifecycle_status": lifecycle_status,
+        "out_of_stock_since": _iso_utc(product.out_of_stock_since),
+        "auto_hidden_at": _iso_utc(product.auto_hidden_at),
+        "auto_hide_at": _iso_utc(hide_at),
+        "auto_delete_at": _iso_utc(delete_at),
         "variants": [
             {
                 "id": variant.id,
@@ -163,6 +199,7 @@ class CatalogAdminService:
                 .where(
                     Product.shop_id == shop_id,
                     Product.category_id == category_id,
+                    Product.lifecycle_deleted_at.is_(None),
                 )
                 .order_by(Product.id)
             )
@@ -189,6 +226,7 @@ class CatalogAdminService:
                 .where(
                     Product.shop_id == shop_id,
                     Product.id == product_id,
+                    Product.lifecycle_deleted_at.is_(None),
                 )
             )
             product = result.scalar_one_or_none()
@@ -232,14 +270,18 @@ class CatalogAdminService:
             session.add(product)
             await session.commit()
             await session.refresh(product)
+            product_id = product.id
 
-            return product.id
+        await ProductLifecycleService.reconcile_safely_if_enabled(
+            trigger="product_created", shop_id=shop_id, product_ids=[product_id]
+        )
+        return product_id
 
     @staticmethod
     async def delete_product(shop_id: int, product_id: int) -> None:
         async with async_session() as session:
             result = await session.execute(
-                select(Product).where(
+                select(Product).options(selectinload(Product.variants)).where(
                     Product.shop_id == shop_id,
                     Product.id == product_id,
                 )
@@ -259,9 +301,10 @@ class CatalogAdminService:
     async def toggle_active(shop_id: int, product_id: int) -> bool | None:
         async with async_session() as session:
             result = await session.execute(
-                select(Product).where(
+                select(Product).options(selectinload(Product.variants)).where(
                     Product.shop_id == shop_id,
                     Product.id == product_id,
+                    Product.lifecycle_deleted_at.is_(None),
                 )
             )
             product = result.scalar_one_or_none()
@@ -270,6 +313,9 @@ class CatalogAdminService:
                 return None
 
             product.is_active = not product.is_active
+            product.auto_hidden_at = None
+            if product.is_active and not ProductLifecycleService.has_stock(product):
+                product.out_of_stock_since = datetime.now()
             await ChannelPostButtonService.enqueue_product_change_in_session(
                 session,
                 shop_id,
@@ -284,9 +330,10 @@ class CatalogAdminService:
     async def set_active(shop_id: int, product_id: int, is_active: bool) -> None:
         async with async_session() as session:
             result = await session.execute(
-                select(Product).where(
+                select(Product).options(selectinload(Product.variants)).where(
                     Product.shop_id == shop_id,
                     Product.id == product_id,
+                    Product.lifecycle_deleted_at.is_(None),
                 )
             )
             product = result.scalar_one_or_none()
@@ -295,6 +342,9 @@ class CatalogAdminService:
                 return
 
             product.is_active = is_active
+            product.auto_hidden_at = None
+            if is_active and not ProductLifecycleService.has_stock(product):
+                product.out_of_stock_since = datetime.now()
             await ChannelPostButtonService.enqueue_product_change_in_session(
                 session,
                 shop_id,
@@ -315,6 +365,7 @@ class CatalogAdminService:
                 select(Product).where(
                     Product.shop_id == shop_id,
                     Product.id == product_id,
+                    Product.lifecycle_deleted_at.is_(None),
                 )
             )
             product = result.scalar_one_or_none()
@@ -353,8 +404,13 @@ class CatalogAdminService:
                 return False
 
             variant.stock = max(0, stock)
+            product_id = variant.product_id
             await session.commit()
-            return True
+
+        await ProductLifecycleService.reconcile_safely_if_enabled(
+            trigger="stock_updated", shop_id=shop_id, product_ids=[product_id]
+        )
+        return True
 
     @staticmethod
     async def update_variant(
@@ -386,8 +442,14 @@ class CatalogAdminService:
             if attributes is not None:
                 variant.attributes = attributes
 
+            product_id = variant.product_id
             await session.commit()
-            return True
+
+        if stock is not None:
+            await ProductLifecycleService.reconcile_safely_if_enabled(
+                trigger="variant_updated", shop_id=shop_id, product_ids=[product_id]
+            )
+        return True
 
     @staticmethod
     async def add_variant(
@@ -404,6 +466,7 @@ class CatalogAdminService:
                     select(Product).where(
                         Product.id == product_id,
                         Product.shop_id == shop_id,
+                        Product.lifecycle_deleted_at.is_(None),
                     )
                 )
             ).scalar_one_or_none()
@@ -420,7 +483,12 @@ class CatalogAdminService:
             session.add(variant)
             await session.commit()
             await session.refresh(variant)
-            return variant.id
+            variant_id = variant.id
+
+        await ProductLifecycleService.reconcile_safely_if_enabled(
+            trigger="variant_added", shop_id=shop_id, product_ids=[product_id]
+        )
+        return variant_id
 
     @staticmethod
     async def delete_variant(shop_id: int, variant_id: int) -> bool:
@@ -434,9 +502,14 @@ class CatalogAdminService:
             variant = result.scalar_one_or_none()
             if not variant:
                 return False
+            product_id = variant.product_id
             await session.delete(variant)
             await session.commit()
-            return True
+
+        await ProductLifecycleService.reconcile_safely_if_enabled(
+            trigger="variant_deleted", shop_id=shop_id, product_ids=[product_id]
+        )
+        return True
 
     @staticmethod
     async def add_photo(shop_id: int, product_id: int, file_id: str) -> int | None:
@@ -446,6 +519,7 @@ class CatalogAdminService:
                     select(Product).where(
                         Product.id == product_id,
                         Product.shop_id == shop_id,
+                        Product.lifecycle_deleted_at.is_(None),
                     )
                 )
             ).scalar_one_or_none()
@@ -501,7 +575,10 @@ class CatalogAdminService:
                     selectinload(Product.photos),
                     selectinload(Product.category),
                 )
-                .where(Product.shop_id == shop_id)
+                .where(
+                    Product.shop_id == shop_id,
+                    Product.lifecycle_deleted_at.is_(None),
+                )
                 .order_by(Product.id.desc())
             )
 
@@ -534,7 +611,10 @@ class CatalogAdminService:
             result = await session.execute(
                 select(Product, ProductVariant)
                 .join(ProductVariant, ProductVariant.product_id == Product.id)
-                .where(Product.shop_id == shop_id)
+                .where(
+                    Product.shop_id == shop_id,
+                    Product.lifecycle_deleted_at.is_(None),
+                )
                 .order_by(Product.id, ProductVariant.id)
             )
             rows = result.all()
@@ -662,9 +742,16 @@ class CatalogAdminService:
 
         async with async_session() as session:
             result = await session.execute(
-                select(ProductVariant).where(
+                select(ProductVariant)
+                .join(
+                    Product,
+                    (Product.id == ProductVariant.product_id)
+                    & (Product.shop_id == ProductVariant.shop_id),
+                )
+                .where(
                     ProductVariant.shop_id == shop_id,
                     ProductVariant.id.in_(variant_ids),
+                    Product.lifecycle_deleted_at.is_(None),
                 )
             )
             variants = result.scalars().all()
@@ -674,7 +761,12 @@ class CatalogAdminService:
                 v.stock = stock_map[v.id]
                 found_ids.add(v.id)
 
+            product_ids = {v.product_id for v in variants}
+
             await session.commit()
 
+        await ProductLifecycleService.reconcile_safely_if_enabled(
+            trigger="stock_bulk_updated", shop_id=shop_id, product_ids=product_ids
+        )
         not_found = len(variant_ids) - len(found_ids)
         return {"updated": len(found_ids), "not_found": not_found}

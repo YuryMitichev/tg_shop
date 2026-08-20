@@ -198,6 +198,25 @@ async def _auto_cancel_loop() -> None:
             logger.exception("Авто-отмена: ошибка")
 
 
+async def _product_lifecycle_loop() -> None:
+    """Ежечасно синхронизирует карточки товаров без остатка."""
+    from app.services.product_lifecycle_service import ProductLifecycleService
+
+    while True:
+        started_at = asyncio.get_running_loop().time()
+        try:
+            result = await ProductLifecycleService.reconcile()
+            ProductLifecycleService.log_result(result, trigger="scheduled_hourly")
+        except Exception:
+            logger.exception(
+                "Product lifecycle version=product-lifecycle-v1 "
+                "trigger=scheduled_hourly outcome=failed"
+            )
+
+        elapsed = asyncio.get_running_loop().time() - started_at
+        await asyncio.sleep(max(60, 3600 - elapsed))
+
+
 async def start_all_bots() -> None:
     """Запуск всех активных ботов из БД + фоновых задач."""
 
@@ -232,6 +251,8 @@ async def start_all_bots() -> None:
 
     asyncio.create_task(_auto_cancel_loop())
     asyncio.create_task(_subscription_check_loop())
+    if settings.product_lifecycle_enabled:
+        asyncio.create_task(_product_lifecycle_loop())
     if settings.channel_import_enabled:
         from app.services.channel_import_worker import ChannelImportWorker
 

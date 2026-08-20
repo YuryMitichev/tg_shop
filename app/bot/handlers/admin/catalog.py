@@ -244,7 +244,10 @@ def setup_catalog_router() -> Router:
         for variant in product["variants"]:
             burn_val = variant.get("attributes", {}).get("burn")
             burn = f", горит {burn_val}" if burn_val else ""
-            lines.append(f"• {variant['volume']} — {variant['price']} ₽{burn}")
+            lines.append(
+                f"• {variant['volume']} — {variant['price']} ₽{burn} · "
+                f"остаток {variant.get('stock', 0)} шт."
+            )
 
         lines.append("")
 
@@ -257,6 +260,14 @@ def setup_catalog_router() -> Router:
         lines.append("")
 
         lines.append("Виден покупателям" if product["is_active"] else "🙈 Скрыт от покупателей")
+
+        lifecycle_status = product.get("lifecycle_status")
+        if lifecycle_status == "out_of_stock_visible":
+            lines.append("⚠️ Нет в наличии · будет скрыт автоматически")
+        elif lifecycle_status == "out_of_stock_hidden":
+            lines.append("🛑 Нет в наличии · скрыт автоматически")
+        elif lifecycle_status == "out_of_stock_manual_hidden":
+            lines.append("⚠️ Нет в наличии · скрыт вручную")
 
         return "\n".join(lines)
 
