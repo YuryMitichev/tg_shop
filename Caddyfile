@@ -37,6 +37,20 @@ main-svoi.{$DOMAIN} {
 	reverse_proxy platform-admin:3000
 }
 
+svoi-kanal.ru {
+	import security_headers
+	encode zstd gzip
+	root * /srv/landing
+	header /img/* Cache-Control "public, max-age=604800"
+	@legacy_index path /index.html
+	redir @legacy_index / permanent
+	file_server
+}
+
+www.svoi-kanal.ru {
+	redir https://svoi-kanal.ru{uri} permanent
+}
+
 svoi.{$DOMAIN} {
 	import security_headers
 	@vless_websocket {
@@ -44,9 +58,10 @@ svoi.{$DOMAIN} {
 		header Connection *Upgrade*
 		header Upgrade websocket
 	}
-	reverse_proxy @vless_websocket xray:10000
-	encode zstd gzip
-	root * /srv/landing
-	header /img/* Cache-Control "public, max-age=604800"
-	file_server
+	handle @vless_websocket {
+		reverse_proxy xray:10000
+	}
+	handle {
+		redir https://svoi-kanal.ru{uri} permanent
+	}
 }
