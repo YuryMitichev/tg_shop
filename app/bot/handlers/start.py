@@ -54,6 +54,26 @@ def setup_router() -> Router:
         await state.clear()
 
         shop_id = get_shop_id()
+        if command.args and command.args.startswith("history_") and message.from_user:
+            from app.services.channel_manual_backfill_service import (
+                ChannelManualBackfillService,
+            )
+
+            token = command.args.removeprefix("history_")
+            session_id = await ChannelManualBackfillService.session_for_token(
+                shop_id, message.from_user.id, token
+            )
+            if session_id is not None:
+                await ChannelManualBackfillService.deliver_instructions(
+                    session_id, message.bot
+                )
+                return
+            await message.answer(
+                "Ссылка импорта недействительна или срок её действия истёк. "
+                "Запустите импорт заново из админ-панели."
+            )
+            return
+
         shop = await ShopService.get(shop_id)
         delivery_enabled = shop["delivery_enabled"] if shop else True
 

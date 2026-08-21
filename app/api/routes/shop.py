@@ -15,6 +15,7 @@ from app.models.product import Product
 from app.models.product_photo import ProductPhoto
 from app.services.catalog_service import CatalogService
 from app.services.cart_service import CartService
+from app.services.favorite_service import FavoriteService
 from app.services.offer_service import OfferService
 from app.services.order_payment_service import OrderPaymentService
 from app.services.order_service import OrderService
@@ -29,7 +30,7 @@ router = APIRouter()
 
 
 async def get_shop_id(x_shop_id: int | None = Header(None, alias="X-Shop-Id")) -> int:
-    if x_shop_id is None:
+    if x_shop_id is None or x_shop_id <= 0:
         raise HTTPException(status_code=400, detail="X-Shop-Id header is required")
     return x_shop_id
 
@@ -71,44 +72,79 @@ async def get_shop_config(shop_id: int = Depends(get_shop_id)):
 # ==========================
 
 class AddToCartRequest(BaseModel):
-    product_id: int
-    variant_id: int
-    quantity: int = 1
+    product_id: int = Field(gt=0)
+    variant_id: int = Field(gt=0)
+    quantity: int = Field(default=1, ge=1, le=100)
     source_ref: str | None = Field(default=None, min_length=1, max_length=32)
 
 
 class AttributionEventRequest(BaseModel):
-    product_id: int
+    product_id: int = Field(gt=0)
     source_ref: str = Field(min_length=1, max_length=32)
     event_type: Literal["product_open", "add_to_cart"]
     event_key: str = Field(min_length=1, max_length=64)
 
 
-class ChangeQuantityRequest(BaseModel):
-    delta: int
-
-
 class CreateOrderRequest(BaseModel):
-    full_name: str
-    phone: str
-    comment: str | None = None
-    promo_code: str | None = None
-    payment_method: str = "manual"
+    full_name: str = Field(min_length=2, max_length=100)
+    phone: str = Field(min_length=5, max_length=30)
+    comment: str | None = Field(default=None, max_length=500)
+    promo_code: str | None = Field(default=None, max_length=64)
+    payment_method: Literal["manual", "yookassa"] = "manual"
 
 
 class ValidatePromoRequest(BaseModel):
-    code: str
+    code: str = Field(min_length=1, max_length=64)
 
 
 class CreateReviewRequest(BaseModel):
-    product_id: int
-    rating: int
-    text: str | None = None
+    product_id: int = Field(gt=0)
+    rating: int = Field(ge=1, le=5)
+    text: str | None = Field(default=None, max_length=500)
 
 
 class ContactManagerRequest(BaseModel):
-    product_id: int
-    message: str
+    product_id: int = Field(gt=0)
+    message: str = Field(min_length=3, max_length=500)
+
+
+async def _product_summary(
+    product: dict,
+    shop_id: int,
+    telegram_user_id: int | None,
+    *,
+    is_favorite: bool,
+) -> dict:
+    prices = [variant["price"] for variant in product["variants"]]
+    rating = await ReviewService.get_rating_summary(shop_id, product["id"])
+
+    has_offer = False
+    if telegram_user_id:
+        for variant in product["variants"]:
+            offer = await OfferService.get_best_offer(
+                shop_id,
+                telegram_user_id,
+                product["id"],
+                variant["id"],
+            )
+            if offer and offer.discount_percent > 0:
+                has_offer = True
+                break
+
+    return {
+        "id": product["id"],
+        "name": product["name"],
+        "description": product["description"],
+        "price_from": min(prices) if prices else 0,
+        "price_to": max(prices) if prices else 0,
+        "photo_id": product["photos"][0]["id"] if product.get("photos") else None,
+        "rating": rating,
+        "has_offer": has_offer,
+        "is_favorite": is_favorite,
+        "is_out_of_stock": not any(
+            variant.get("stock", 0) > 0 for variant in product["variants"]
+        ),
+    }
 
 
 # ==========================
@@ -123,39 +159,28 @@ async def list_categories(shop_id: int = Depends(get_shop_id)):
 
 @router.get("/products")
 async def list_products(
-    category_id: int = Query(...),
+    category_id: int = Query(..., gt=0),
     user: dict | None = Depends(get_optional_user),
     shop_id: int = Depends(get_shop_id),
 ):
     sid = user["shop_id"] if user else shop_id
     products = await CatalogService.get_products(sid, category_id)
     tg_id = user.get("id") if user else None
+    favorite_ids = (
+        await FavoriteService.product_ids(sid, tg_id, [p["id"] for p in products])
+        if tg_id
+        else set()
+    )
 
-    result = []
-    for p in products:
-        prices = [v["price"] for v in p["variants"]]
-        summary = await ReviewService.get_rating_summary(sid, p["id"])
-
-        has_offer = False
-        if tg_id:
-            for v in p["variants"]:
-                offer = await OfferService.get_best_offer(sid, tg_id, p["id"], v["id"])
-                if offer and offer.discount_percent > 0:
-                    has_offer = True
-                    break
-
-        result.append({
-            "id": p["id"],
-            "name": p["name"],
-            "description": p["description"],
-            "price_from": min(prices) if prices else 0,
-            "price_to": max(prices) if prices else 0,
-            "photo_id": p["photos"][0]["id"] if p.get("photos") else None,
-            "rating": summary,
-            "has_offer": has_offer,
-        })
-
-    return result
+    return [
+        await _product_summary(
+            product,
+            sid,
+            tg_id,
+            is_favorite=product["id"] in favorite_ids,
+        )
+        for product in products
+    ]
 
 
 @router.get("/products/{product_id}")
@@ -179,11 +204,62 @@ async def get_product_detail(
             sid, tg_id, product_id, product["variants"]
         )
 
+    is_favorite = bool(
+        tg_id
+        and await FavoriteService.product_ids(sid, tg_id, [product_id])
+    )
+
     return {
         **product,
         "rating": summary,
         "reviews": reviews,
+        "is_favorite": is_favorite,
+        "is_out_of_stock": not any(
+            variant.get("stock", 0) > 0 for variant in product["variants"]
+        ),
     }
+
+
+# ==========================
+# Избранное
+# ==========================
+
+@router.get("/favorites")
+async def list_favorites(user: dict = Depends(get_current_user)):
+    shop_id = user["shop_id"]
+    telegram_user_id = user["id"]
+    product_ids = await FavoriteService.list_product_ids(shop_id, telegram_user_id)
+    products = await CatalogService.get_products_by_ids(shop_id, product_ids)
+
+    return [
+        await _product_summary(
+            product,
+            shop_id,
+            telegram_user_id,
+            is_favorite=True,
+        )
+        for product in products
+    ]
+
+
+@router.put("/favorites/{product_id}")
+async def add_favorite(product_id: int, user: dict = Depends(get_current_user)):
+    if product_id <= 0:
+        raise HTTPException(status_code=422, detail="Invalid product id")
+
+    added = await FavoriteService.add(user["shop_id"], user["id"], product_id)
+    if not added:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"product_id": product_id, "is_favorite": True}
+
+
+@router.delete("/favorites/{product_id}")
+async def remove_favorite(product_id: int, user: dict = Depends(get_current_user)):
+    if product_id <= 0:
+        raise HTTPException(status_code=422, detail="Invalid product id")
+
+    await FavoriteService.remove(user["shop_id"], user["id"], product_id)
+    return {"product_id": product_id, "is_favorite": False}
 
 
 # ==========================
@@ -367,6 +443,14 @@ async def list_orders(user: dict = Depends(get_current_user)):
 @router.post("/orders")
 @limiter.limit("10/minute", key_func=user_or_ip_key)
 async def create_order(request: Request, req: CreateOrderRequest, user: dict = Depends(get_current_user)):
+    shop = await ShopService.get(user["shop_id"])
+    if shop is None:
+        raise HTTPException(status_code=404, detail="Магазин не найден")
+    if req.payment_method == "manual" and not shop["manual_payment_enabled"]:
+        raise HTTPException(status_code=400, detail="Ручная оплата отключена")
+    if req.payment_method == "yookassa" and not shop["yookassa_enabled"]:
+        raise HTTPException(status_code=400, detail="Онлайн-оплата отключена")
+
     unavailable = await CartService.check_availability(user["shop_id"], user["id"])
 
     if unavailable:
@@ -395,12 +479,23 @@ async def create_order(request: Request, req: CreateOrderRequest, user: dict = D
             detail={"error": "out_of_stock", "items": order["items"]},
         )
 
-    shop = await ShopService.get(user["shop_id"])
-    shop_yookassa_enabled = shop["yookassa_enabled"] if shop else False
-    card_number = (shop["payment_card_number"] if shop else None) or settings.payment_card_number
-    recipient = (shop["payment_recipient_name"] if shop else None) or settings.payment_recipient_name
+    error_messages = {
+        "invalid_payment_method": "Недопустимый способ оплаты",
+        "invalid_quantity": "Недопустимое количество товара",
+        "invalid_total": "Сумма заказа должна быть больше нуля",
+        "cart_changed": "Корзина изменилась. Обновите её и повторите оформление",
+        "too_many_unpaid_orders": "Сначала оплатите или отмените предыдущие заказы",
+        "shop_order_limit": "Магазин временно не принимает новые неоплаченные заказы",
+        "shop_not_found": "Магазин не найден",
+    }
+    if order.get("error") in error_messages:
+        code = 429 if order["error"] in {"too_many_unpaid_orders", "shop_order_limit"} else 400
+        raise HTTPException(status_code=code, detail=error_messages[order["error"]])
 
-    if req.payment_method == "yookassa" and shop_yookassa_enabled:
+    card_number = shop["payment_card_number"] or settings.payment_card_number
+    recipient = shop["payment_recipient_name"] or settings.payment_recipient_name
+
+    if req.payment_method == "yookassa":
         payment = await OrderPaymentService.create_payment(
             user["shop_id"], order["order_id"]
         )
@@ -410,10 +505,8 @@ async def create_order(request: Request, req: CreateOrderRequest, user: dict = D
                 "order_id": order["order_id"],
                 "total": order["total"],
                 "discount": order["discount"],
-                "payment": "manual",
+                "payment": "yookassa",
                 "payment_error": True,
-                "card_number": card_number,
-                "recipient": recipient,
             }
 
         return {
@@ -493,7 +586,7 @@ async def contact_manager(req: ContactManagerRequest, user: dict = Depends(get_c
         f"{req.message}"
     )
     try:
-        await bot.send_message(owner_id, text)
+        await bot.send_message(owner_id, text, parse_mode=None)
     except Exception:
         raise HTTPException(status_code=502, detail="Не удалось отправить сообщение")
 

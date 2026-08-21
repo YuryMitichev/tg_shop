@@ -112,6 +112,7 @@ class PaymentService:
                     source="online",
                     reference=str(data.get("PaymentId") or order.payment_id or ""),
                 )
+                order.stock_reserved_until = None
                 if order.status not in (
                     OrderStatus.PAID,
                     OrderStatus.SHIPPED,

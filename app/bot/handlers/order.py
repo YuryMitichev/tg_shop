@@ -95,7 +95,7 @@ def setup_router() -> Router:
 
                 if order:
                     items_text = "\n".join(
-                        f"• {item['product_name']} ({item['variant_volume']}) "
+                        f"• {esc(item['product_name'])} ({esc(item['variant_volume'])}) "
                         f"× {item['quantity']}"
                         for item in order["items"]
                     )

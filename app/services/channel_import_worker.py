@@ -23,12 +23,14 @@ from app.models.channel_import import (
 from app.models.shop import Shop
 from app.services.channel_ai_service import ChannelAIService, PROMPT_VERSION
 from app.services.channel_import_service import ChannelImportService, product_fingerprint
+from app.utils.escape import esc
 from app.services.channel_prefilter import PREFILTER_VERSION, classify_post
 from app.services.subscription_service import SubscriptionService
 
 
 logger = logging.getLogger(__name__)
 RETRY_DELAYS = (5, 30, 120)
+CLAIMABLE_STATUSES = {"queued", "analyzing"}
 _shop_locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 _budget_warnings: set[tuple[int, int, int]] = set()
 
@@ -71,7 +73,7 @@ class ChannelImportWorker:
             query = (
                 select(CatalogImportJob)
                 .where(
-                    CatalogImportJob.status == "queued",
+                    CatalogImportJob.status.in_(CLAIMABLE_STATUSES),
                     CatalogImportJob.available_at <= now,
                     or_(CatalogImportJob.locked_until.is_(None), CatalogImportJob.locked_until < now),
                 )
@@ -191,7 +193,7 @@ class ChannelImportWorker:
                 await session.refresh(candidate)
                 return [candidate.id]
 
-            used_microusd = await self._monthly_cost(session)
+            used_microusd = await self._monthly_cost(session, job.shop_id)
             budget_microusd = int(settings.channel_import_budget_usd * 1_000_000)
             if used_microusd >= budget_microusd:
                 job.status = "budget_blocked"
@@ -357,12 +359,13 @@ class ChannelImportWorker:
             await session.commit()
         return created_ids
 
-    async def _monthly_cost(self, session) -> int:
+    async def _monthly_cost(self, session, shop_id: int) -> int:
         month_start = _utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         return int(
             (
                 await session.execute(
                     select(func.coalesce(func.sum(CatalogAnalysisRun.cost_microusd), 0)).where(
+                        CatalogAnalysisRun.shop_id == shop_id,
                         CatalogAnalysisRun.created_at >= month_start
                     )
                 )
@@ -404,7 +407,7 @@ class ChannelImportWorker:
         if key in _budget_warnings:
             return
         async with async_session() as session:
-            used = await self._monthly_cost(session)
+            used = await self._monthly_cost(session, shop_id)
             shop = await session.get(Shop, shop_id)
         budget = int(settings.channel_import_budget_usd * 1_000_000)
         if not budget or used < budget * 0.8 or shop is None:
@@ -473,8 +476,8 @@ class ChannelImportWorker:
             await bot.send_message(
                 owner_id,
                 "🧠 <b>Новый AI-черновик</b>\n\n"
-                f"{candidate.get('name') or 'Нужно заполнить вручную'}\n"
-                f"Статус: <code>{candidate['status']}</code>",
+                f"{esc(candidate.get('name') or 'Нужно заполнить вручную')}\n"
+                f"Статус: <code>{esc(candidate['status'])}</code>",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             )
         except Exception:

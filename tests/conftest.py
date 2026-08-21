@@ -25,6 +25,8 @@ import app.services.review_admin_service as review_admin_service
 import app.services.stats_service as stats_service
 import app.services.admin_user_service as admin_user_service
 import app.services.cart_service as cart_service
+import app.services.favorite_service as favorite_service
+import app.services.product_lifecycle_service as product_lifecycle_service
 import app.services.catalog_service as catalog_service
 import app.services.crm_service as crm_service
 import app.services.order_service as order_service
@@ -48,12 +50,16 @@ import app.services.channel_post_button_service as channel_post_button_service
 import app.services.channel_post_button_worker as channel_post_button_worker
 import app.services.channel_storefront_service as channel_storefront_service
 import app.services.channel_backfill_service as channel_backfill_service
+import app.services.channel_manual_backfill_service as channel_manual_backfill_service
+import app.services.channel_manual_backfill_worker as channel_manual_backfill_worker
 import app.services.channel_attribution_service as channel_attribution_service
 import app.services.channel_metrics_service as channel_metrics_service
+import app.api.routes.channel_import as channel_import_routes
 from app.services.admin_auth_service import AdminAuthService
 from app.database.db import Base
 from app.models import (  # noqa: F401 — импорт регистрирует таблицы в metadata
     CartItem,
+    Favorite,
     Category,
     Order,
     OrderItem,
@@ -99,6 +105,8 @@ _PATCH_TARGETS = [
     db_module,
     catalog_service,
     cart_service,
+    favorite_service,
+    product_lifecycle_service,
     order_service,
     catalog_admin_service,
     order_admin_service,
@@ -126,8 +134,11 @@ _PATCH_TARGETS = [
     channel_post_button_worker,
     channel_storefront_service,
     channel_backfill_service,
+    channel_manual_backfill_service,
+    channel_manual_backfill_worker,
     channel_attribution_service,
     channel_metrics_service,
+    channel_import_routes,
 ]
 
 
@@ -234,7 +245,13 @@ async def seed_data(db_session):
 # Фикстуры для HTTP API тестов
 # ==========================
 
-_ADMIN_DICT = {"admin_id": 123456, "shop_id": 1, "is_super_admin": False}
+_ADMIN_DICT = {
+    "admin_id": 123456,
+    "shop_id": 1,
+    "is_super_admin": False,
+    "role": "owner",
+    "authenticated_at": int(datetime.now(timezone.utc).timestamp()),
+}
 
 
 @pytest.fixture

@@ -15,25 +15,25 @@ class AIAttribute(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str
-    value: str
+    name: str = Field(min_length=1, max_length=80)
+    value: str = Field(min_length=1, max_length=300)
 
 
 class AIFieldConfidence(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    field: str
+    field: str = Field(min_length=1, max_length=80)
     confidence: float = Field(ge=0, le=1)
 
 
 class AIVariant(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    title: str = "—"
-    price: int | None = None
-    currency: str = "RUB"
-    stock: int | None = None
-    attributes: list[AIAttribute] = Field(default_factory=list)
+    title: str = Field(default="—", min_length=1, max_length=160)
+    price: int | None = Field(default=None, gt=0, le=1_000_000_000)
+    currency: str = Field(default="RUB", min_length=3, max_length=8)
+    stock: int | None = Field(default=None, ge=0, le=1_000_000)
+    attributes: list[AIAttribute] = Field(default_factory=list, max_length=50)
 
     def to_catalog_dict(self) -> dict:
         data = self.model_dump(exclude={"attributes"})
@@ -44,14 +44,16 @@ class AIVariant(BaseModel):
 class AIProduct(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = None
-    description: str | None = None
-    category_name: str | None = None
+    name: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=10_000)
+    category_name: str | None = Field(default=None, max_length=100)
     category_is_new: bool = False
-    sku: str | None = None
-    variants: list[AIVariant] = Field(default_factory=list)
-    attributes: list[AIAttribute] = Field(default_factory=list)
-    field_confidence: list[AIFieldConfidence] = Field(default_factory=list)
+    sku: str | None = Field(default=None, max_length=100)
+    variants: list[AIVariant] = Field(default_factory=list, max_length=100)
+    attributes: list[AIAttribute] = Field(default_factory=list, max_length=50)
+    field_confidence: list[AIFieldConfidence] = Field(
+        default_factory=list, max_length=100
+    )
 
     def to_catalog_dict(self) -> dict:
         data = self.model_dump(
@@ -70,16 +72,16 @@ class PostAnalysis(BaseModel):
 
     classification: Literal["product", "non_product", "uncertain"]
     confidence: float = Field(ge=0, le=1)
-    products: list[AIProduct] = Field(default_factory=list)
-    reason: str
+    products: list[AIProduct] = Field(default_factory=list, max_length=50)
+    reason: str = Field(min_length=1, max_length=2_000)
 
 
 class DuplicateDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    duplicate_product_id: int | None = None
+    duplicate_product_id: int | None = Field(default=None, gt=0)
     confidence: float = Field(ge=0, le=1)
-    reason: str
+    reason: str = Field(min_length=1, max_length=2_000)
 
 
 class ChannelAIService:

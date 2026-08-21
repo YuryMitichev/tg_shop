@@ -1,5 +1,6 @@
 import time
 from datetime import datetime, timedelta, timezone
+import hashlib
 from unittest.mock import AsyncMock, patch
 
 import jwt
@@ -18,10 +19,10 @@ class TestMagicLinkAuth:
     """Тесты авторизации через magic link."""
 
     async def test_verify_login_token_valid(self, db_session, seed_data):
-        token = "test-valid-token-abc123"
+        token = "test-valid-token-abc123-0123456789abcdef"
         async with db_session() as session:
             session.add(LoginToken(
-                token=token,
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),
                 telegram_user_id=123456,
                 shop_id=1,
                 is_super_admin=False,
@@ -43,10 +44,10 @@ class TestMagicLinkAuth:
         assert payload["super_admin"] is False
 
     async def test_verify_login_token_expired(self, db_session, seed_data):
-        token = "test-expired-token"
+        token = "test-expired-token-0123456789abcdef"
         async with db_session() as session:
             session.add(LoginToken(
-                token=token,
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),
                 telegram_user_id=123456,
                 shop_id=1,
                 is_super_admin=False,
@@ -62,10 +63,10 @@ class TestMagicLinkAuth:
         assert result is None
 
     async def test_verify_login_token_single_use(self, db_session, seed_data):
-        token = "test-single-use-token"
+        token = "test-single-use-token-0123456789abcdef"
         async with db_session() as session:
             session.add(LoginToken(
-                token=token,
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),
                 telegram_user_id=123456,
                 shop_id=1,
                 is_super_admin=True,
@@ -80,10 +81,10 @@ class TestMagicLinkAuth:
         assert jwt2 is None
 
     async def test_verify_login_token_super_admin_flag(self, db_session, seed_data):
-        token = "test-super-admin-token"
+        token = "test-super-admin-token-0123456789abcdef"
         async with db_session() as session:
             session.add(LoginToken(
-                token=token,
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),
                 telegram_user_id=999,
                 shop_id=1,
                 is_super_admin=True,
@@ -125,7 +126,7 @@ class TestMagicLinkAuth:
                 mock_bot.send_message.assert_called_once()
 
                 sent_text = mock_bot.send_message.call_args[0][1]
-                assert "login?token=" in sent_text
+                assert "login#token=" in sent_text
 
     async def test_request_login_multiple_shops(self, db_session, seed_data):
         with patch.object(
@@ -173,12 +174,12 @@ class TestMagicLinkAuth:
                 result = await session.execute(select(LoginToken))
                 tokens = result.scalars().all()
                 assert len(tokens) == 1
-                assert len(tokens[0].token) >= 50
+                assert len(tokens[0].token_hash) == 64
 
     async def test_request_login_cleans_expired(self, db_session, seed_data):
         async with db_session() as session:
             session.add(LoginToken(
-                token="old-expired",
+                token_hash=hashlib.sha256(b"old-expired").hexdigest(),
                 telegram_user_id=111,
                 shop_id=1,
                 is_super_admin=False,
@@ -200,6 +201,9 @@ class TestMagicLinkAuth:
         async with db_session() as session:
             from sqlalchemy import select
             result = await session.execute(
-                select(LoginToken).where(LoginToken.token == "old-expired")
+                select(LoginToken).where(
+                    LoginToken.token_hash
+                    == hashlib.sha256(b"old-expired").hexdigest()
+                )
             )
             assert result.scalar_one_or_none() is None

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import Cookie, Depends, HTTPException
 
 from app.services.admin_auth_service import AdminAuthService
@@ -51,6 +53,41 @@ async def require_active_subscription(
     if not admin.get("subscription_active", True):
         raise SubscriptionExpiredException()
     return admin
+
+
+def _check_role(admin: dict, allowed: set[str]) -> dict:
+    if admin.get("is_super_admin") or admin.get("role") in allowed:
+        return admin
+    raise HTTPException(status_code=403, detail="Недостаточно прав для этого действия")
+
+
+async def require_owner(admin: dict = Depends(require_active_subscription)) -> dict:
+    return _check_role(admin, {"owner"})
+
+
+async def require_owner_recent(admin: dict = Depends(require_owner)) -> dict:
+    authenticated_at = int(admin.get("authenticated_at") or 0)
+    now = int(datetime.now(timezone.utc).timestamp())
+    if authenticated_at <= 0 or now - authenticated_at > 600:
+        raise HTTPException(
+            status_code=403,
+            detail="Для изменения платёжных реквизитов войдите повторно",
+        )
+    return admin
+
+
+async def require_catalog_access(
+    admin: dict = Depends(require_active_subscription),
+) -> dict:
+    return _check_role(admin, {"owner", "manager", "content"})
+
+
+async def require_support_access(
+    admin: dict = Depends(require_admin_full_access),
+) -> dict:
+    # Orders and customer support remain available after a subscription
+    # expires, matching the existing recovery/read-access policy.
+    return _check_role(admin, {"owner", "manager", "support"})
 
 
 async def require_super_admin(admin_token: str | None = Cookie(default=None)) -> dict:

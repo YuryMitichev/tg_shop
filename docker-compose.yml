@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: tg_shop
       POSTGRES_USER: tg_shop
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - pg_data:/var/lib/postgresql/data
     networks:
@@ -29,7 +29,7 @@ services:
     container_name: tg_shop_backup
     restart: unless-stopped
     environment:
-      - PGPASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - PGPASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       - YANDEX_BACKUP_ENABLED=${YANDEX_BACKUP_ENABLED:-false}
       - YANDEX_BACKUP_BUCKET=${YANDEX_BACKUP_BUCKET:-}
       - AWS_ACCESS_KEY_ID=${YANDEX_ACCESS_KEY_ID:-}
@@ -73,7 +73,8 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://tg_shop:${POSTGRES_PASSWORD:-changeme}@postgres:5432/tg_shop
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      - DATABASE_URL=postgresql+asyncpg://tg_shop:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tg_shop
     depends_on:
       postgres:
         condition: service_healthy
@@ -172,6 +173,7 @@ services:
       - caddy_config:/config
     networks:
       - shopnet
+      - freelance_ops_proxy
     depends_on:
       - bot
       - admin
@@ -191,3 +193,6 @@ volumes:
 
 networks:
   shopnet:
+  freelance_ops_proxy:
+    external: true
+    name: freelance-ops_default

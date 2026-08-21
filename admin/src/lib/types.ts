@@ -25,6 +25,16 @@ export interface Product {
   name: string;
   description: string;
   is_active: boolean;
+  total_stock: number;
+  lifecycle_status:
+    | "in_stock"
+    | "out_of_stock_visible"
+    | "out_of_stock_hidden"
+    | "out_of_stock_manual_hidden";
+  out_of_stock_since?: string | null;
+  auto_hidden_at?: string | null;
+  auto_hide_at?: string | null;
+  auto_delete_at?: string | null;
   variants: Variant[];
   photos: Photo[];
 }
@@ -46,6 +56,13 @@ export interface Order {
   discount_amount?: number;
   created_at?: string;
   telegram_user_id?: number;
+}
+
+export interface OrdersResponse {
+  orders: Order[];
+  total: number;
+  page: number;
+  per_page: number;
 }
 
 export interface OrderDetail extends Order {
@@ -333,6 +350,7 @@ export interface Admin {
   id: number;
   telegram_user_id: number;
   display_name: string | null;
+  role: "owner" | "manager" | "content" | "support";
   created_at: string | null;
   is_super: boolean;
 }

@@ -3,12 +3,15 @@ from sqlalchemy import func, select
 from app.core.config import settings
 from app.database.db import async_session
 from app.models.admin_user import AdminUser
+from app.models.shop import Shop
 
 
 class AdminUserService:
+    VALID_ROLES = {"owner", "manager", "content", "support"}
+
     @staticmethod
     async def is_admin(shop_id: int, telegram_user_id: int) -> bool:
-        if telegram_user_id in settings.admin_id_list:
+        if shop_id == 1 and telegram_user_id in settings.admin_id_list:
             return True
 
         async with async_session() as session:
@@ -30,6 +33,7 @@ class AdminUserService:
                 "id": admin.id,
                 "telegram_user_id": admin.telegram_user_id,
                 "display_name": admin.display_name,
+                "role": admin.role,
                 "created_at": admin.created_at.isoformat() if admin.created_at else None,
                 "is_super": False,
             }
@@ -49,6 +53,7 @@ class AdminUserService:
                     "id": a.id,
                     "telegram_user_id": a.telegram_user_id,
                     "display_name": a.display_name,
+                    "role": a.role,
                     "created_at": a.created_at.isoformat() if a.created_at else None,
                     "is_super": False,
                 }
@@ -56,16 +61,40 @@ class AdminUserService:
             ]
 
     @staticmethod
-    async def add(shop_id: int, telegram_user_id: int, display_name: str | None = None) -> int:
+    async def add(
+        shop_id: int,
+        telegram_user_id: int,
+        display_name: str | None = None,
+        role: str = "manager",
+    ) -> int:
+        if role not in AdminUserService.VALID_ROLES - {"owner"}:
+            raise ValueError("Недопустимая роль администратора")
         async with async_session() as session:
             admin = AdminUser(
                 shop_id=shop_id,
                 telegram_user_id=telegram_user_id,
                 display_name=display_name,
+                role=role,
             )
             session.add(admin)
             await session.commit()
             return admin.id
+
+    @staticmethod
+    async def get_role(shop_id: int, telegram_user_id: int) -> str | None:
+        if shop_id == 1 and telegram_user_id in settings.admin_id_list:
+            return "owner"
+        async with async_session() as session:
+            shop = await session.get(Shop, shop_id)
+            if shop and shop.owner_telegram_id == telegram_user_id:
+                return "owner"
+            result = await session.execute(
+                select(AdminUser.role).where(
+                    AdminUser.shop_id == shop_id,
+                    AdminUser.telegram_user_id == telegram_user_id,
+                )
+            )
+            return result.scalar_one_or_none()
 
     @staticmethod
     async def count_admins(shop_id: int) -> int:
@@ -82,6 +111,8 @@ class AdminUserService:
         async with async_session() as session:
             admin = await session.get(AdminUser, admin_id)
             if admin is None or admin.shop_id != shop_id:
+                return False
+            if admin.role == "owner":
                 return False
             await session.delete(admin)
             await session.commit()

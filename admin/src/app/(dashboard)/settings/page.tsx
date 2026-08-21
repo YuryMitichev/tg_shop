@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { fetcher } from "@/lib/swr";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -35,26 +35,67 @@ const LEGAL_TYPE_LABELS: Record<string, string> = {
   ooo: "Общество с ограниченной ответственностью",
 };
 
-export default function SettingsPage() {
-  const { data: messages, isLoading, mutate } = useSWR<SystemMessage[]>("/settings/messages", fetcher);
+function ColorField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value || "#000000"}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-input bg-background p-0.5"
+        />
+        <Input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="flex-1 font-mono text-sm"
+        />
+        {value && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onChange("")}
+            className="shrink-0 text-muted-foreground"
+          >
+            Сбросить
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
+export default function SettingsPage() {
   const [selectedKey, setSelectedKey] = useState<string>("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (messages && messages.length > 0 && !selectedKey) {
-      setSelectedKey(messages[0].key);
-      setContent(messages[0].content);
-    }
-  }, [messages, selectedKey]);
-
-  useEffect(() => {
-    if (messages && selectedKey) {
-      const msg = messages.find((m) => m.key === selectedKey);
-      if (msg) setContent(msg.content);
-    }
-  }, [selectedKey, messages]);
+  const { data: messages, isLoading, mutate } = useSWR<SystemMessage[]>(
+    "/settings/messages",
+    fetcher,
+    {
+      onSuccess: (nextMessages) => {
+        if (nextMessages.length === 0) return;
+        const selected =
+          nextMessages.find((message) => message.key === selectedKey) ??
+          nextMessages[0];
+        setSelectedKey(selected.key);
+        setContent(selected.content);
+      },
+    },
+  );
 
   async function handleSave() {
     setSaving(true);
@@ -114,7 +155,10 @@ export default function SettingsPage() {
                     key={msg.key}
                     variant={selectedKey === msg.key ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setSelectedKey(msg.key)}
+                    onClick={() => {
+                      setSelectedKey(msg.key);
+                      setContent(msg.content);
+                    }}
                   >
                     {msg.label}
                     {!msg.is_default && (
@@ -202,8 +246,6 @@ interface PaymentSettingsData {
 }
 
 function PaymentSettings() {
-  const { data, isLoading, mutate } = useSWR<PaymentSettingsData>("/settings/payments", fetcher);
-
   const [manualEnabled, setManualEnabled] = useState(true);
   const [cardNumber, setCardNumber] = useState("");
   const [recipientName, setRecipientName] = useState("");
@@ -215,17 +257,21 @@ function PaymentSettings() {
 
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (data) {
-      setManualEnabled(data.manual_payment_enabled);
-      setCardNumber(data.payment_card_number || "");
-      setRecipientName(data.payment_recipient_name || "");
-      setYookassaEnabled(data.yookassa_enabled);
-      setYookassaShopId(data.yookassa_shop_id || "");
-      setYookassaSecretKey("");
-      setYookassaSecretTouched(false);
-    }
-  }, [data]);
+  const { data, isLoading, mutate } = useSWR<PaymentSettingsData>(
+    "/settings/payments",
+    fetcher,
+    {
+      onSuccess: (nextSettings) => {
+        setManualEnabled(nextSettings.manual_payment_enabled);
+        setCardNumber(nextSettings.payment_card_number || "");
+        setRecipientName(nextSettings.payment_recipient_name || "");
+        setYookassaEnabled(nextSettings.yookassa_enabled);
+        setYookassaShopId(nextSettings.yookassa_shop_id || "");
+        setYookassaSecretKey("");
+        setYookassaSecretTouched(false);
+      },
+    },
+  );
 
   async function handleSave() {
     setSaving(true);
@@ -380,8 +426,6 @@ function PaymentSettings() {
 }
 
 function ThemeSettingsTab() {
-  const { data, isLoading, mutate } = useSWR<ThemeSettings>("/settings/theme", fetcher);
-
   const [primaryColor, setPrimaryColor] = useState("");
   const [bgColor, setBgColor] = useState("");
   const [textColor, setTextColor] = useState("");
@@ -394,20 +438,24 @@ function ThemeSettingsTab() {
   const [priceWeight, setPriceWeight] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (data) {
-      setPrimaryColor(data.primary_color || "");
-      setBgColor(data.bg_color || "");
-      setTextColor(data.text_color || "");
-      setButtonTextColor(data.button_text_color || "");
-      setSecondaryBgColor(data.secondary_bg_color || "");
-      setRadius(data.radius || "");
-      setFontFamily(data.font_family || "");
-      setPriceColor(data.price_color || "");
-      setPriceSize(data.price_size || "");
-      setPriceWeight(data.price_weight || "");
-    }
-  }, [data]);
+  const { isLoading, mutate } = useSWR<ThemeSettings>(
+    "/settings/theme",
+    fetcher,
+    {
+      onSuccess: (nextTheme) => {
+        setPrimaryColor(nextTheme.primary_color || "");
+        setBgColor(nextTheme.bg_color || "");
+        setTextColor(nextTheme.text_color || "");
+        setButtonTextColor(nextTheme.button_text_color || "");
+        setSecondaryBgColor(nextTheme.secondary_bg_color || "");
+        setRadius(nextTheme.radius || "");
+        setFontFamily(nextTheme.font_family || "");
+        setPriceColor(nextTheme.price_color || "");
+        setPriceSize(nextTheme.price_size || "");
+        setPriceWeight(nextTheme.price_weight || "");
+      },
+    },
+  );
 
   async function handleSave() {
     setSaving(true);
@@ -431,48 +479,6 @@ function ThemeSettingsTab() {
     } finally {
       setSaving(false);
     }
-  }
-
-  function ColorField({
-    label,
-    value,
-    onChange,
-    placeholder,
-  }: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-    placeholder: string;
-  }) {
-    return (
-      <div className="space-y-1.5">
-        <Label>{label}</Label>
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={value || "#000000"}
-            onChange={(e) => onChange(e.target.value)}
-            className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-input bg-background p-0.5"
-          />
-          <Input
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className="flex-1 font-mono text-sm"
-          />
-          {value && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onChange("")}
-              className="shrink-0 text-muted-foreground"
-            >
-              Сбросить
-            </Button>
-          )}
-        </div>
-      </div>
-    );
   }
 
   if (isLoading) return <Skeleton className="h-48 w-full" />;
@@ -641,18 +647,20 @@ function ThemeSettingsTab() {
 }
 
 function DeliverySettings() {
-  const { data, isLoading, mutate } = useSWR<DeliverySettings>("/settings/delivery", fetcher);
-
   const [enabled, setEnabled] = useState(true);
   const [couriers, setCouriers] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (data) {
-      setEnabled(data.delivery_enabled);
-      setCouriers(data.courier_services);
-    }
-  }, [data]);
+  const { data, isLoading, mutate } = useSWR<DeliverySettings>(
+    "/settings/delivery",
+    fetcher,
+    {
+      onSuccess: (nextSettings) => {
+        setEnabled(nextSettings.delivery_enabled);
+        setCouriers(nextSettings.courier_services);
+      },
+    },
+  );
 
   function toggleCourier(name: string) {
     setCouriers((prev) =>
@@ -819,16 +827,12 @@ function ProductAttrsSettingsTab() {
 }
 
 function ShopNameSettings() {
-  const { data, isLoading, mutate } = useSWR<ShopInfo>("/settings/shop", fetcher);
-
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (data) {
-      setName(data.name || "");
-    }
-  }, [data]);
+  const { isLoading, mutate } = useSWR<ShopInfo>("/settings/shop", fetcher, {
+    onSuccess: (nextShop) => setName(nextShop.name || ""),
+  });
 
   async function handleSave() {
     setSaving(true);
@@ -877,22 +881,24 @@ function ShopNameSettings() {
 }
 
 function CompanyInfoSettings() {
-  const { data, isLoading, mutate } = useSWR<CompanyInfo>("/settings/company", fetcher);
-
   const [name, setName] = useState("");
   const [inn, setInn] = useState("");
   const [address, setAddress] = useState("");
   const [legalType, setLegalType] = useState("individual");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (data) {
-      setName(data.company_name || "");
-      setInn(data.company_inn || "");
-      setAddress(data.company_address || "");
-      setLegalType(data.legal_type || "individual");
-    }
-  }, [data]);
+  const { isLoading, mutate } = useSWR<CompanyInfo>(
+    "/settings/company",
+    fetcher,
+    {
+      onSuccess: (nextCompany) => {
+        setName(nextCompany.company_name || "");
+        setInn(nextCompany.company_inn || "");
+        setAddress(nextCompany.company_address || "");
+        setLegalType(nextCompany.legal_type || "individual");
+      },
+    },
+  );
 
   async function handleSave() {
     setSaving(true);
@@ -975,22 +981,27 @@ function CompanyInfoSettings() {
 }
 
 function LegalDocsSettings() {
-  const { data: docs, isLoading, mutate } = useSWR<LegalDocument[]>("/settings/legal-documents", fetcher);
-  const { data: rknInfo } = useSWR<RoskomnadzorInfo>("/settings/roskomnadzor", fetcher);
-
   const [addendums, setAddendums] = useState<Record<string, string>>({});
   const [savingType, setSavingType] = useState<string | null>(null);
   const [downloadingRkn, setDownloadingRkn] = useState(false);
 
-  useEffect(() => {
-    if (docs) {
+  const { data: docs, isLoading, mutate } = useSWR<LegalDocument[]>(
+    "/settings/legal-documents",
+    fetcher,
+    {
+      onSuccess: (nextDocuments) => {
       const map: Record<string, string> = {};
-      for (const doc of docs) {
+      for (const doc of nextDocuments) {
         map[doc.document_type] = doc.seller_addendum || "";
       }
       setAddendums(map);
-    }
-  }, [docs]);
+      },
+    },
+  );
+  const { data: rknInfo } = useSWR<RoskomnadzorInfo>(
+    "/settings/roskomnadzor",
+    fetcher,
+  );
 
   async function handleSaveAddendum(docType: string) {
     setSavingType(docType);

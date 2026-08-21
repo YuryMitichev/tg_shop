@@ -9,6 +9,7 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.product_variant import ProductVariant
 from app.services.sales_service import SalesService
+from app.services.product_lifecycle_service import ProductLifecycleService
 
 
 class OrderAdminService:
@@ -74,6 +75,7 @@ class OrderAdminService:
 
     @staticmethod
     async def set_order_status(shop_id: int, order_id: int, status: str) -> None:
+        restored_product_ids: set[int] = set()
         async with async_session() as session:
             result = await session.execute(
                 select(Order)
@@ -93,6 +95,7 @@ class OrderAdminService:
             order.status_updated_at = datetime.now()
 
             if status == OrderStatus.PAID:
+                order.stock_reserved_until = None
                 SalesService.confirm_order(
                     order,
                     source="manual",
@@ -100,8 +103,14 @@ class OrderAdminService:
                     confirmed_at=order.status_updated_at,
                 )
 
-            if old_status != OrderStatus.CANCELLED and status == OrderStatus.CANCELLED:
+            if (
+                old_status != OrderStatus.CANCELLED
+                and status == OrderStatus.CANCELLED
+                and order.stock_released_at is None
+            ):
                 for item in order.items:
+                    if item.product_id:
+                        restored_product_ids.add(item.product_id)
                     if item.variant_id:
                         result_v = await session.execute(
                             select(ProductVariant).where(
@@ -112,9 +121,17 @@ class OrderAdminService:
                         variant = result_v.scalar_one_or_none()
                         if variant:
                             variant.stock += item.quantity
+                order.stock_released_at = order.status_updated_at
 
             await session.commit()
             SalesService.invalidate_analytics()
+
+        if restored_product_ids:
+            await ProductLifecycleService.reconcile_safely_if_enabled(
+                trigger="admin_order_stock_released",
+                shop_id=shop_id,
+                product_ids=restored_product_ids,
+            )
 
     # ==========================
     # Заказы (расширенные)

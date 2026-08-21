@@ -179,6 +179,7 @@ class TestOrderService:
             from app.models.order import Order
             order = await session.get(Order, created["order_id"])
             order.created_at = datetime.now() - timedelta(days=15)
+            order.stock_reserved_until = datetime.now() - timedelta(days=14)
             await session.commit()
 
         cancelled = await OrderService.auto_cancel_stale_orders(days=14)

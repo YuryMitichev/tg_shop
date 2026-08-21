@@ -38,10 +38,23 @@ def mock_yookassa():
 class TestPayRequiresOfferAcceptance:
     """Оплата без принятия оферты блокируется."""
 
+    async def test_pay_rejects_forged_shop_id(self, db_session, seed_data, mock_yookassa):
+        from app.bot.platform.bot import on_pay
+
+        cb = _make_callback(data="pay:1:2", user_id=999)
+        with patch(
+            "app.bot.platform.bot.SubscriptionPaymentService.create_payment",
+            new_callable=AsyncMock,
+        ) as mock_create:
+            await on_pay(cb)
+
+        mock_create.assert_not_called()
+        assert cb.answer.call_args.kwargs["show_alert"] is True
+
     async def test_pay_blocked_without_acceptance(self, db_session, seed_data, mock_yookassa):
         from app.bot.platform.bot import on_pay
 
-        cb = _make_callback(data="pay:1:2")
+        cb = _make_callback(data="pay:1:2", user_id=1)
 
         with patch.object(
             OfferAgreementService, "has_accepted", new_callable=AsyncMock, return_value=False
@@ -59,7 +72,7 @@ class TestPayRequiresOfferAcceptance:
     async def test_pay_shows_accept_button_with_callback(self, db_session, seed_data, mock_yookassa):
         from app.bot.platform.bot import on_pay
 
-        cb = _make_callback(data="pay:1:2")
+        cb = _make_callback(data="pay:1:2", user_id=1)
 
         with patch.object(
             OfferAgreementService, "has_accepted", new_callable=AsyncMock, return_value=False
@@ -82,7 +95,7 @@ class TestPayRequiresOfferAcceptance:
     async def test_pay_allowed_with_acceptance(self, db_session, seed_data, mock_yookassa):
         from app.bot.platform.bot import on_pay
 
-        cb = _make_callback(data="pay:1:2")
+        cb = _make_callback(data="pay:1:2", user_id=1)
 
         mock_payment = {"payment_id": "yk_123", "confirmation_url": "https://yoomoney.ru/checkout?id=123"}
 
@@ -111,7 +124,7 @@ class TestAcceptOfferAndPay:
     async def test_accept_offer_and_pay_creates_acceptance(self, db_session, seed_data, mock_yookassa):
         from app.bot.platform.bot import on_accept_offer_and_pay
 
-        cb = _make_callback(data="accept_offer_pay:1:2", user_id=222)
+        cb = _make_callback(data="accept_offer_pay:1:2", user_id=1)
 
         mock_payment = {"payment_id": "yk_456", "confirmation_url": "https://yoomoney.ru/checkout?id=456"}
 
@@ -122,13 +135,13 @@ class TestAcceptOfferAndPay:
         ):
             await on_accept_offer_and_pay(cb)
 
-        accepted = await OfferAgreementService.has_accepted(222)
+        accepted = await OfferAgreementService.has_accepted(1)
         assert accepted is True
 
     async def test_accept_offer_and_pay_creates_payment(self, db_session, seed_data, mock_yookassa):
         from app.bot.platform.bot import on_accept_offer_and_pay
 
-        cb = _make_callback(data="accept_offer_pay:1:2", user_id=333)
+        cb = _make_callback(data="accept_offer_pay:1:2", user_id=1)
 
         mock_payment = {"payment_id": "yk_789", "confirmation_url": "https://yoomoney.ru/checkout?id=789"}
 
@@ -148,9 +161,9 @@ class TestAcceptOfferAndPay:
         """Повторное принятие оферты не вызывает ошибку."""
         from app.bot.platform.bot import on_accept_offer_and_pay
 
-        await OfferAgreementService.accept(telegram_user_id=444, full_name="Already")
+        await OfferAgreementService.accept(telegram_user_id=1, full_name="Already")
 
-        cb = _make_callback(data="accept_offer_pay:1:2", user_id=444)
+        cb = _make_callback(data="accept_offer_pay:1:2", user_id=1)
 
         mock_payment = {"payment_id": "yk_000", "confirmation_url": "https://yoomoney.ru/checkout?id=000"}
 
@@ -161,7 +174,7 @@ class TestAcceptOfferAndPay:
         ):
             await on_accept_offer_and_pay(cb)
 
-        accepted = await OfferAgreementService.has_accepted(444)
+        accepted = await OfferAgreementService.has_accepted(1)
         assert accepted is True
 
 

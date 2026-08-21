@@ -23,12 +23,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatPrice, formatDate, STATUS_LABELS } from "@/lib/format";
-import type { Order } from "@/lib/types";
+import type { Order, OrdersResponse } from "@/lib/types";
 
 export default function OrdersPage() {
   const [status, setStatus] = useState<string>("all");
 
-  const { data, isLoading } = useSWR(
+  const { data, isLoading } = useSWR<OrdersResponse>(
     `/orders?${status !== "all" ? `status=${status}&` : ""}page=1&per_page=50`,
     fetcher,
   );

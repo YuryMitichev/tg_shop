@@ -98,9 +98,11 @@ class TestAtomicStock:
 
     async def test_zero_stock_order(self, db_session, seed_data):
         async with db_session() as session:
+            variant = await session.get(ProductVariant, 1)
+            variant.stock = 0
             session.add(CartItem(
                 shop_id=1, telegram_user_id=100,
-                product_id=2, variant_id=3, quantity=1,
+                product_id=1, variant_id=1, quantity=1,
             ))
             await session.commit()
 
@@ -161,9 +163,11 @@ class TestAtomicPromoCode:
         await PromoCodeService.create(1, "STOCKPROMO", "percent", 10, max_uses=1)
 
         async with db_session() as session:
+            variant = await session.get(ProductVariant, 1)
+            variant.stock = 0
             session.add(CartItem(
                 shop_id=1, telegram_user_id=100,
-                product_id=2, variant_id=3, quantity=1,
+                product_id=1, variant_id=1, quantity=1,
             ))
             await session.commit()
 

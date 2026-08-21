@@ -119,7 +119,7 @@ class TestCartService:
         error = await CartService.add_item(1, 111, product_id=2, variant_id=3, quantity=1)
 
         assert error is not None
-        assert "нет в наличии" in error
+        assert "недоступен" in error
 
     async def test_add_exceeding_stock(self, db_session, seed_data):
         error = await CartService.add_item(1, 111, product_id=1, variant_id=1, quantity=15)

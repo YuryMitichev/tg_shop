@@ -139,6 +139,34 @@ body {
     transform: scale(0.97);
 }
 
+.favorite-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    color: #555;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.favorite-btn.active {
+    color: #e53935;
+}
+
+.favorite-btn:active {
+    transform: scale(0.9);
+}
+
 .product-card img {
     width: 100%;
     aspect-ratio: 1;
@@ -289,6 +317,61 @@ body {
     font-size: 22px;
     font-weight: 700;
     margin-bottom: 4px;
+    flex: 1;
+}
+
+.pd-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.favorite-btn-detail {
+    position: static;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    background: var(--secondary-bg);
+    color: var(--hint);
+    box-shadow: none;
+}
+
+.favorite-btn-detail.active {
+    color: #e53935;
+}
+
+.favorites-message {
+    grid-column: 1 / -1;
+}
+
+.favorites-empty {
+    grid-column: 1 / -1;
+    min-height: 55vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 32px 20px;
+}
+
+.favorites-empty .emoji {
+    color: var(--hint);
+    font-size: 64px;
+    line-height: 1;
+    margin-bottom: 16px;
+}
+
+.favorites-empty-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.favorites-empty-text {
+    max-width: 320px;
+    color: var(--hint);
+    margin-bottom: 24px;
 }
 
 .pd-rating {
@@ -873,6 +956,37 @@ body {
     padding: 3px 8px;
     border-radius: 8px;
     z-index: 1;
+}
+
+.product-badges {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    max-width: calc(100% - 58px);
+}
+
+.product-badges .offer-badge {
+    position: static;
+}
+
+.stock-badge,
+.pd-stock-status {
+    background: #6b7280;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 8px;
+}
+
+.pd-stock-status {
+    display: inline-block;
+    margin: 2px 0 8px;
 }
 
 .product-card {

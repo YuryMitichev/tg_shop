@@ -16,6 +16,7 @@ from app.services.crm_service import CrmService
 from app.services.broadcast_service import BroadcastService
 from app.services.order_service import OrderService
 from app.services.shop_service import ShopService
+from app.utils.escape import esc
 
 logger = logging.getLogger(__name__)
 
@@ -186,15 +187,34 @@ async def restart_shop_bot(shop_id: int) -> None:
 
 
 async def _auto_cancel_loop() -> None:
-    """Фоновая задача: авто-отмена заказов без смены статуса 14 дней."""
+    """Фоновая задача: освобождение просроченных 20-минутных резервов."""
     while True:
         await asyncio.sleep(3600)
         try:
-            cancelled = await OrderService.auto_cancel_stale_orders(days=14)
+            cancelled = await OrderService.auto_cancel_stale_orders(minutes=20)
             if cancelled:
-                logger.info("Авто-отмена: отменено заказов старше 14 дней: %d", cancelled)
+                logger.info("Авто-отмена: освобождено просроченных резервов: %d", cancelled)
         except Exception:
             logger.exception("Авто-отмена: ошибка")
+
+
+async def _product_lifecycle_loop() -> None:
+    """Ежечасно синхронизирует карточки товаров без остатка."""
+    from app.services.product_lifecycle_service import ProductLifecycleService
+
+    while True:
+        started_at = asyncio.get_running_loop().time()
+        try:
+            result = await ProductLifecycleService.reconcile()
+            ProductLifecycleService.log_result(result, trigger="scheduled_hourly")
+        except Exception:
+            logger.exception(
+                "Product lifecycle version=product-lifecycle-v1 "
+                "trigger=scheduled_hourly outcome=failed"
+            )
+
+        elapsed = asyncio.get_running_loop().time() - started_at
+        await asyncio.sleep(max(60, 3600 - elapsed))
 
 
 async def start_all_bots() -> None:
@@ -202,8 +222,22 @@ async def start_all_bots() -> None:
 
     await init_db()
 
+    logger.info(
+        "Feature rollout version=channel-release-v1 "
+        "channel_import=%s import_scope=%s product_buttons=%s buttons_scope=%s "
+        "attribution=%s attribution_scope=%s public_metrics=%s product_lifecycle=%s",
+        settings.channel_import_enabled,
+        settings.channel_import_pilot_shop_id or "all",
+        settings.channel_product_buttons_enabled,
+        settings.channel_product_buttons_pilot_shop_id or "all",
+        settings.channel_attribution_enabled,
+        settings.channel_attribution_pilot_shop_id or "all",
+        settings.channel_public_metrics_enabled,
+        settings.product_lifecycle_enabled,
+    )
+
     try:
-        cancelled = await OrderService.auto_cancel_stale_orders(days=14)
+        cancelled = await OrderService.auto_cancel_stale_orders(minutes=20)
         if cancelled:
             logger.info("Авто-отмена при запуске: отменено %d заказов", cancelled)
     except Exception:
@@ -231,10 +265,16 @@ async def start_all_bots() -> None:
 
     asyncio.create_task(_auto_cancel_loop())
     asyncio.create_task(_subscription_check_loop())
+    if settings.product_lifecycle_enabled:
+        asyncio.create_task(_product_lifecycle_loop())
     if settings.channel_import_enabled:
         from app.services.channel_import_worker import ChannelImportWorker
+        from app.services.channel_manual_backfill_worker import (
+            ChannelManualBackfillWorker,
+        )
 
         asyncio.create_task(ChannelImportWorker(concurrency=2).run_forever())
+        asyncio.create_task(ChannelManualBackfillWorker().run_forever())
         asyncio.create_task(_channel_import_cleanup_loop())
     if settings.channel_product_buttons_enabled:
         from app.services.channel_post_button_worker import ChannelPostButtonWorker
@@ -363,7 +403,7 @@ async def _send_trial_ending_notice(
         await bot.send_message(
             owner_telegram_id,
             f"⏰ <b>Триал заканчивается!</b>\n\n"
-            f"Магазин «{shop_name}» — бесплатный период истекает <b>{expires_at}</b>.\n\n"
+            f"Магазин «{esc(shop_name)}» — бесплатный период истекает <b>{esc(expires_at)}</b>.\n\n"
             f"Чтобы бот продолжил работать, оплатите подписку.\n"
             f"Откройте платформенного бота → «💳 Подписка».",
         )

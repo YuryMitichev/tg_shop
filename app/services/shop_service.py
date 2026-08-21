@@ -6,6 +6,7 @@ from app.database.db import async_session
 from app.models.admin_user import AdminUser
 from app.models.broadcast import Broadcast
 from app.models.cart_item import CartItem
+from app.models.favorite import Favorite
 from app.models.category import Category
 from app.models.communication_log import CommunicationLog
 from app.models.login_token import LoginToken
@@ -126,6 +127,15 @@ class ShopService:
                 is_active=True,
             )
             session.add(shop)
+            await session.flush()
+            session.add(
+                AdminUser(
+                    shop_id=shop.id,
+                    telegram_user_id=owner_telegram_id,
+                    display_name="Владелец",
+                    role="owner",
+                )
+            )
             await session.commit()
             await session.refresh(shop)
             return _shop_to_dict(shop)
@@ -177,7 +187,40 @@ class ShopService:
             if bot_token is not None:
                 shop.bot_token = encrypt(bot_token)
                 shop.bot_token_hash = token_hash(bot_token)
-            if owner_telegram_id is not None:
+            if (
+                owner_telegram_id is not None
+                and owner_telegram_id != shop.owner_telegram_id
+            ):
+                previous_owner = (
+                    await session.execute(
+                        select(AdminUser).where(
+                            AdminUser.shop_id == shop_id,
+                            AdminUser.telegram_user_id == shop.owner_telegram_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if previous_owner is not None and previous_owner.role == "owner":
+                    previous_owner.role = "manager"
+
+                new_owner = (
+                    await session.execute(
+                        select(AdminUser).where(
+                            AdminUser.shop_id == shop_id,
+                            AdminUser.telegram_user_id == owner_telegram_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if new_owner is None:
+                    session.add(
+                        AdminUser(
+                            shop_id=shop_id,
+                            telegram_user_id=owner_telegram_id,
+                            display_name="Владелец",
+                            role="owner",
+                        )
+                    )
+                else:
+                    new_owner.role = "owner"
                 shop.owner_telegram_id = owner_telegram_id
             if is_active is not None:
                 shop.is_active = is_active
@@ -216,6 +259,9 @@ class ShopService:
 
             await session.execute(
                 delete(CartItem).where(CartItem.shop_id == shop_id)
+            )
+            await session.execute(
+                delete(Favorite).where(Favorite.shop_id == shop_id)
             )
             await session.execute(
                 delete(OrderItem).where(OrderItem.shop_id == shop_id)

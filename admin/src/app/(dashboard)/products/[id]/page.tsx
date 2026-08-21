@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
 import { api, photoUrl } from "@/lib/api";
@@ -35,7 +36,30 @@ export default function EditProductPage() {
   const params = useParams();
   const id = params.id as string;
 
-  const { data: product, mutate } = useSWR<Product>(`/products/${id}`, fetcher);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [variants, setVariants] = useState<EditableVariant[]>([]);
+  const [savingVariant, setSavingVariant] = useState<number | null>(null);
+
+  const { data: product, mutate } = useSWR<Product>(`/products/${id}`, fetcher, {
+    onSuccess: (nextProduct) => {
+      setName(nextProduct.name);
+      setDescription(nextProduct.description);
+      setCategoryId(String(nextProduct.category_id));
+      setVariants(
+        nextProduct.variants.map((variant) => ({
+          id: variant.id,
+          volume: variant.volume,
+          price: String(variant.price),
+          stock: String(variant.stock ?? 0),
+          attributes: { ...(variant.attributes ?? {}) },
+        })),
+      );
+    },
+  });
   const { data: categories } = useSWR<Category[]>("/categories", fetcher);
   const { data: attrsData } = useSWR<ProductAttrsSettings>("/settings/product-attrs", fetcher);
 
@@ -48,31 +72,6 @@ export default function EditProductPage() {
     }
     return map;
   }, [categories]);
-
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [variants, setVariants] = useState<EditableVariant[]>([]);
-  const [savingVariant, setSavingVariant] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (product) {
-      setName(product.name);
-      setDescription(product.description);
-      setCategoryId(String(product.category_id));
-      setVariants(
-        product.variants.map((v) => ({
-          id: v.id,
-          volume: v.volume,
-          price: String(v.price),
-          stock: String(v.stock ?? 0),
-          attributes: { ...(v.attributes ?? {}) },
-        })),
-      );
-    }
-  }, [product]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -209,10 +208,13 @@ export default function EditProductPage() {
             <div className="grid grid-cols-2 gap-3">
               {product.photos.map((photo) => (
                 <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg bg-muted">
-                  <img
+                  <Image
                     src={photoUrl(photo.id)}
                     alt=""
-                    className="h-full w-full object-cover"
+                    fill
+                    unoptimized
+                    sizes="(max-width: 768px) 50vw, 25vw"
+                    className="object-cover"
                   />
                   <button
                     onClick={() => deletePhoto(photo.id)}

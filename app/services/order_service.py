@@ -1,17 +1,26 @@
-from sqlalchemy import select, exists, or_, update
+from datetime import datetime, timedelta
+
+from sqlalchemy import delete, exists, func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 from app.core.enums import OrderStatus
 from app.database.db import async_session
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.cart_item import CartItem
 from app.models.product_variant import ProductVariant
+from app.models.shop import Shop
 from app.services.cart_service import CartService
 from app.services.offer_service import OfferService
 from app.services.promo_service import PromoCodeService
+from app.services.product_lifecycle_service import ProductLifecycleService
 
 
 class OrderService:
+
+    RESERVATION_MINUTES = 20
+    MAX_ACTIVE_UNPAID_PER_USER = 3
+    MAX_ACTIVE_UNPAID_PER_SHOP = 200
 
     @staticmethod
     async def create_order(
@@ -30,10 +39,18 @@ class OrderService:
         Возвращает None, если корзина пуста.
         Возвращает {"error": "out_of_stock", "items": [...]} если товар закончился.
         """
+        if payment_method not in {"manual", "yookassa"}:
+            return {"error": "invalid_payment_method"}
+
         items = await CartService.get_items(shop_id, telegram_user_id)
 
         if not items:
             return None
+
+        if any(item["quantity"] < 1 or item["quantity"] > 100 for item in items):
+            return {"error": "invalid_quantity"}
+        if any(item["price"] <= 0 or item["subtotal"] <= 0 for item in items):
+            return {"error": "invalid_total"}
 
         total = sum(item["subtotal"] for item in items)
 
@@ -48,8 +65,74 @@ class OrderService:
                 applied_promo = promo_info["code"]
 
         final_total = total - discount
+        if final_total <= 0:
+            return {"error": "invalid_total"}
 
         async with async_session() as session:
+            # A shop-row lock serializes order creation and makes the unpaid-order
+            # limits effective under concurrent/distributed requests.
+            shop = (
+                await session.execute(
+                    select(Shop).where(Shop.id == shop_id).with_for_update()
+                )
+            ).scalar_one_or_none()
+            if shop is None:
+                return {"error": "shop_not_found"}
+
+            locked_cart = list(
+                (
+                    await session.execute(
+                        select(CartItem)
+                        .where(
+                            CartItem.shop_id == shop_id,
+                            CartItem.telegram_user_id == telegram_user_id,
+                        )
+                        .order_by(CartItem.id)
+                        .with_for_update()
+                    )
+                ).scalars().all()
+            )
+            expected = {
+                (item["product_id"], item["variant_id"]): item["quantity"]
+                for item in items
+            }
+            actual = {
+                (item.product_id, item.variant_id): item.quantity
+                for item in locked_cart
+            }
+            if not locked_cart or actual != expected:
+                return {"error": "cart_changed"}
+
+            now = datetime.now()
+            active_reservation = (
+                Order.payment_confirmed_at.is_(None),
+                Order.stock_released_at.is_(None),
+                Order.stock_reserved_until > now,
+                Order.status.in_([OrderStatus.NEW, OrderStatus.CONFIRMED]),
+            )
+            user_unpaid = (
+                await session.execute(
+                    select(func.count()).select_from(Order).where(
+                        Order.shop_id == shop_id,
+                        Order.telegram_user_id == telegram_user_id,
+                        *active_reservation,
+                    )
+                )
+            ).scalar_one()
+            if user_unpaid >= OrderService.MAX_ACTIVE_UNPAID_PER_USER:
+                return {"error": "too_many_unpaid_orders"}
+
+            shop_unpaid = (
+                await session.execute(
+                    select(func.count()).select_from(Order).where(
+                        Order.shop_id == shop_id,
+                        *active_reservation,
+                    )
+                )
+            ).scalar_one()
+            if shop_unpaid >= OrderService.MAX_ACTIVE_UNPAID_PER_SHOP:
+                return {"error": "shop_order_limit"}
+
             out_of_stock: list[dict] = []
 
             for item in items:
@@ -60,6 +143,7 @@ class OrderService:
                         .where(
                             ProductVariant.id == variant_id,
                             ProductVariant.shop_id == shop_id,
+                            ProductVariant.product_id == item["product_id"],
                             ProductVariant.stock >= item["quantity"],
                         )
                         .values(stock=ProductVariant.stock - item["quantity"])
@@ -99,6 +183,9 @@ class OrderService:
                 promo_code=applied_promo,
                 discount_amount=discount,
                 payment_method=payment_method,
+                stock_reserved_until=now + timedelta(
+                    minutes=OrderService.RESERVATION_MINUTES
+                ),
             )
 
             order.items = [
@@ -117,12 +204,22 @@ class OrderService:
             ]
 
             session.add(order)
+            await session.execute(
+                delete(CartItem).where(
+                    CartItem.shop_id == shop_id,
+                    CartItem.telegram_user_id == telegram_user_id,
+                )
+            )
             await session.commit()
             await session.refresh(order)
 
             order_id = order.id
 
-        await CartService.clear(shop_id, telegram_user_id)
+        await ProductLifecycleService.reconcile_safely_if_enabled(
+            trigger="order_stock_reserved",
+            shop_id=shop_id,
+            product_ids={item["product_id"] for item in items},
+        )
 
         for item in items:
             if item.get("discount_percent", 0) > 0:
@@ -239,23 +336,31 @@ class OrderService:
             }
 
     @staticmethod
-    async def auto_cancel_stale_orders(days: int = 14) -> int:
+    async def auto_cancel_stale_orders(
+        days: int | None = None,
+        minutes: int = RESERVATION_MINUTES,
+    ) -> int:
         """Отменяет заказы, которые не сменили статус за указанное число дней.
 
         Проверяет status_updated_at (или created_at, если поле пустое —
         старые заказы). Не трогает финальные статусы (done, cancelled, shipped).
         Возвращает количество отменённых заказов.
         """
-        from datetime import datetime, timedelta
-
-        cutoff = datetime.now() - timedelta(days=days)
+        now = datetime.now()
+        cutoff = now - (timedelta(days=days) if days is not None else timedelta(minutes=minutes))
 
         async with async_session() as session:
             result = await session.execute(
                 select(Order)
                 .options(selectinload(Order.items))
                 .where(
-                    Order.status.in_([OrderStatus.NEW, OrderStatus.CONFIRMED, OrderStatus.PAID]),
+                    Order.status.in_([OrderStatus.NEW, OrderStatus.CONFIRMED]),
+                    Order.payment_confirmed_at.is_(None),
+                    Order.stock_released_at.is_(None),
+                    or_(
+                        Order.stock_reserved_until < now,
+                        Order.stock_reserved_until.is_(None),
+                    ),
                     or_(
                         Order.status_updated_at.is_(None),
                         Order.status_updated_at < cutoff,
@@ -264,12 +369,16 @@ class OrderService:
                 )
             )
             stale = result.scalars().all()
+            restored_product_ids: set[int] = set()
 
             for order in stale:
                 order.status = OrderStatus.CANCELLED
-                order.status_updated_at = datetime.now()
+                order.status_updated_at = now
+                order.stock_released_at = now
 
                 for item in order.items:
+                    if item.product_id:
+                        restored_product_ids.add(item.product_id)
                     if item.variant_id:
                         await session.execute(
                             update(ProductVariant)
@@ -280,4 +389,11 @@ class OrderService:
             if stale:
                 await session.commit()
 
-            return len(stale)
+            stale_count = len(stale)
+
+        if restored_product_ids:
+            await ProductLifecycleService.reconcile_safely_if_enabled(
+                trigger="stale_order_stock_released",
+                product_ids=restored_product_ids,
+            )
+        return stale_count

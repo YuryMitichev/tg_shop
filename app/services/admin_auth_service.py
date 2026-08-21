@@ -1,4 +1,6 @@
 import secrets
+import hashlib
+from html import escape
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -80,7 +82,7 @@ class AdminAuthService:
 
         async with async_session() as session:
             session.add(LoginToken(
-                token=token,
+                token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
                 telegram_user_id=telegram_user_id,
                 shop_id=shop_id,
                 is_super_admin=is_super_admin,
@@ -96,7 +98,7 @@ class AdminAuthService:
     ) -> str | None:
         """Создаёт magic link для конкретного магазина без отправки через бот.
 
-        Возвращает готовый URL вида ``{base}/login?token=…`` или ``None``,
+        Возвращает готовый URL вида ``{base}/login#token=…`` или ``None``,
         если пользователь не является админом магазина.
         """
         from app.services.admin_user_service import AdminUserService
@@ -109,7 +111,7 @@ class AdminAuthService:
             telegram_user_id, shop_id, is_super,
         )
         base_url = settings.admin_panel_url or "https://t.me"
-        return f"{base_url.rstrip('/')}/login?token={token}"
+        return f"{base_url.rstrip('/')}/login#token={token}"
 
     @staticmethod
     async def request_login(
@@ -142,10 +144,10 @@ class AdminAuthService:
             token = await AdminAuthService._create_login_token(
                 telegram_user_id, sid, is_super,
             )
-            login_url = f"{base_url.rstrip('/')}/login?token={token}"
+            login_url = f"{base_url.rstrip('/')}/login#token={token}"
 
             shop = await ShopService.get(sid)
-            shop_label = f" — «{shop['name']}»" if shop else ""
+            shop_label = f" — «{escape(shop['name'])}»" if shop else ""
 
             await bot.send_message(
                 telegram_user_id,
@@ -159,9 +161,12 @@ class AdminAuthService:
 
     @staticmethod
     async def verify_login_token(token: str) -> str | None:
+        if not 32 <= len(token) <= 128:
+            return None
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
         async with async_session() as session:
             result = await session.execute(
-                select(LoginToken).where(LoginToken.token == token)
+                select(LoginToken).where(LoginToken.token_hash == token_hash)
             )
             login_token = result.scalar_one_or_none()
 
@@ -197,6 +202,9 @@ class AdminAuthService:
             "shop_id": shop_id,
             "super_admin": is_super_admin,
             "iat": now,
+            # PyJWT knows how to normalize registered datetime claims such as
+            # iat/exp, but auth_time is application-specific and must be JSON.
+            "auth_time": int(now.timestamp()),
             "exp": now + AdminAuthService.JWT_EXPIRES,
         }
         return jwt.encode(payload, settings.resolved_jwt_secret, algorithm=AdminAuthService.JWT_ALGORITHM)
@@ -217,13 +225,24 @@ class AdminAuthService:
             admin_id = int(payload["sub"])
             shop_id = int(payload.get("shop_id", 1))
             is_super = bool(payload.get("super_admin", False))
+            auth_time = int(payload.get("auth_time", payload.get("iat", 0)))
 
             if not is_super:
                 from app.services.admin_user_service import AdminUserService
                 if not await AdminUserService.is_admin(shop_id, admin_id):
                     return None
 
-            result = {"admin_id": admin_id, "shop_id": shop_id, "is_super_admin": is_super}
+            from app.services.admin_user_service import AdminUserService
+            role = "owner" if is_super else await AdminUserService.get_role(shop_id, admin_id)
+            if role is None:
+                return None
+            result = {
+                "admin_id": admin_id,
+                "shop_id": shop_id,
+                "is_super_admin": is_super,
+                "role": role,
+                "authenticated_at": auth_time,
+            }
             AdminAuthService._token_cache.set(token, result)
             return result
         except Exception:

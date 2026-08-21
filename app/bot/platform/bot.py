@@ -29,6 +29,7 @@ from app.services.offer_agreement_service import (
     get_privacy_policy_text,
 )
 from app.bot.bot import get_bot, start_shop_bot, stop_shop_bot
+from app.utils.escape import esc
 
 logger = logging.getLogger(__name__)
 
@@ -118,14 +119,14 @@ async def _send_shop_card(message: Message, shop: dict) -> None:
     bot_username = shop.get("bot_username")
 
     lines = [
-        f"🏪 <b>{shop['name']}</b>",
+        f"🏪 <b>{esc(shop['name'])}</b>",
         f"   ID: {shop['id']}",
         f"   Статус: {'🟢 активен' if shop['is_active'] else '🔴 отключён'}",
         f"   Подписка: {status}",
         f"   До: {expires}",
     ]
     if bot_username:
-        lines.append(f"   Бот: @{bot_username}")
+        lines.append(f"   Бот: @{esc(bot_username)}")
 
     await message.answer(
         "\n".join(lines),
@@ -258,7 +259,7 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
     await state.set_state(None)
 
     await message.answer(
-        f"✅ <b>Магазин «{shop['name']}» создан!</b>\n\n"
+        f"✅ <b>Магазин «{esc(shop['name'])}» создан!</b>\n\n"
         "🎁 Для активации бесплатного периода (7 дней) необходимо принять "
         "условия <b>публичной оферты</b> и <b>политики конфиденциальности</b>.\n\n"
         "Ознакомьтесь с документами и нажмите кнопку ниже для активации.",
@@ -336,7 +337,7 @@ async def _finalize_shop_creation(
     await SubscriptionService.start_trial(shop["id"])
 
     await message.answer(
-        f"✅ <b>Магазин «{shop['name']}» создан!</b>\n\n"
+        f"✅ <b>Магазин «{esc(shop['name'])}» создан!</b>\n\n"
         f"🎁 Активирован бесплатный период — <b>7 дней</b>\n\n"
         "🚀 Запускаю бота..."
     )
@@ -368,8 +369,8 @@ async def _finalize_shop_creation(
     if bot_username:
         text += (
             f"📊 Ссылки на админ-панель и мини-приложение "
-            f"отправлены в боте @{bot_username}.\n\n"
-            f"Если не получили — откройте бота @{bot_username} и отправьте /admin"
+            f"отправлены в боте @{esc(bot_username)}.\n\n"
+            f"Если не получили — откройте бота @{esc(bot_username)} и отправьте /admin"
         )
     else:
         text += "📊 Ссылки на админ-панель отправлены в вашем боте."
@@ -518,6 +519,12 @@ async def on_accept_offer_and_trial(callback: CallbackQuery, state: FSMContext) 
     """Принимает оферту + политику и активирует бесплатный период."""
     shop_id = int(callback.data.split(":")[1])
 
+    shop = await ShopService.get(shop_id)
+    if shop is None or shop["owner_telegram_id"] != callback.from_user.id:
+        await callback.answer("Магазин не найден", show_alert=True)
+        await state.clear()
+        return
+
     await OfferAgreementService.accept(
         telegram_user_id=callback.from_user.id,
         full_name=callback.from_user.full_name,
@@ -533,12 +540,6 @@ async def on_accept_offer_and_trial(callback: CallbackQuery, state: FSMContext) 
 
     data = await state.get_data()
     bot_username = data.get("bot_username")
-
-    shop = await ShopService.get(shop_id)
-    if shop is None:
-        await callback.message.answer("❌ Магазин не найден. Обратитесь в поддержку.")
-        await state.clear()
-        return
 
     if not bot_username:
         bot_info = await _validate_bot_token(shop["bot_token"])
@@ -695,17 +696,17 @@ async def _show_plans_without_shop(message: Message) -> None:
     )
 
     for feature in features:
-        text += f"  ✅ {feature}\n"
+        text += f"  ✅ {esc(feature)}\n"
 
     text += f"\n{'---' * 10}\n"
     text += "<b>Доступные периоды оплаты:</b>\n\n"
 
     for plan in plans:
         if plan["description"]:
-            text += f"🔸 <b>{plan['name']}</b> — {int(plan['price']):,} ₽\n"
-            text += f"<i>{plan['description']}</i>\n\n"
+            text += f"🔸 <b>{esc(plan['name'])}</b> — {int(plan['price']):,} ₽\n"
+            text += f"<i>{esc(plan['description'])}</i>\n\n"
         else:
-            text += f"🔸 <b>{plan['name']}</b> — {int(plan['price']):,} ₽\n\n"
+            text += f"🔸 <b>{esc(plan['name'])}</b> — {int(plan['price']):,} ₽\n\n"
 
     text += (
         "🎁 <b>7 дней бесплатно</b> при создании первого магазина.\n\n"
@@ -728,7 +729,7 @@ async def _show_subscription_for_shop(message: Message | CallbackQuery, shop: di
 
     if not plans:
         text = (
-            f"🏪 <b>{shop['name']}</b> (ID: {shop_id})\n\n"
+            f"🏪 <b>{esc(shop['name'])}</b> (ID: {shop_id})\n\n"
             f"Статус подписки: {status_line}\n\n"
             f"Тарифы не настроены. Обратитесь к администратору."
         )
@@ -740,14 +741,14 @@ async def _show_subscription_for_shop(message: Message | CallbackQuery, shop: di
     features = plans[0].get("features", [])
 
     text = (
-        f"🏪 <b>{shop['name']}</b> (ID: {shop_id})\n\n"
+        f"🏪 <b>{esc(shop['name'])}</b> (ID: {shop_id})\n\n"
         f"Статус подписки: {status_line}\n\n"
         f"{'---' * 10}\n"
         f"📦 <b>Тариф: 5000 ₽ / месяц</b>\n\n"
     )
 
     for feature in features:
-        text += f"  ✅ {feature}\n"
+        text += f"  ✅ {esc(feature)}\n"
 
     text += f"\n{'---' * 10}\n"
     text += "<b>Выберите период оплаты:</b>\n\n"
@@ -755,10 +756,10 @@ async def _show_subscription_for_shop(message: Message | CallbackQuery, shop: di
     kb_rows = []
     for plan in plans:
         if plan["description"]:
-            text += f"🔸 <b>{plan['name']}</b> — {int(plan['price']):,} ₽\n"
-            text += f"<i>{plan['description']}</i>\n\n"
+            text += f"🔸 <b>{esc(plan['name'])}</b> — {int(plan['price']):,} ₽\n"
+            text += f"<i>{esc(plan['description'])}</i>\n\n"
         else:
-            text += f"🔸 <b>{plan['name']}</b> — {int(plan['price']):,} ₽\n\n"
+            text += f"🔸 <b>{esc(plan['name'])}</b> — {int(plan['price']):,} ₽\n\n"
 
         kb_rows.append([
             InlineKeyboardButton(
@@ -778,6 +779,11 @@ async def on_pay(callback: CallbackQuery) -> None:
     _, shop_id_str, plan_id_str = callback.data.split(":")
     shop_id = int(shop_id_str)
     plan_id = int(plan_id_str)
+
+    shop = await ShopService.get(shop_id)
+    if shop is None or shop["owner_telegram_id"] != callback.from_user.id:
+        await callback.answer("Магазин не найден", show_alert=True)
+        return
 
     if not await PlatformSettingsService.is_yookassa_enabled():
         await callback.answer("Оплата скоро будет доступна", show_alert=True)
@@ -799,6 +805,11 @@ async def on_accept_offer_and_pay(callback: CallbackQuery) -> None:
     _, shop_id_str, plan_id_str = callback.data.split(":")
     shop_id = int(shop_id_str)
     plan_id = int(plan_id_str)
+
+    shop = await ShopService.get(shop_id)
+    if shop is None or shop["owner_telegram_id"] != callback.from_user.id:
+        await callback.answer("Магазин не найден", show_alert=True)
+        return
 
     await OfferAgreementService.accept(
         telegram_user_id=callback.from_user.id,
@@ -823,6 +834,10 @@ async def on_subscription_shop(callback: CallbackQuery) -> None:
 
     if shop is None:
         await callback.answer("Магазин не найден", show_alert=True)
+        return
+
+    if shop["owner_telegram_id"] != callback.from_user.id:
+        await callback.answer("Это не ваш магазин", show_alert=True)
         return
 
     await _show_subscription_for_shop(callback, shop)
@@ -853,7 +868,7 @@ async def on_delete_shop(callback: CallbackQuery) -> None:
         ]
     )
     await callback.message.answer(
-        f"⚠️ <b>Удалить магазин «{shop['name']}»?</b>\n\n"
+        f"⚠️ <b>Удалить магазин «{esc(shop['name'])}»?</b>\n\n"
         "Будут удалены все товары, заказы, клиенты и настройки.\n"
         "Это действие <b>нельзя отменить</b>.",
         reply_markup=kb,
@@ -883,7 +898,7 @@ async def on_delete_shop_confirm(callback: CallbackQuery) -> None:
     await ShopService.delete(shop_id)
 
     await callback.message.edit_text(
-        f"✅ Магазин «{shop_name}» удалён.",
+        f"✅ Магазин «{esc(shop_name)}» удалён.",
         reply_markup=None,
     )
     await callback.answer("Магазин удалён")

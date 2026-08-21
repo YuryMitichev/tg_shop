@@ -6,6 +6,7 @@ from app.models.product_attribute_def import ProductAttributeDef
 from app.models.offer_acceptance import OfferAcceptance
 from app.models.product_photo import ProductPhoto
 from app.models.cart_item import CartItem
+from app.models.favorite import Favorite
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
@@ -26,6 +27,8 @@ from app.models.channel_import import (
     ChannelConnection,
     ChannelPost,
     ChannelPostMedia,
+    ChannelManualBackfillSession,
+    ChannelManualBackfillItem,
     CatalogImportJob,
     CatalogImportCandidate,
     CatalogAnalysisRun,
@@ -44,6 +47,7 @@ __all__ = [
     "OfferAcceptance",
     "ProductPhoto",
     "CartItem",
+    "Favorite",
     "Order",
     "OrderItem",
     "Payment",
@@ -64,6 +68,8 @@ __all__ = [
     "ChannelConnection",
     "ChannelPost",
     "ChannelPostMedia",
+    "ChannelManualBackfillSession",
+    "ChannelManualBackfillItem",
     "CatalogImportJob",
     "CatalogImportCandidate",
     "CatalogAnalysisRun",
