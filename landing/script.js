@@ -2,10 +2,21 @@
   'use strict';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const header = document.querySelector('#siteHeader');
-  const hero = document.querySelector('.hero');
+  const hero = document.querySelector('.hero, .page-hero');
   const finalCta = document.querySelector('#finalCta');
   const mobileCta = document.querySelector('#mobileCta');
   const reveals = [...document.querySelectorAll('.reveal')];
+  const menuButton = document.querySelector('.menu-button');
+  const mainNav = document.querySelector('.main-nav');
+
+  menuButton?.addEventListener('click', () => {
+    const open = mainNav?.classList.toggle('open') || false;
+    menuButton.setAttribute('aria-expanded', String(open));
+  });
+  mainNav?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => {
+    mainNav.classList.remove('open');
+    menuButton?.setAttribute('aria-expanded', 'false');
+  }));
 
   if (reduceMotion || !('IntersectionObserver' in window)) {
     reveals.forEach((item) => item.classList.add('revealed'));
