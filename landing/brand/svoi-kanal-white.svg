@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 84" role="img" aria-label="Белый логотип «Свой канал»">
+  <rect x="2" y="2" width="80" height="80" rx="22" fill="#FFFFFF"/>
+  <path d="M23 25h39l-8 10H28l-7 13h32l-9 12H20" fill="none" stroke="#168AD2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="62" cy="25" r="4" fill="#FF6D54"/>
+  <text x="106" y="53" fill="#FFFFFF" font-family="Manrope, Arial, sans-serif" font-size="38" font-weight="800" letter-spacing="-1.2">Свой канал</text>
+</svg>

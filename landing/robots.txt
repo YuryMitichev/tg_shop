@@ -1,4 +1,3 @@
 User-agent: *
 Allow: /
-
-Sitemap: https://svoi-kanal.ru/sitemap.xml
+Sitemap: https://svoi.svechevarov-family.ru/sitemap.xml

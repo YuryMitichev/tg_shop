@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Визуальная система бренда «Свой канал»</title>
+  <desc id="desc">Логотип, цвета, типографика и основные сообщения бренда</desc>
+  <rect width="1600" height="1000" fill="#F4F2EC"/>
+  <rect x="70" y="70" width="1460" height="860" rx="42" fill="#FFFDF7" stroke="#D8D6CF" stroke-width="2"/>
+  <rect x="120" y="120" width="112" height="112" rx="30" fill="#151719"/>
+  <path d="M150 153h54l-11 14h-36l-10 19h44l-13 17h-47" fill="none" stroke="#168AD2" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="204" cy="153" r="6" fill="#FF6D54"/>
+  <text x="266" y="190" fill="#151719" font-family="Manrope, Arial, sans-serif" font-size="60" font-weight="800" letter-spacing="-2">Свой канал</text>
+  <text x="121" y="285" fill="#686C70" font-family="Manrope, Arial, sans-serif" font-size="23" font-weight="600" letter-spacing="3">МАГАЗИН ВНУТРИ TELEGRAM</text>
+  <text x="120" y="390" fill="#151719" font-family="Unbounded, Arial, sans-serif" font-size="58" font-weight="600" letter-spacing="-2">Ваш канал.</text>
+  <text x="120" y="458" fill="#168AD2" font-family="Unbounded, Arial, sans-serif" font-size="58" font-weight="600" letter-spacing="-2">Ваш магазин.</text>
+  <text x="120" y="526" fill="#151719" font-family="Unbounded, Arial, sans-serif" font-size="58" font-weight="600" letter-spacing="-2">Ваши клиенты.</text>
+  <text x="121" y="591" fill="#686C70" font-family="Manrope, Arial, sans-serif" font-size="24">Из публикации — в понятный путь к заказу и оплате.</text>
+  <text x="121" y="628" fill="#168AD2" font-family="Manrope, Arial, sans-serif" font-size="19" font-weight="700">AI помогает подготовить товары. Вы проверяете результат.</text>
+  <rect x="120" y="666" width="246" height="74" rx="37" fill="#168AD2"/>
+  <text x="159" y="712" fill="#FFFFFF" font-family="Manrope, Arial, sans-serif" font-size="21" font-weight="800">Запустить магазин</text>
+  <text x="120" y="823" fill="#686C70" font-family="Manrope, Arial, sans-serif" font-size="18" font-weight="700">UNBOUNDED · ЗАГОЛОВКИ</text>
+  <text x="120" y="860" fill="#151719" font-family="Manrope, Arial, sans-serif" font-size="23">Manrope · текст и интерфейс</text>
+  <rect x="990" y="122" width="455" height="455" rx="42" fill="#168AD2"/>
+  <rect x="1080" y="212" width="275" height="275" rx="79" fill="#151719"/>
+  <path d="M1142 286h176l-36 46h-115l-32 60h144l-41 53h-108" fill="none" stroke="#FFFDF7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1318" cy="286" r="17" fill="#FF6D54"/>
+  <text x="990" y="631" fill="#686C70" font-family="Manrope, Arial, sans-serif" font-size="17" font-weight="700" letter-spacing="2">ЦВЕТОВАЯ СИСТЕМА</text>
+  <rect x="990" y="666" width="88" height="88" rx="20" fill="#151719"/><text x="990" y="780" fill="#686C70" font-family="Manrope, Arial" font-size="17">#151719</text>
+  <rect x="1098" y="666" width="88" height="88" rx="20" fill="#168AD2"/><text x="1098" y="780" fill="#686C70" font-family="Manrope, Arial" font-size="17">#168AD2</text>
+  <rect x="1206" y="666" width="88" height="88" rx="20" fill="#FF6D54"/><text x="1206" y="780" fill="#686C70" font-family="Manrope, Arial" font-size="17">#FF6D54</text>
+  <rect x="1314" y="666" width="88" height="88" rx="20" fill="#F4F2EC" stroke="#D8D6CF"/><text x="1314" y="780" fill="#686C70" font-family="Manrope, Arial" font-size="17">#F4F2EC</text>
+  <line x1="990" y1="836" x2="1445" y2="836" stroke="#D8D6CF" stroke-width="2"/>
+  <text x="990" y="875" fill="#151719" font-family="Manrope, Arial, sans-serif" font-size="20" font-weight="700">Понятно · Практично · Надёжно · По-человечески</text>
+</svg>
