@@ -173,6 +173,7 @@ services:
       - caddy_config:/config
     networks:
       - shopnet
+      - freelance_ops_proxy
     depends_on:
       - bot
       - admin
@@ -192,3 +193,6 @@ volumes:
 
 networks:
   shopnet:
+  freelance_ops_proxy:
+    external: true
+    name: freelance-ops_default

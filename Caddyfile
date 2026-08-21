@@ -45,6 +45,19 @@ main-svoi.{$DOMAIN} {
 	reverse_proxy platform-admin:3000
 }
 
+freelance.svechevarov-family.ru {
+	import security_headers
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	encode zstd gzip
+	basic_auth {
+		owner $2a$14$ofOdOeYgt4MlSEoHkgk/1ujsmBPFjhVL8HqN6vouFli2svdBHkU7y
+	}
+	reverse_proxy freelance_ops_monitor:8765
+	handle_errors 502 503 504 {
+		respond "CRM временно недоступна. Попробуйте позже." 502
+	}
+}
+
 svoi-kanal.ru {
 	import security_headers
 	encode zstd gzip
