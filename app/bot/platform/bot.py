@@ -216,7 +216,15 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
 
     existing = await ShopService.get_by_bot_token(token)
     if existing:
-        await message.answer("❌ Этот токен уже используется в системе.")
+        if existing.get("owner_telegram_id") == message.from_user.id:
+            await message.answer(
+                f"✅ <b>Магазин «{esc(existing['name'])}» уже создан!</b>\n\n"
+                f"ID магазина: <code>{existing['id']}</code>\n"
+                "Регистрация сохранена. Магазин доступен в разделе «Мои магазины».",
+                reply_markup=_main_menu(is_new=False),
+            )
+        else:
+            await message.answer("❌ Этот токен уже используется в системе.")
         await state.clear()
         return
 
@@ -241,12 +249,6 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
         bot_token=token,
         owner_telegram_id=message.from_user.id,
         bot_username=bot_info.get("username"),
-    )
-
-    await AdminUserService.add(
-        shop_id=shop["id"],
-        telegram_user_id=message.from_user.id,
-        display_name=message.from_user.full_name,
     )
 
     already_accepted = await OfferAgreementService.has_accepted(message.from_user.id)
