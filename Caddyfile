@@ -45,6 +45,40 @@ main-svoi.{$DOMAIN} {
 	reverse_proxy platform-admin:3000
 }
 
+app.svoi-kanal.ru {
+	import security_headers
+	import miniapp_security_headers
+	encode zstd gzip
+	reverse_proxy bot:8000
+}
+
+admin.svoi-kanal.ru {
+	import security_headers
+	import admin_security_headers
+	reverse_proxy admin:3000
+}
+
+platform.svoi-kanal.ru {
+	import security_headers
+	import admin_security_headers
+	reverse_proxy platform-admin:3000
+}
+
+proxy.svoi-kanal.ru {
+	import security_headers
+	@vless_websocket {
+		path {$VLESS_WS_PATH}
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	handle @vless_websocket {
+		reverse_proxy xray:10000
+	}
+	handle {
+		respond "Not found" 404
+	}
+}
+
 freelance.svechevarov-family.ru {
 	import security_headers
 	header X-Robots-Tag "noindex, nofollow, noarchive"

@@ -128,6 +128,13 @@ type ImportStats = {
     runs: number;
     non_product: number;
   };
+  quality: {
+    reviewed: number;
+    corrected_candidates: number;
+    correction_events: number;
+    manual_correction_rate_percent: number;
+    corrected_fields: Record<string, number>;
+  };
 };
 
 const statusLabel: Record<string, string> = {
@@ -398,6 +405,9 @@ export default function ChannelImportPage() {
             <Metric label="Отсечено локально" value={stats?.prefilter.non_product ?? 0} />
             <Metric label="Черновиков" value={stats?.candidates.pending ?? 0} />
             <Metric label="Ручная проверка" value={stats?.candidates.needs_manual ?? 0} />
+            <Metric label="Проверено владельцем" value={stats?.quality.reviewed ?? 0} />
+            <Metric label="Исправлено вручную" value={stats?.quality.corrected_candidates ?? 0} />
+            <Metric label="Доля исправлений" value={`${stats?.quality.manual_correction_rate_percent ?? 0}%`} />
             <Metric label="Ошибок" value={stats?.jobs.failed ?? 0} />
             <Metric label="Кнопки: нужна настройка" value={stats?.button_jobs.needs_action ?? 0} />
           </CardContent>
@@ -554,7 +564,7 @@ function ManualBackfillProgress({
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return <div className="rounded-lg bg-muted p-3"><div className="text-xl font-semibold">{value}</div><div className="text-xs text-muted-foreground">{label}</div></div>;
 }
 

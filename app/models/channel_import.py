@@ -236,6 +236,10 @@ class CatalogImportCandidate(Base):
     duplicate_score: Mapped[float | None] = mapped_column(Float)
     product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"))
     owner_note: Mapped[str | None] = mapped_column(Text)
+    correction_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    corrected_fields: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    review_outcome: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False

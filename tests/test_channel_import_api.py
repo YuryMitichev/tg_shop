@@ -54,7 +54,7 @@ async def test_admin_can_approve_complete_candidate(
     ) as client:
         response = await client.post(
             f"/api/admin/channel-import/candidates/{candidate_id}/approve",
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
 
     assert response.status_code == 200
@@ -94,7 +94,7 @@ async def test_admin_can_sync_pinned_storefront(
     ) as client:
         response = await client.post(
             "/api/admin/channel-import/storefront-pin/sync",
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
 
     assert response.status_code == 200
@@ -152,11 +152,11 @@ async def test_admin_can_save_stock_then_approve_candidate(
                     {"title": "150 г", "price": 900, "stock": 7, "currency": "RUB"}
                 ]
             },
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
         approve_response = await client.post(
             f"/api/admin/channel-import/candidates/{candidate_id}/approve",
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
 
     assert patch_response.status_code == 200
@@ -215,7 +215,7 @@ async def test_admin_manages_post_product_links(
         add_response = await client.post(
             f"/api/admin/channel-import/posts/{post_id}/product-links",
             json={"product_id": 1},
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
         assert add_response.status_code == 200
         link_id = add_response.json()["links"][0]["id"]
@@ -223,7 +223,7 @@ async def test_admin_manages_post_product_links(
         replace_response = await client.patch(
             f"/api/admin/channel-import/posts/{post_id}/product-links/{link_id}",
             json={"product_id": 3},
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
         assert replace_response.status_code == 200
         assert replace_response.json()["links"][0]["product_id"] == 3
@@ -231,13 +231,13 @@ async def test_admin_manages_post_product_links(
         inactive_response = await client.post(
             f"/api/admin/channel-import/posts/{post_id}/product-links",
             json={"product_id": 2},
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
         assert inactive_response.status_code == 400
 
         delete_response = await client.delete(
             f"/api/admin/channel-import/posts/{post_id}/product-links/{link_id}",
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
         assert delete_response.status_code == 200
         assert delete_response.json()["links"] == []

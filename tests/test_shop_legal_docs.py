@@ -187,7 +187,7 @@ class TestAdminLegalDocs:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/settings/legal", cookies=admin_cookie)
+            resp = await client.get("/api/admin/settings/legal", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -202,7 +202,7 @@ class TestAdminLegalDocs:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/legal",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={
                     "offer_text": "Моя оферта",
                     "privacy_policy_text": "Моя политика",
@@ -223,7 +223,7 @@ class TestAdminLegalDocs:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/admin/settings/legal/generate",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={},
             )
 
@@ -519,7 +519,7 @@ class TestAdminLegalDocuments:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get(
-                "/api/admin/settings/legal-documents", cookies=admin_cookie
+                "/api/admin/settings/legal-documents", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]}
             )
 
         assert resp.status_code == 200
@@ -539,7 +539,7 @@ class TestAdminLegalDocuments:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get(
-                "/api/admin/settings/legal-documents", cookies=admin_cookie
+                "/api/admin/settings/legal-documents", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]}
             )
 
         docs = resp.json()
@@ -555,7 +555,7 @@ class TestAdminLegalDocuments:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get(
-                "/api/admin/settings/legal-documents", cookies=admin_cookie
+                "/api/admin/settings/legal-documents", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]}
             )
 
         docs = resp.json()
@@ -569,7 +569,7 @@ class TestAdminLegalDocuments:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get(
-                "/api/admin/settings/legal-documents", cookies=admin_cookie
+                "/api/admin/settings/legal-documents", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]}
             )
 
         docs = resp.json()
@@ -587,7 +587,7 @@ class TestAdminLegalDocuments:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/legal-documents/privacy_policy",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"seller_addendum": "Дополнительные условия"},
             )
 
@@ -609,7 +609,7 @@ class TestAdminLegalDocuments:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/legal-documents/order_terms",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"seller_addendum": None},
             )
 
@@ -625,7 +625,7 @@ class TestAdminLegalDocuments:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/legal-documents/data_processing_mandate",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"seller_addendum": "x"},
             )
 
@@ -639,7 +639,7 @@ class TestAdminLegalDocuments:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/legal-documents/nonexistent",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"seller_addendum": "x"},
             )
 
@@ -666,7 +666,7 @@ class TestCompanyInfoLegalType:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/settings/company", cookies=admin_cookie)
+            resp = await client.get("/api/admin/settings/company", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 200
         assert resp.json()["legal_type"] == "individual"
@@ -679,7 +679,7 @@ class TestCompanyInfoLegalType:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/company",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"legal_type": "ooo", "company_name": "ООО Ромашка"},
             )
 
@@ -696,11 +696,11 @@ class TestCompanyInfoLegalType:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await client.put(
                 "/api/admin/settings/company",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"legal_type": "ip", "company_name": "ИП Сидоров"},
             )
             resp = await client.get(
-                "/api/admin/settings/legal-documents", cookies=admin_cookie
+                "/api/admin/settings/legal-documents", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]}
             )
 
         docs = resp.json()
@@ -722,7 +722,7 @@ class TestRoskomnadzor:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get(
-                "/api/admin/settings/roskomnadzor", cookies=admin_cookie
+                "/api/admin/settings/roskomnadzor", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]}
             )
 
         assert resp.status_code == 200
@@ -747,7 +747,7 @@ class TestRoskomnadzor:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get(
-                "/api/admin/settings/roskomnadzor/draft", cookies=admin_cookie
+                "/api/admin/settings/roskomnadzor/draft", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]}
             )
 
         assert resp.status_code == 200
@@ -834,7 +834,7 @@ class TestPublicLegalDocumentRoutes:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await client.put(
                 "/api/admin/settings/legal-documents/order_terms",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"seller_addendum": "Особые условия доставки"},
             )
             resp = await client.get(

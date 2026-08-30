@@ -88,8 +88,13 @@ jobs:
             install -d -m 0700 /var/lib/tg-shop-monitor
             install -m 0644 ops/systemd/tg-shop-monitor.service /etc/systemd/system/tg-shop-monitor.service
             install -m 0644 ops/systemd/tg-shop-monitor.timer /etc/systemd/system/tg-shop-monitor.timer
+            install -m 0644 ops/systemd/tg-shop-channel-smoke.service /etc/systemd/system/tg-shop-channel-smoke.service
+            install -m 0644 ops/systemd/tg-shop-channel-smoke.timer /etc/systemd/system/tg-shop-channel-smoke.timer
             systemctl daemon-reload
             systemctl enable --now tg-shop-monitor.timer
+            if grep -q '^CHANNEL_SMOKE_CHANNEL_ID=.' .env; then
+              systemctl enable --now tg-shop-channel-smoke.timer
+            fi
 
             trap - ERR
             docker image prune -f

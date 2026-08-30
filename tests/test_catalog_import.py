@@ -243,7 +243,7 @@ class TestImportEndpoints:
             resp = await client.post(
                 "/api/admin/catalog/import/preview?source=ym",
                 files={"file": ("test.xlsx", file_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
             )
 
         assert resp.status_code == 200
@@ -259,7 +259,7 @@ class TestImportEndpoints:
             resp = await client.post(
                 "/api/admin/catalog/import/preview?source=amazon",
                 files={"file": ("test.xlsx", b"fake", "application/octet-stream")},
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
             )
 
         assert resp.status_code == 400
@@ -275,7 +275,7 @@ class TestImportEndpoints:
             resp = await client.post(
                 "/api/admin/catalog/import/preview?source=ym",
                 files={"file": ("big.xlsx", oversized, "application/octet-stream")},
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
             )
 
         assert resp.status_code == 413
@@ -292,7 +292,7 @@ class TestImportEndpoints:
                         {"name": "Импорт-2", "description": "Описание"},
                     ],
                 },
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
             )
 
         assert resp.status_code == 200
@@ -305,7 +305,7 @@ class TestImportEndpoints:
             resp = await client.post(
                 "/api/admin/catalog/import/confirm",
                 json={"rows": []},
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
             )
 
         assert resp.status_code == 400

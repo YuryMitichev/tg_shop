@@ -15,7 +15,7 @@ class TestExpiredSubscriptionAccess:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/orders", cookies=admin_cookie)
+            resp = await client.get("/api/admin/orders", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 200
 
@@ -23,7 +23,7 @@ class TestExpiredSubscriptionAccess:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/orders/1", cookies=admin_cookie)
+            resp = await client.get("/api/admin/orders/1", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 200
 
@@ -31,7 +31,7 @@ class TestExpiredSubscriptionAccess:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/crm/users", cookies=admin_cookie)
+            resp = await client.get("/api/admin/crm/users", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 200
 
@@ -41,7 +41,7 @@ class TestExpiredSubscriptionAccess:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/admin/products",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={
                     "category_id": 1,
                     "name": "Test",
@@ -60,7 +60,7 @@ class TestExpiredSubscriptionAccess:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/admin/categories",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"name": "New Cat"},
             )
 
@@ -73,7 +73,7 @@ class TestExpiredSubscriptionAccess:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/admin/promos",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"code": "TEST10", "discount_type": "percent", "discount_value": 10},
             )
 
@@ -84,7 +84,7 @@ class TestExpiredSubscriptionAccess:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/stats", cookies=admin_cookie)
+            resp = await client.get("/api/admin/stats", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 403
 
@@ -92,7 +92,7 @@ class TestExpiredSubscriptionAccess:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/settings/delivery", cookies=admin_cookie)
+            resp = await client.get("/api/admin/settings/delivery", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 403
 
@@ -100,7 +100,7 @@ class TestExpiredSubscriptionAccess:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/broadcasts", cookies=admin_cookie)
+            resp = await client.get("/api/admin/broadcasts", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 403
 
@@ -110,7 +110,7 @@ class TestExpiredSubscriptionAccess:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/auth/me", cookies=admin_cookie)
+            resp = await client.get("/api/admin/auth/me", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 200
         assert resp.json()["subscription_active"] is False
@@ -138,7 +138,7 @@ class TestActiveSubscriptionAccess:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/admin/products",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={
                     "category_id": 1,
                     "name": "Test",
@@ -168,7 +168,7 @@ class TestActiveSubscriptionAccess:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/auth/me", cookies=admin_cookie)
+            resp = await client.get("/api/admin/auth/me", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 200
         assert resp.json()["subscription_active"] is True

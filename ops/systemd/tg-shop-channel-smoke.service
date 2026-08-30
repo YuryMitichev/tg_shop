@@ -1,0 +1,10 @@
+[Unit]
+Description=TG Shop live Telegram/OpenAI channel smoke test
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/tg_shop
+ExecStart=/bin/sh -c 'docker compose exec -T bot python scripts/channel_e2e_smoke.py && date +%%s > /var/lib/tg-shop-monitor/channel_smoke_last_success'
+TimeoutStartSec=300

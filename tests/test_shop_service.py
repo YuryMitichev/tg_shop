@@ -197,7 +197,7 @@ class TestShopNameEndpoint:
         app = create_app()
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/settings/shop", cookies=admin_cookie)
+            resp = await client.get("/api/admin/settings/shop", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert resp.status_code == 200
         assert resp.json()["name"] == "Test Shop"
@@ -210,7 +210,7 @@ class TestShopNameEndpoint:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/shop",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"name": "Новое название"},
             )
 
@@ -228,12 +228,12 @@ class TestShopNameEndpoint:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             put_resp = await client.put(
                 "/api/admin/settings/shop",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"name": "Обновлённый магазин"},
             )
             assert put_resp.status_code == 200
 
-            get_resp = await client.get("/api/admin/settings/shop", cookies=admin_cookie)
+            get_resp = await client.get("/api/admin/settings/shop", headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]})
 
         assert get_resp.status_code == 200
         assert get_resp.json()["name"] == "Обновлённый магазин"
@@ -246,7 +246,7 @@ class TestShopNameEndpoint:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/shop",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"name": "   "},
             )
 
@@ -260,7 +260,7 @@ class TestShopNameEndpoint:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/shop",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={"name": "А" * 101},
             )
 

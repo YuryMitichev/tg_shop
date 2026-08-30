@@ -306,7 +306,7 @@ class TestStockTemplateEndpoint:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get(
                 "/api/admin/catalog/stock-template",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
             )
 
         assert resp.status_code == 200
@@ -354,7 +354,7 @@ class TestBulkUpdateEndpoint:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/admin/catalog/stock/bulk-update",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 files={"file": ("stock.xlsx", buf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
             )
 
@@ -386,7 +386,7 @@ class TestBulkUpdateEndpoint:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/admin/catalog/stock/bulk-update",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 files={"file": ("stock.xlsx", buf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
             )
 
@@ -418,7 +418,7 @@ class TestImportConfirmReturnsTemplateUrl:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/admin/catalog/import/confirm",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={
                     "rows": [
                         {"name": "Товар 1", "description": "", "category": ""},

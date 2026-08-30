@@ -21,6 +21,7 @@ STATE_FILE = STATE_DIR / "state.json"
 LOCK_FILE = STATE_DIR / "monitor.lock"
 REMINDER_SECONDS = 6 * 60 * 60
 BACKUP_MAX_AGE_SECONDS = 36 * 60 * 60
+SMOKE_MAX_AGE_SECONDS = 36 * 60 * 60
 DISK_WARNING_PERCENT = 80
 CONTAINERS = (
     "tg_shop_db", "tg_shop_backup", "tg_shop_bot", "tg_shop_admin",
@@ -84,6 +85,23 @@ def collect_issues(force_failure: bool = False) -> list[str]:
                     issues.append(f"Внешняя проверка приложения вернула HTTP {response.status}")
         except Exception:
             issues.append("Приложение недоступно по внешнему адресу")
+
+    if read_env_value("CHANNEL_SMOKE_CHANNEL_ID"):
+        smoke_file = STATE_DIR / "channel_smoke_last_success"
+        try:
+            age = int(time.time()) - int(smoke_file.read_text(encoding="utf-8").strip())
+            if age >= SMOKE_MAX_AGE_SECONDS:
+                issues.append(f"Telegram/OpenAI smoke-тест не проходил {age // 3600} ч.")
+        except (OSError, ValueError):
+            issues.append("Нет успешного результата Telegram/OpenAI smoke-теста")
+
+    try:
+        run(["docker", "exec", "tg_shop_bot", "python", "scripts/channel_quality_check.py"])
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or error.stdout or "").strip()[-300:]
+        issues.append(f"Качество AI-черновиков ниже порога: {detail}")
+    except subprocess.SubprocessError:
+        issues.append("Не удалось проверить метрики качества AI")
 
     if force_failure:
         issues.append("Тестовая ошибка мониторинга")

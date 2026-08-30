@@ -239,18 +239,18 @@ async def test_admin_chooses_browser_and_receives_manual_backfill_links(
         response = await client.post(
             "/api/admin/channel-import/manual-backfill",
             json={"device": "browser"},
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
         current = await client.get(
             "/api/admin/channel-import/manual-backfill",
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
         await ChannelManualBackfillService.accept_forward(
             1, 1, _forwarded_message(501, text="Выбранный товар 2500 ₽")
         )
         finish = await client.post(
             f"/api/admin/channel-import/manual-backfill/{response.json()['id']}/finish",
-            cookies=admin_cookie,
+            headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
         )
 
     assert response.status_code == 200

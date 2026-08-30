@@ -460,6 +460,10 @@ class ChannelImportService:
             "duplicate_score": candidate.duplicate_score,
             "product_id": candidate.product_id,
             "owner_note": candidate.owner_note,
+            "correction_count": candidate.correction_count,
+            "corrected_fields": candidate.corrected_fields or [],
+            "reviewed_at": candidate.reviewed_at.isoformat() if candidate.reviewed_at else None,
+            "review_outcome": candidate.review_outcome,
             "post": {
                 "id": post.id,
                 "telegram_message_id": post.telegram_message_id,
@@ -490,9 +494,16 @@ class ChannelImportService:
                 raise ValueError("Черновик не найден")
             if candidate.status not in EDITABLE_STATUSES:
                 raise ValueError("Этот черновик уже закрыт")
+            changed_fields = set(candidate.corrected_fields or [])
+            changes = 0
             for key, value in values.items():
                 if key in allowed:
+                    if getattr(candidate, key) != value:
+                        changed_fields.add(key)
+                        changes += 1
                     setattr(candidate, key, value)
+            candidate.correction_count += changes
+            candidate.corrected_fields = sorted(changed_fields)
             candidate.fingerprint = product_fingerprint(
                 candidate.name, candidate.sku, candidate.variants or []
             )
@@ -551,6 +562,8 @@ class ChannelImportService:
             ).scalar_one_or_none()
             if source_exists:
                 candidate.status = "approved"
+                candidate.reviewed_at = _utcnow()
+                candidate.review_outcome = "approved"
                 candidate.product_id = source_exists.product_id
                 post.status = "published"
                 from app.services.channel_post_button_service import ChannelPostButtonService
@@ -656,6 +669,8 @@ class ChannelImportService:
             )
             candidate.product_id = product.id
             candidate.status = "approved"
+            candidate.reviewed_at = _utcnow()
+            candidate.review_outcome = "approved"
             post.status = "published"
             from app.services.channel_post_button_service import ChannelPostButtonService
 
@@ -686,6 +701,8 @@ class ChannelImportService:
             if candidate.status in TERMINAL_CANDIDATE_STATUSES:
                 return
             candidate.status = status
+            candidate.reviewed_at = _utcnow()
+            candidate.review_outcome = owner_label
             feedback = (
                 await session.execute(
                     select(PrefilterFeedback).where(PrefilterFeedback.post_id == job.post_id)
@@ -836,7 +853,40 @@ class ChannelImportService:
                     )
                 )
             ).scalar_one()
+            reviewed = (
+                await session.execute(
+                    select(
+                        func.count(CatalogImportCandidate.id),
+                        func.coalesce(func.sum(CatalogImportCandidate.correction_count), 0),
+                    ).where(
+                        CatalogImportCandidate.shop_id == shop_id,
+                        CatalogImportCandidate.reviewed_at.is_not(None),
+                    )
+                )
+            ).one()
+            corrected_candidates = (
+                await session.execute(
+                    select(func.count(CatalogImportCandidate.id)).where(
+                        CatalogImportCandidate.shop_id == shop_id,
+                        CatalogImportCandidate.reviewed_at.is_not(None),
+                        CatalogImportCandidate.correction_count > 0,
+                    )
+                )
+            ).scalar_one()
+            corrected_field_rows = (
+                await session.execute(
+                    select(CatalogImportCandidate.corrected_fields).where(
+                        CatalogImportCandidate.shop_id == shop_id,
+                        CatalogImportCandidate.correction_count > 0,
+                    )
+                )
+            ).scalars().all()
         budget_microusd = int(settings.channel_import_budget_usd * 1_000_000)
+        reviewed_count = int(reviewed[0] or 0)
+        field_counts: dict[str, int] = {}
+        for fields in corrected_field_rows:
+            for field in fields or []:
+                field_counts[field] = field_counts.get(field, 0) + 1
         return {
             "candidates": dict(statuses),
             "prefilter": dict(prefilter),
@@ -852,6 +902,15 @@ class ChannelImportService:
                 "non_product": ai_non_product,
                 "budget_percent": round(usage[2] / budget_microusd * 100, 1)
                 if budget_microusd else 100,
+            },
+            "quality": {
+                "reviewed": reviewed_count,
+                "corrected_candidates": int(corrected_candidates or 0),
+                "correction_events": int(reviewed[1] or 0),
+                "manual_correction_rate_percent": round(
+                    int(corrected_candidates or 0) / reviewed_count * 100, 1
+                ) if reviewed_count else 0.0,
+                "corrected_fields": dict(sorted(field_counts.items())),
             },
         }
 
