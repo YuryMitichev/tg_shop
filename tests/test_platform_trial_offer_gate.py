@@ -63,6 +63,45 @@ _BOT_INFO = {"id": 999, "username": "testbot", "first_name": "Test Bot"}
 # on_token_received: gate before trial
 # ---------------------------------------------------------------------------
 
+class TestExistingTokenRecovery:
+    async def test_existing_owned_shop_reports_success(self):
+        from app.bot.platform.bot import on_token_received
+
+        msg = _make_message(user_id=111)
+        state = _make_state(data={"shop_name": "Тест"})
+
+        with patch(
+            "app.bot.platform.bot.ShopService.get_by_bot_token",
+            new_callable=AsyncMock,
+            return_value=_shop_dict(shop_id=42, owner_id=111),
+        ), patch(
+            "app.bot.platform.bot._validate_bot_token",
+            new_callable=AsyncMock,
+        ) as validate:
+            await on_token_received(msg, state)
+
+        validate.assert_not_called()
+        state.clear.assert_awaited_once()
+        text = msg.answer.await_args.args[0]
+        assert "уже создан" in text
+        assert "42" in text
+
+    async def test_existing_foreign_shop_stays_rejected(self):
+        from app.bot.platform.bot import on_token_received
+
+        msg = _make_message(user_id=111)
+        state = _make_state()
+
+        with patch(
+            "app.bot.platform.bot.ShopService.get_by_bot_token",
+            new_callable=AsyncMock,
+            return_value=_shop_dict(shop_id=42, owner_id=222),
+        ):
+            await on_token_received(msg, state)
+
+        assert "уже используется" in msg.answer.await_args.args[0]
+        state.clear.assert_awaited_once()
+
 class TestTokenReceivedShowsGate:
     """Если пользователь ещё не принял оферту — показываем гейт, триал не активируем."""
 
