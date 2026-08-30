@@ -24,10 +24,14 @@ jobs:
     steps:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          CHANNEL_SMOKE_SHOP_ID: ${{ vars.CHANNEL_SMOKE_SHOP_ID }}
+          CHANNEL_SMOKE_CHANNEL_ID: ${{ vars.CHANNEL_SMOKE_CHANNEL_ID }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: CHANNEL_SMOKE_SHOP_ID,CHANNEL_SMOKE_CHANNEL_ID
           script: |
             set -e
             cd /root/tg_shop
@@ -35,6 +39,20 @@ jobs:
             target_sha="${{ github.event.workflow_run.head_sha }}"
             git fetch origin master
             git checkout --detach "$target_sha"
+
+            set_env_value() {
+              key="$1"
+              value="$2"
+              if grep -q "^${key}=" .env; then
+                sed -i "s|^${key}=.*|${key}=${value}|" .env
+              else
+                printf '\n%s=%s\n' "$key" "$value" >> .env
+              fi
+            }
+            if [ -n "$CHANNEL_SMOKE_SHOP_ID" ] && [ -n "$CHANNEL_SMOKE_CHANNEL_ID" ]; then
+              set_env_value CHANNEL_SMOKE_SHOP_ID "$CHANNEL_SMOKE_SHOP_ID"
+              set_env_value CHANNEL_SMOKE_CHANNEL_ID "$CHANNEL_SMOKE_CHANNEL_ID"
+            fi
 
             rollback() {
               echo "Deployment failed, rolling back to $previous_sha"
@@ -96,6 +114,7 @@ jobs:
             systemctl is-enabled tg-shop-monitor.timer
             systemctl is-active tg-shop-monitor.timer
             if grep -q '^CHANNEL_SMOKE_CHANNEL_ID=.' .env; then
+              docker compose exec -T bot python scripts/configure_smoke_channel.py
               systemctl enable --now tg-shop-channel-smoke.timer
               systemctl is-enabled tg-shop-channel-smoke.timer
               systemctl is-active tg-shop-channel-smoke.timer
