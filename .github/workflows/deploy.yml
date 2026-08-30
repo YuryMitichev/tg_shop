@@ -56,6 +56,7 @@ jobs:
 
             rollback() {
               echo "Deployment failed, rolling back to $previous_sha"
+              systemctl disable --now tg-shop-channel-smoke.timer 2>/dev/null || true
               git checkout --detach "$previous_sha"
               docker compose up -d --build
             }
@@ -118,7 +119,11 @@ jobs:
               systemctl enable --now tg-shop-channel-smoke.timer
               systemctl is-enabled tg-shop-channel-smoke.timer
               systemctl is-active tg-shop-channel-smoke.timer
-              systemctl start tg-shop-channel-smoke.service
+              if ! systemctl start tg-shop-channel-smoke.service; then
+                systemctl status tg-shop-channel-smoke.service --no-pager || true
+                journalctl -u tg-shop-channel-smoke.service -n 100 --no-pager || true
+                false
+              fi
               test -s /var/lib/tg-shop-monitor/channel_smoke_last_success
             else
               echo "CHANNEL_SMOKE_CHANNEL_ID is not configured; live smoke timer remains disabled"
