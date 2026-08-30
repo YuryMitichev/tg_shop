@@ -52,6 +52,8 @@ jobs:
             if [ -n "$CHANNEL_SMOKE_SHOP_ID" ] && [ -n "$CHANNEL_SMOKE_CHANNEL_ID" ]; then
               set_env_value CHANNEL_SMOKE_SHOP_ID "$CHANNEL_SMOKE_SHOP_ID"
               set_env_value CHANNEL_SMOKE_CHANNEL_ID "$CHANNEL_SMOKE_CHANNEL_ID"
+              set_env_value CHANNEL_IMPORT_ENABLED true
+              set_env_value CHANNEL_IMPORT_PILOT_SHOP_ID "$CHANNEL_SMOKE_SHOP_ID"
             fi
 
             rollback() {
