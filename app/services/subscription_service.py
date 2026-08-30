@@ -4,6 +4,11 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.core.cache import TTLCache
+from app.core.pricing import (
+    CANONICAL_SUBSCRIPTION_PLANS,
+    TRIAL_DURATION_DAYS as DEFAULT_TRIAL_DURATION_DAYS,
+    is_canonical_paid_plan,
+)
 from app.database.db import async_session
 from app.models.subscription import Subscription, SubscriptionPlan
 
@@ -16,104 +21,72 @@ def _utcnow() -> datetime:
 class SubscriptionService:
     """Управление подписками магазинов."""
 
-    TRIAL_DURATION_DAYS = 7
+    TRIAL_DURATION_DAYS = DEFAULT_TRIAL_DURATION_DAYS
 
     _active_cache: TTLCache = TTLCache(ttl=30)
 
-    PLANS_SEED = [
-        {
-            "name": "Триал 7 дней",
-            "description": "Бесплатный пробный период — все возможности",
-            "price": 0,
-            "duration_days": 7,
-            "is_trial": True,
-            "features": [],
-        },
-        {
-            "name": "Подписка — 1 месяц",
-            "description": "Полный функционал магазина. Стоимость: 5000₽/мес.",
-            "price": 5000,
-            "duration_days": 30,
-            "is_trial": False,
-            "features": [
-                "Каталог товаров без лимита",
-                "Заказы и корзина без лимита",
-                "Админ-панель и мини-приложение",
-                "CRM: профили клиентов",
-                "Приём оплаты (СБП / карты)",
-                "Промокоды",
-                "Рассылки без лимита",
-                "Авто-теги клиентов",
-                "Персональные офферы",
-                "Расширенная аналитика продаж",
-                "Администраторы без лимита",
-                "Приоритетная поддержка",
-            ],
-        },
-        {
-            "name": "Подписка — 6 месяцев",
-            "description": "Полный функционал магазина. Выгода 3000₽ (скидка 10%).",
-            "price": 27000,
-            "duration_days": 180,
-            "is_trial": False,
-            "features": [
-                "Каталог товаров без лимита",
-                "Заказы и корзина без лимита",
-                "Админ-панель и мини-приложение",
-                "CRM: профили клиентов",
-                "Приём оплаты (СБП / карты)",
-                "Промокоды",
-                "Рассылки без лимита",
-                "Авто-теги клиентов",
-                "Персональные офферы",
-                "Расширенная аналитика продаж",
-                "Администраторы без лимита",
-                "Приоритетная поддержка",
-            ],
-        },
-        {
-            "name": "Подписка — 12 месяцев",
-            "description": "Полный функционал магазина. Выгода 12000₽ (скидка 20%).",
-            "price": 48000,
-            "duration_days": 365,
-            "is_trial": False,
-            "features": [
-                "Каталог товаров без лимита",
-                "Заказы и корзина без лимита",
-                "Админ-панель и мини-приложение",
-                "CRM: профили клиентов",
-                "Приём оплаты (СБП / карты)",
-                "Промокоды",
-                "Рассылки без лимита",
-                "Авто-теги клиентов",
-                "Персональные офферы",
-                "Расширенная аналитика продаж",
-                "Администраторы без лимита",
-                "Приоритетная поддержка",
-            ],
-        },
-    ]
+    PLANS_SEED = CANONICAL_SUBSCRIPTION_PLANS
 
     @staticmethod
     async def ensure_default_plans() -> None:
-        """Создаёт тарифы по умолчанию, если их ещё нет."""
+        """Синхронизирует единственные действующие тарифы платформы."""
         async with async_session() as session:
+            result = await session.execute(
+                select(SubscriptionPlan).order_by(SubscriptionPlan.id)
+            )
+            existing_plans = list(result.scalars().all())
+            canonical_plans: list[SubscriptionPlan] = []
+
             for plan_data in SubscriptionService.PLANS_SEED:
-                result = await session.execute(
-                    select(SubscriptionPlan).where(
-                        SubscriptionPlan.name == plan_data["name"],
-                        SubscriptionPlan.is_trial == plan_data["is_trial"],
-                    )
+                matching = next(
+                    (
+                        plan
+                        for plan in existing_plans
+                        if plan.name == plan_data["name"]
+                        and plan.is_trial == plan_data["is_trial"]
+                        and plan not in canonical_plans
+                    ),
+                    None,
                 )
-                if result.scalar_one_or_none() is None:
-                    session.add(SubscriptionPlan(
+
+                if matching is None and plan_data["is_trial"]:
+                    matching = next(
+                        (
+                            plan
+                            for plan in existing_plans
+                            if plan.is_trial and plan not in canonical_plans
+                        ),
+                        None,
+                    )
+
+                if matching is None:
+                    matching = SubscriptionPlan(
                         name=plan_data["name"],
                         description=plan_data["description"],
                         price=plan_data["price"],
                         duration_days=plan_data["duration_days"],
                         is_trial=plan_data["is_trial"],
+                        is_active=True,
                         features=json.dumps(plan_data["features"], ensure_ascii=False),
-                    ))
+                    )
+                    session.add(matching)
+                    existing_plans.append(matching)
+                else:
+                    matching.name = plan_data["name"]
+                    matching.description = plan_data["description"]
+                    matching.price = plan_data["price"]
+                    matching.duration_days = plan_data["duration_days"]
+                    matching.is_trial = plan_data["is_trial"]
+                    matching.is_active = True
+                    matching.features = json.dumps(
+                        plan_data["features"], ensure_ascii=False
+                    )
+
+                canonical_plans.append(matching)
+
+            for plan in existing_plans:
+                if plan not in canonical_plans:
+                    plan.is_active = False
 
             await session.commit()
 
@@ -121,7 +94,13 @@ class SubscriptionService:
     async def get_trial_plan() -> dict | None:
         async with async_session() as session:
             result = await session.execute(
-                select(SubscriptionPlan).where(SubscriptionPlan.is_trial == True)  # noqa: E712
+                select(SubscriptionPlan)
+                .where(
+                    SubscriptionPlan.is_trial == True,  # noqa: E712
+                    SubscriptionPlan.is_active == True,  # noqa: E712
+                )
+                .order_by(SubscriptionPlan.id)
+                .limit(1)
             )
             plan = result.scalar_one_or_none()
             if plan is None:
@@ -240,6 +219,11 @@ class SubscriptionService:
                     "features": json.loads(p.features) if p.features else [],
                 }
                 for p in result.scalars().all()
+                if is_canonical_paid_plan(
+                    name=p.name,
+                    duration_days=p.duration_days,
+                    price=p.price,
+                )
             ]
 
     @staticmethod
@@ -254,6 +238,7 @@ class SubscriptionService:
                 "price": plan.price,
                 "duration_days": plan.duration_days,
                 "is_trial": plan.is_trial,
+                "is_active": plan.is_active,
                 "features": json.loads(plan.features) if plan.features else [],
             }
 

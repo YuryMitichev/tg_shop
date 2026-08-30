@@ -14,16 +14,16 @@ async def plans(db_session):
         session.add_all([
             SubscriptionPlan(
                 id=1,
-                name="Триал 7 дней",
+                name="Пробный период — 14 дней",
                 price=0,
-                duration_days=7,
+                duration_days=14,
                 is_trial=True,
             ),
             SubscriptionPlan(
                 id=2,
                 name="Подписка — 1 месяц",
-                description="Полный функционал магазина. Стоимость: 5000₽/мес.",
-                price=5000,
+                description="Полный функционал магазина за 1 299 ₽ в месяц.",
+                price=1299,
                 duration_days=30,
                 is_trial=False,
             ),
@@ -129,7 +129,7 @@ class TestCreatePayment:
             "app.services.subscription_payment_service.YooKassaClient.create_payment",
             new_callable=AsyncMock,
             return_value=mock_response,
-        ), patch(
+        ) as create_payment, patch(
             "app.services.subscription_payment_service.PlatformSettingsService.get_yookassa_credentials",
             new_callable=AsyncMock,
             return_value=("test_shop_id", "test_secret_key"),
@@ -141,6 +141,7 @@ class TestCreatePayment:
         assert result is not None
         assert result["payment_id"] == "yk_test_id"
         assert "yoomoney.ru" in result["confirmation_url"]
+        assert create_payment.await_args.kwargs["amount_rub"] == 1299
 
     async def test_create_payment_trial_plan_fails(
         self, db_session, seed_data, plans
@@ -153,6 +154,44 @@ class TestCreatePayment:
     async def test_create_payment_nonexistent_plan(self, db_session, seed_data, plans):
         result = await SubscriptionPaymentService.create_payment(
             shop_id=1, plan_id=999
+        )
+        assert result is None
+
+    async def test_create_payment_inactive_plan_fails(
+        self, db_session, seed_data, plans
+    ):
+        from app.models.subscription import SubscriptionPlan
+
+        async with db_session() as session:
+            plan = await session.get(SubscriptionPlan, 2)
+            plan.is_active = False
+            await session.commit()
+
+        result = await SubscriptionPaymentService.create_payment(
+            shop_id=1, plan_id=2
+        )
+        assert result is None
+
+    async def test_create_payment_noncanonical_active_plan_fails(
+        self, db_session, seed_data, plans
+    ):
+        from app.models.subscription import SubscriptionPlan
+
+        async with db_session() as session:
+            session.add(
+                SubscriptionPlan(
+                    id=3,
+                    name="Произвольный тариф",
+                    price=100,
+                    duration_days=10,
+                    is_trial=False,
+                    is_active=True,
+                )
+            )
+            await session.commit()
+
+        result = await SubscriptionPaymentService.create_payment(
+            shop_id=1, plan_id=3
         )
         assert result is None
 

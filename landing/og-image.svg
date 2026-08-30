@@ -38,5 +38,5 @@
 
   <!-- Badge -->
   <rect x="80" y="530" width="320" height="52" rx="26" fill="rgba(255,255,255,0.15)"/>
-  <text x="240" y="562" font-family="-apple-system, Arial, sans-serif" font-size="20" font-weight="700" fill="#fff" text-anchor="middle">7 дней бесплатно · без карты</text>
+  <text x="240" y="562" font-family="-apple-system, Arial, sans-serif" font-size="20" font-weight="700" fill="#fff" text-anchor="middle">14 дней бесплатно · без карты</text>
 </svg>

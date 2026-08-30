@@ -2,6 +2,7 @@ import logging
 from html import escape
 
 from app.core.config import settings
+from app.core.pricing import is_canonical_paid_plan
 from app.services.platform_settings_service import PlatformSettingsService
 from app.services.shop_service import ShopService
 from app.services.subscription_service import SubscriptionService
@@ -29,8 +30,17 @@ class SubscriptionPaymentService:
         При ошибке возвращает None.
         """
         plan = await SubscriptionService.get_plan(plan_id)
-        if plan is None or plan["is_trial"]:
-            logger.warning("Попытка оплаты триального тарифа %d", plan_id)
+        if (
+            plan is None
+            or plan["is_trial"]
+            or not plan["is_active"]
+            or not is_canonical_paid_plan(
+                name=plan["name"],
+                duration_days=plan["duration_days"],
+                price=plan["price"],
+            )
+        ):
+            logger.warning("Попытка оплаты недоступного тарифа %d", plan_id)
             return None
 
         shop = await ShopService.get(shop_id)

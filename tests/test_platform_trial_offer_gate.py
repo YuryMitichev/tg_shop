@@ -342,7 +342,7 @@ class TestAcceptOfferAndTrial:
             for c in cb.message.answer.call_args_list
         )
         assert "@coolshop" in all_texts
-        assert "7 дней" in all_texts
+        assert "14 дней" in all_texts
 
     async def test_idempotent_offer_acceptance(self, db_session, seed_data):
         """Повторное принятие оферты не вызывает ошибку."""
