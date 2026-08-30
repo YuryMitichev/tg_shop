@@ -2,34 +2,15 @@
 
 import useSWR from "swr";
 import { superAdminFetcher } from "@/lib/swr";
-import { superAdminApi } from "@/lib/api";
-import { useState } from "react";
-import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { Plus, Pencil, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { formatPrice } from "@/lib/format";
 import type { SubscriptionPlanAdmin } from "@/lib/types";
 
 export default function PlansPage() {
-  const [editing, setEditing] = useState<SubscriptionPlanAdmin | null>(null);
-  const [creating, setCreating] = useState(false);
-
-  const { data, isLoading, mutate } = useSWR<{ plans: SubscriptionPlanAdmin[] }>(
+  const { data, isLoading } = useSWR<{ plans: SubscriptionPlanAdmin[] }>(
     "/plans",
     superAdminFetcher,
   );
@@ -38,17 +19,14 @@ export default function PlansPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div>
         <div>
           <h1 className="text-2xl font-bold">Тарифы</h1>
           <p className="text-sm text-muted-foreground">
-            Управление тарифными планами подписки
+            Тарифы зафиксированы: 14 дней бесплатно, затем 1 299 ₽ в месяц
+            или 3 507,30 ₽ за 3 месяца со скидкой 10%.
           </p>
         </div>
-        <Button size="sm" onClick={() => setCreating(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Новый тариф
-        </Button>
       </div>
 
       {isLoading ? (
@@ -60,50 +38,15 @@ export default function PlansPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {plans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} onEdit={() => setEditing(plan)} />
+            <PlanCard key={plan.id} plan={plan} />
           ))}
         </div>
-      )}
-
-      {editing && (
-        <PlanEditDialog
-          plan={editing}
-          open={!!editing}
-          onOpenChange={(open) => { if (!open) setEditing(null); }}
-          onSave={async (data) => {
-            try {
-              await superAdminApi.patch(`/plans/${editing.id}`, data);
-              mutate();
-              toast.success("Тариф обновлён");
-              setEditing(null);
-            } catch {
-              toast.error("Ошибка");
-            }
-          }}
-        />
-      )}
-
-      {creating && (
-        <PlanEditDialog
-          open={creating}
-          onOpenChange={setCreating}
-          onSave={async (data) => {
-            try {
-              await superAdminApi.post("/plans", data);
-              mutate();
-              toast.success("Тариф создан");
-              setCreating(false);
-            } catch {
-              toast.error("Ошибка");
-            }
-          }}
-        />
       )}
     </div>
   );
 }
 
-function PlanCard({ plan, onEdit }: { plan: SubscriptionPlanAdmin; onEdit: () => void }) {
+function PlanCard({ plan }: { plan: SubscriptionPlanAdmin }) {
   return (
     <Card>
       <CardHeader>
@@ -138,132 +81,7 @@ function PlanCard({ plan, onEdit }: { plan: SubscriptionPlanAdmin; onEdit: () =>
             )}
           </ul>
         )}
-        <Button size="sm" variant="outline" onClick={onEdit}>
-          <Pencil className="mr-2 h-3 w-3" />
-          Редактировать
-        </Button>
       </CardContent>
     </Card>
-  );
-}
-
-interface PlanFormData {
-  name: string;
-  description: string | null;
-  price: number;
-  duration_days: number;
-  features: string[];
-  is_active?: boolean;
-}
-
-function PlanEditDialog({
-  plan,
-  open,
-  onOpenChange,
-  onSave,
-}: {
-  plan?: SubscriptionPlanAdmin;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave: (data: PlanFormData) => Promise<void>;
-}) {
-  const [name, setName] = useState(plan?.name ?? "");
-  const [description, setDescription] = useState(plan?.description ?? "");
-  const [price, setPrice] = useState(String(plan?.price ?? ""));
-  const [durationDays, setDurationDays] = useState(String(plan?.duration_days ?? "30"));
-  const [featuresText, setFeaturesText] = useState(
-    plan?.features?.join("\n") ?? ""
-  );
-  const [isActive, setIsActive] = useState(plan?.is_active ?? true);
-  const [saving, setSaving] = useState(false);
-
-  async function handleSubmit() {
-    if (!name.trim() || !price || !durationDays) {
-      toast.error("Заполните обязательные поля");
-      return;
-    }
-    setSaving(true);
-    const data: PlanFormData = {
-      name: name.trim(),
-      description: description.trim() || null,
-      price: parseFloat(price),
-      duration_days: parseInt(durationDays, 10),
-      features: featuresText.split("\n").map((s) => s.trim()).filter(Boolean),
-      is_active: isActive,
-    };
-    await onSave(data);
-    setSaving(false);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{plan ? "Редактировать тариф" : "Новый тариф"}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label>Название</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Подписка — 1 месяц"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Описание</Label>
-            <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Полный функционал магазина"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Цена (₽)</Label>
-              <Input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="5000"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Длительность (дн.)</Label>
-              <Input
-                type="number"
-                value={durationDays}
-                onChange={(e) => setDurationDays(e.target.value)}
-                placeholder="30"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Возможности (по одной на строку)</Label>
-            <Textarea
-              value={featuresText}
-              onChange={(e) => setFeaturesText(e.target.value)}
-              rows={5}
-              className="text-sm"
-              placeholder={"Каталог товаров\nЗаказы и корзина\nАдмин-панель"}
-            />
-          </div>
-          {plan && !plan.is_trial && (
-            <div className="flex items-center justify-between">
-              <Label>Активен</Label>
-              <Switch checked={isActive} onCheckedChange={setIsActive} />
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
-            Отмена
-          </DialogClose>
-          <Button onClick={handleSubmit} disabled={saving}>
-            {saving ? "Сохранение..." : "Сохранить"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

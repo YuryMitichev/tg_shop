@@ -18,6 +18,7 @@ from aiogram.types import (
 )
 
 from app.core.config import settings
+from app.core.pricing import MONTHLY_PRICE_RUB, TRIAL_DURATION_DAYS, format_rub
 from app.services.platform_settings_service import PlatformSettingsService
 from app.services.shop_service import ShopService
 from app.services.subscription_service import SubscriptionService
@@ -154,7 +155,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             "Это платформа для создания магазинов в Telegram.\n"
             "Каталог, корзина, заказы, CRM и админ-панель — "
             "всё готово, настройка за 5 минут.\n\n"
-            "🎁 <b>7 дней бесплатно</b> — нажмите кнопку ниже 👇",
+            f"🎁 <b>{TRIAL_DURATION_DAYS} дней бесплатно</b> — нажмите кнопку ниже 👇",
             reply_markup=_main_menu(is_new=True),
         )
 
@@ -262,7 +263,7 @@ async def on_token_received(message: Message, state: FSMContext) -> None:
 
     await message.answer(
         f"✅ <b>Магазин «{esc(shop['name'])}» создан!</b>\n\n"
-        "🎁 Для активации бесплатного периода (7 дней) необходимо принять "
+        f"🎁 Для активации бесплатного периода ({TRIAL_DURATION_DAYS} дней) необходимо принять "
         "условия <b>публичной оферты</b> и <b>политики конфиденциальности</b>.\n\n"
         "Ознакомьтесь с документами и нажмите кнопку ниже для активации.",
         reply_markup=InlineKeyboardMarkup(
@@ -340,7 +341,7 @@ async def _finalize_shop_creation(
 
     await message.answer(
         f"✅ <b>Магазин «{esc(shop['name'])}» создан!</b>\n\n"
-        f"🎁 Активирован бесплатный период — <b>7 дней</b>\n\n"
+        f"🎁 Активирован бесплатный период — <b>{TRIAL_DURATION_DAYS} дней</b>\n\n"
         "🚀 Запускаю бота..."
     )
 
@@ -366,7 +367,7 @@ async def _finalize_shop_creation(
 
     text = (
         f"🎉 <b>Готово! Ваш магазин работает!</b>\n\n"
-        f"🎁 Подписка: 7 дней бесплатно\n\n"
+        f"🎁 Подписка: {TRIAL_DURATION_DAYS} дней бесплатно\n\n"
     )
     if bot_username:
         text += (
@@ -628,7 +629,7 @@ async def on_about(message: Message) -> None:
         "• <b>Промокоды и отзывы</b> — инструменты для роста продаж\n"
         "• <b>Мини-приложение</b> — красивый каталог прямо в Telegram\n\n"
 
-        "🎁 <b>7 дней бесплатно</b> — попробуйте все возможности без оплаты.\n\n"
+        f"🎁 <b>{TRIAL_DURATION_DAYS} дней бесплатно</b> — попробуйте все возможности без оплаты.\n\n"
 
         "Готовы начать? Нажмите <b>🚀 Создать магазин</b> в меню 👇"
     )
@@ -694,7 +695,7 @@ async def _show_plans_without_shop(message: Message) -> None:
     text = (
         "💳 <b>Подписка</b>\n\n"
         f"{'---' * 10}\n"
-        f"📦 <b>Тариф: 5000 ₽ / месяц</b>\n\n"
+        f"📦 <b>Тариф: {format_rub(MONTHLY_PRICE_RUB)} / месяц</b>\n\n"
     )
 
     for feature in features:
@@ -705,14 +706,14 @@ async def _show_plans_without_shop(message: Message) -> None:
 
     for plan in plans:
         if plan["description"]:
-            text += f"🔸 <b>{esc(plan['name'])}</b> — {int(plan['price']):,} ₽\n"
+            text += f"🔸 <b>{esc(plan['name'])}</b> — {format_rub(plan['price'])}\n"
             text += f"<i>{esc(plan['description'])}</i>\n\n"
         else:
-            text += f"🔸 <b>{esc(plan['name'])}</b> — {int(plan['price']):,} ₽\n\n"
+            text += f"🔸 <b>{esc(plan['name'])}</b> — {format_rub(plan['price'])}\n\n"
 
     text += (
-        "🎁 <b>7 дней бесплатно</b> при создании первого магазина.\n\n"
-        "Создайте магазин кнопкой «➕ Создать магазин» — триал активируется автоматически."
+        f"🎁 <b>{TRIAL_DURATION_DAYS} дней бесплатно</b> при создании магазина.\n\n"
+        "Создайте магазин кнопкой «➕ Создать магазин» — пробный период активируется автоматически."
     )
 
     await message.answer(text, reply_markup=_main_menu(), disable_web_page_preview=True)
@@ -746,7 +747,7 @@ async def _show_subscription_for_shop(message: Message | CallbackQuery, shop: di
         f"🏪 <b>{esc(shop['name'])}</b> (ID: {shop_id})\n\n"
         f"Статус подписки: {status_line}\n\n"
         f"{'---' * 10}\n"
-        f"📦 <b>Тариф: 5000 ₽ / месяц</b>\n\n"
+        f"📦 <b>Тариф: {format_rub(MONTHLY_PRICE_RUB)} / месяц</b>\n\n"
     )
 
     for feature in features:
@@ -758,14 +759,14 @@ async def _show_subscription_for_shop(message: Message | CallbackQuery, shop: di
     kb_rows = []
     for plan in plans:
         if plan["description"]:
-            text += f"🔸 <b>{esc(plan['name'])}</b> — {int(plan['price']):,} ₽\n"
+            text += f"🔸 <b>{esc(plan['name'])}</b> — {format_rub(plan['price'])}\n"
             text += f"<i>{esc(plan['description'])}</i>\n\n"
         else:
-            text += f"🔸 <b>{esc(plan['name'])}</b> — {int(plan['price']):,} ₽\n\n"
+            text += f"🔸 <b>{esc(plan['name'])}</b> — {format_rub(plan['price'])}\n\n"
 
         kb_rows.append([
             InlineKeyboardButton(
-                text=f"💳 {plan['name']} — {int(plan['price']):,} ₽".replace(",", " "),
+                text=f"💳 {plan['name']} — {format_rub(plan['price'])}",
                 callback_data=f"pay:{shop_id}:{plan['id']}",
             )
         ])

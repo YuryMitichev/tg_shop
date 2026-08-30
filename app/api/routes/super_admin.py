@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from app.api.admin_auth import require_super_admin
 from app.api.rate_limit import limiter
 from app.bot.bot import start_shop_bot, stop_shop_bot, restart_shop_bot
+from app.core.pricing import CANONICAL_PLAN_NAMES
 from app.database.db import async_session
 from app.models.shop import Shop
 from app.models.subscription import Subscription, SubscriptionPlan
@@ -344,7 +345,9 @@ async def extend_subscription(
 async def list_all_plans(_admin: dict = Depends(require_super_admin)):
     async with async_session() as session:
         result = await session.execute(
-            select(SubscriptionPlan).order_by(SubscriptionPlan.price)
+            select(SubscriptionPlan)
+            .where(SubscriptionPlan.name.in_(CANONICAL_PLAN_NAMES))
+            .order_by(SubscriptionPlan.price)
         )
         plans = result.scalars().all()
 
@@ -370,22 +373,10 @@ async def create_plan(
     body: CreatePlanBody,
     _admin: dict = Depends(require_super_admin),
 ):
-    async with async_session() as session:
-        plan = SubscriptionPlan(
-            name=body.name,
-            description=body.description,
-            price=body.price,
-            duration_days=body.duration_days,
-            is_trial=False,
-            is_active=True,
-            features=json.dumps(body.features, ensure_ascii=False) if body.features else None,
-        )
-        session.add(plan)
-        await session.commit()
-        await session.refresh(plan)
-
-    logger.info("Создан тариф: %s (id=%d)", body.name, plan.id)
-    return {"id": plan.id}
+    raise HTTPException(
+        status_code=409,
+        detail="Тарифы зафиксированы в конфигурации продукта; создание других тарифов отключено",
+    )
 
 
 @router.patch("/plans/{plan_id}")
@@ -394,28 +385,10 @@ async def update_plan(
     body: UpdatePlanBody,
     _admin: dict = Depends(require_super_admin),
 ):
-    async with async_session() as session:
-        plan = await session.get(SubscriptionPlan, plan_id)
-        if plan is None:
-            raise HTTPException(status_code=404, detail="Тариф не найден")
-
-        if body.name is not None:
-            plan.name = body.name
-        if body.description is not None:
-            plan.description = body.description
-        if body.price is not None:
-            plan.price = body.price
-        if body.duration_days is not None:
-            plan.duration_days = body.duration_days
-        if body.is_active is not None:
-            plan.is_active = body.is_active
-        if body.features is not None:
-            plan.features = json.dumps(body.features, ensure_ascii=False)
-
-        await session.commit()
-
-    logger.info("Тариф %d обновлён", plan_id)
-    return {"ok": True}
+    raise HTTPException(
+        status_code=409,
+        detail="Тарифы зафиксированы в конфигурации продукта; ручное изменение отключено",
+    )
 
 
 # ==========================

@@ -1,9 +1,16 @@
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import pytest
 
+from app.core.pricing import THREE_MONTH_PRICE_RUB, format_rub
 from app.services.subscription_service import SubscriptionService
 from app.models.subscription import Subscription, SubscriptionPlan
+
+
+def test_three_month_price_is_exact_ten_percent_discount():
+    assert THREE_MONTH_PRICE_RUB == Decimal("3507.30")
+    assert format_rub(THREE_MONTH_PRICE_RUB) == "3 507,30 ₽"
 
 
 @pytest.fixture
@@ -13,38 +20,30 @@ async def plans(db_session):
         session.add_all([
             SubscriptionPlan(
                 id=1,
-                name="Триал 7 дней",
+                name="Пробный период — 14 дней",
                 price=0,
-                duration_days=7,
+                duration_days=14,
                 is_trial=True,
             ),
             SubscriptionPlan(
                 id=2,
                 name="Подписка — 1 месяц",
-                description="Полный функционал магазина. Стоимость: 5000₽/мес.",
-                price=5000,
+                description="Полный функционал магазина за 1 299 ₽ в месяц.",
+                price=1299,
                 duration_days=30,
                 is_trial=False,
             ),
             SubscriptionPlan(
                 id=3,
-                name="Подписка — 6 месяцев",
-                description="Полный функционал магазина. Выгода 3000₽ (скидка 10%).",
-                price=27000,
-                duration_days=180,
-                is_trial=False,
-            ),
-            SubscriptionPlan(
-                id=4,
-                name="Подписка — 12 месяцев",
-                description="Полный функционал магазина. Выгода 12000₽ (скидка 20%).",
-                price=48000,
-                duration_days=365,
+                name="Подписка — 3 месяца",
+                description="Оплата за 3 месяца со скидкой 10%.",
+                price=3507.30,
+                duration_days=90,
                 is_trial=False,
             ),
         ])
         await session.commit()
-    return {1: "Триал", 2: "1 мес", 3: "6 мес", 4: "12 мес"}
+    return {1: "Триал", 2: "1 мес", 3: "3 мес"}
 
 
 class TestGetPlans:
@@ -81,6 +80,25 @@ class TestGetPlans:
         for p in result:
             assert p["features"] == []
 
+    async def test_get_plans_excludes_noncanonical_active_plan(
+        self, db_session, seed_data, plans
+    ):
+        async with db_session() as session:
+            session.add(
+                SubscriptionPlan(
+                    id=4,
+                    name="Произвольный тариф",
+                    price=100,
+                    duration_days=10,
+                    is_trial=False,
+                    is_active=True,
+                )
+            )
+            await session.commit()
+
+        result = await SubscriptionService.get_plans()
+        assert {plan["id"] for plan in result} == {2, 3}
+
 
 class TestGetPlan:
 
@@ -115,6 +133,9 @@ class TestStartTrial:
         assert result is not None
         assert result["shop_id"] == 1
         assert result["status"] == "trial"
+        expires_at = datetime.fromisoformat(result["expires_at"])
+        expected = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=14)
+        assert abs((expires_at - expected).total_seconds()) < 5
 
     async def test_start_trial_extends_existing(self, db_session, seed_data, plans):
         await SubscriptionService.start_trial(shop_id=1)
@@ -317,7 +338,7 @@ class TestMarkExpired:
 
 class TestEnsureDefaultPlans:
 
-    async def test_creates_all_three_plans(self, db_session):
+    async def test_creates_only_canonical_plans(self, db_session):
         await SubscriptionService.ensure_default_plans()
 
         async with db_session() as session:
@@ -325,22 +346,21 @@ class TestEnsureDefaultPlans:
             result = await session.execute(select(SubscriptionPlan))
             plans = {p.name: p for p in result.scalars().all()}
 
-        assert "Триал 7 дней" in plans
+        assert "Пробный период — 14 дней" in plans
         assert "Подписка — 1 месяц" in plans
-        assert "Подписка — 6 месяцев" in plans
-        assert "Подписка — 12 месяцев" in plans
+        assert "Подписка — 3 месяца" in plans
 
-        assert plans["Триал 7 дней"].price == 0
-        assert plans["Триал 7 дней"].is_trial is True
+        assert plans["Пробный период — 14 дней"].price == 0
+        assert plans["Пробный период — 14 дней"].duration_days == 14
+        assert plans["Пробный период — 14 дней"].is_trial is True
 
-        assert plans["Подписка — 1 месяц"].price == 5000
+        assert plans["Подписка — 1 месяц"].price == 1299
+        assert plans["Подписка — 1 месяц"].duration_days == 30
         assert plans["Подписка — 1 месяц"].is_trial is False
 
-        assert plans["Подписка — 6 месяцев"].price == 27000
-        assert plans["Подписка — 6 месяцев"].is_trial is False
-
-        assert plans["Подписка — 12 месяцев"].price == 48000
-        assert plans["Подписка — 12 месяцев"].is_trial is False
+        assert plans["Подписка — 3 месяца"].price == 3507.30
+        assert plans["Подписка — 3 месяца"].duration_days == 90
+        assert plans["Подписка — 3 месяца"].is_trial is False
 
     async def test_idempotent(self, db_session):
         await SubscriptionService.ensure_default_plans()
@@ -351,7 +371,33 @@ class TestEnsureDefaultPlans:
             result = await session.execute(select(SubscriptionPlan))
             plans = result.scalars().all()
 
-        assert len(plans) == 4
+        assert len(plans) == 3
+
+    async def test_deactivates_legacy_plans(self, db_session):
+        async with db_session() as session:
+            session.add(
+                SubscriptionPlan(
+                    name="Подписка — 12 месяцев",
+                    price=48000,
+                    duration_days=365,
+                    is_trial=False,
+                    is_active=True,
+                )
+            )
+            await session.commit()
+
+        await SubscriptionService.ensure_default_plans()
+
+        async with db_session() as session:
+            from sqlalchemy import select
+            result = await session.execute(
+                select(SubscriptionPlan).where(
+                    SubscriptionPlan.name == "Подписка — 12 месяцев"
+                )
+            )
+            legacy_plan = result.scalar_one()
+
+        assert legacy_plan.is_active is False
 
     async def test_features_stored_as_json(self, db_session):
         import json as _json

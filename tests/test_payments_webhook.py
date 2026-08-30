@@ -46,7 +46,7 @@ async def trial_subscription(db_session, seed_data):
         plan = SubscriptionPlan(
             id=10,
             name="Подписка — 1 месяц",
-            price=5000,
+            price=1299,
             duration_days=30,
             is_trial=False,
             is_active=True,
