@@ -92,7 +92,7 @@ jobs:
             install -m 0644 ops/systemd/tg-shop-channel-smoke.timer /etc/systemd/system/tg-shop-channel-smoke.timer
             systemctl daemon-reload
             systemctl enable --now tg-shop-monitor.timer
-            docker compose exec -T bot alembic current --check-heads
+            docker compose exec -T bot alembic current | grep -q '(head)'
             systemctl is-enabled tg-shop-monitor.timer
             systemctl is-active tg-shop-monitor.timer
             if grep -q '^CHANNEL_SMOKE_CHANNEL_ID=.' .env; then
