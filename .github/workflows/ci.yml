@@ -76,7 +76,7 @@ jobs:
           sh -n scripts/verify_backup.sh
           sh -n scripts/verify_offsite_backup.sh
           python -m py_compile scripts/monitor.py
-          python -m py_compile scripts/channel_e2e_smoke.py scripts/channel_quality_check.py scripts/validate_domain_config.py
+          python -m py_compile scripts/channel_e2e_smoke.py scripts/channel_quality_check.py scripts/configure_smoke_channel.py scripts/validate_domain_config.py
           python scripts/validate_domain_config.py
           docker build -f backup.Dockerfile -t tg-shop-backup-check .
           cp .env.example .env

@@ -96,7 +96,7 @@ def collect_issues(force_failure: bool = False) -> list[str]:
             issues.append("Нет успешного результата Telegram/OpenAI smoke-теста")
 
     try:
-        run(["docker", "exec", "tg_shop_bot", "python", "scripts/channel_quality_check.py"])
+        run(["docker", "exec", "tg_shop_bot", "python", "-m", "scripts.channel_quality_check"])
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or error.stdout or "").strip()[-300:]
         issues.append(f"Качество AI-черновиков ниже порога: {detail}")

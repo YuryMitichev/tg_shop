@@ -6,5 +6,5 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/root/tg_shop
-ExecStart=/bin/sh -c 'docker compose exec -T bot python scripts/channel_e2e_smoke.py && date +%%s > /var/lib/tg-shop-monitor/channel_smoke_last_success'
+ExecStart=/bin/sh -c 'docker compose exec -T bot python -m scripts.channel_e2e_smoke && date +%%s > /var/lib/tg-shop-monitor/channel_smoke_last_success'
 TimeoutStartSec=300
