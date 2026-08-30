@@ -49,7 +49,17 @@ async def configure() -> dict:
                 raise RuntimeError("smoke bot cannot delete messages")
 
         sender = await sender_bot.get_me()
-        sender_member = await sender_bot.get_chat_member(channel_id, sender.id)
+        print(json.dumps({
+            "outcome": "validating_sender",
+            "sender_bot_username": sender.username,
+            "channel_id": channel_id,
+        }, ensure_ascii=False), flush=True)
+        try:
+            sender_member = await sender_bot.get_chat_member(channel_id, sender.id)
+        except Exception as exc:
+            raise RuntimeError(
+                f"platform bot @{sender.username} cannot access smoke channel: {exc}"
+            ) from exc
         if sender_member.status not in {
             ChatMemberStatus.ADMINISTRATOR,
             ChatMemberStatus.CREATOR,
