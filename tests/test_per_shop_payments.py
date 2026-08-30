@@ -248,7 +248,7 @@ class TestAdminPaymentSettings:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get(
                 "/api/admin/settings/payments",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
             )
 
         assert resp.status_code == 200
@@ -267,7 +267,7 @@ class TestAdminPaymentSettings:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/payments",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={
                     "payment_card_number": "4222 2222",
                     "payment_recipient_name": "Пётр",
@@ -299,7 +299,7 @@ class TestAdminPaymentSettings:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.put(
                 "/api/admin/settings/payments",
-                cookies=admin_cookie,
+                headers={"Cookie": "admin_token=" + admin_cookie["admin_token"]},
                 json={
                     "yookassa_enabled": True,
                 },

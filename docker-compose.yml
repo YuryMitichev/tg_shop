@@ -96,7 +96,7 @@ services:
     build:
       context: ./admin
       args:
-        - NEXT_PUBLIC_API_BASE=${APP_BASE_URL:-https://svechevarov-family.ru}
+        - NEXT_PUBLIC_API_BASE=${PUBLIC_API_BASE:-https://app.svoi-kanal.ru}
     container_name: tg_shop_admin
     restart: unless-stopped
     networks:
@@ -120,7 +120,7 @@ services:
     build:
       context: ./platform-admin
       args:
-        - NEXT_PUBLIC_API_BASE=${APP_BASE_URL:-https://svechevarov-family.ru}
+        - NEXT_PUBLIC_API_BASE=${PUBLIC_API_BASE:-https://app.svoi-kanal.ru}
     container_name: tg_shop_platform_admin
     restart: unless-stopped
     networks:

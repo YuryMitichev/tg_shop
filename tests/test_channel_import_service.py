@@ -265,6 +265,45 @@ async def test_stats_expose_cloud_ai_non_product_flow(db_session, seed_data):
     assert stats["posts"]["non_product"] == 1
     assert stats["ai"]["runs"] == 1
     assert stats["ai"]["non_product"] == 1
+    assert stats["quality"]["reviewed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_quality_metrics_track_real_manual_changes(db_session, seed_data):
+    await ChannelImportService.connect_channel(
+        1, channel_id=-100114, channel_title="Quality channel",
+        channel_username=None, connected_by=1,
+    )
+    job_id = await ChannelImportService.ingest_post(
+        1, telegram_message_id=9, text="Футболка 1000 ₽", media=[]
+    )
+    async with db_session() as session:
+        candidate = CatalogImportCandidate(
+            shop_id=1, job_id=job_id, position=0, status="pending",
+            name="Футболка", category_name="Одежда",
+            variants=[{"title": "M", "price": 1000, "stock": 1}],
+            attributes={}, field_confidence={"name": 0.9},
+        )
+        session.add(candidate)
+        await session.commit()
+        await session.refresh(candidate)
+        candidate_id = candidate.id
+
+    await ChannelImportService.update_candidate(
+        1, candidate_id, {"name": "Футболка базовая", "owner_note": "Проверено"}
+    )
+    await ChannelImportService.set_candidate_status(
+        1, candidate_id, "rejected", "owner_rejected"
+    )
+    stats = await ChannelImportService.stats(1)
+
+    assert stats["quality"] == {
+        "reviewed": 1,
+        "corrected_candidates": 1,
+        "correction_events": 2,
+        "manual_correction_rate_percent": 100.0,
+        "corrected_fields": {"name": 1, "owner_note": 1},
+    }
 
 
 @pytest.mark.asyncio

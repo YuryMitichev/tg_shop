@@ -119,7 +119,7 @@ class TestCookieAuth:
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 resp = await client.get(
                     "/api/admin/auth/me",
-                    cookies={"admin_token": admin_token},
+                    headers={"Cookie": "admin_token=" + admin_token},
                 )
 
         assert resp.status_code == 200
@@ -131,7 +131,7 @@ class TestCookieAuth:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get(
                 "/api/admin/auth/me",
-                cookies={"admin_token": "invalid.jwt.token"},
+                headers={"Cookie": "admin_token=invalid.jwt.token"},
             )
 
         assert resp.status_code == 401
