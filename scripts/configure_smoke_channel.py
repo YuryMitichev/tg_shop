@@ -10,6 +10,7 @@ import os
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
 
+from app.core.config import settings
 from app.services.channel_import_service import ChannelImportService
 from app.services.shop_service import ShopService
 
@@ -29,7 +30,12 @@ async def configure() -> dict:
     if not shop or not token:
         raise RuntimeError("dedicated smoke shop or bot token is missing")
 
+    sender_token = settings.platform_bot_token
+    if not sender_token:
+        raise RuntimeError("PLATFORM_BOT_TOKEN is required as an independent smoke sender")
+
     bot = Bot(token=token)
+    sender_bot = Bot(token=sender_token)
     try:
         me = await bot.get_me()
         chat = await bot.get_chat(channel_id)
@@ -41,6 +47,19 @@ async def configure() -> dict:
                 raise RuntimeError("smoke bot cannot post messages")
             if not getattr(member, "can_delete_messages", False):
                 raise RuntimeError("smoke bot cannot delete messages")
+
+        sender = await sender_bot.get_me()
+        sender_member = await sender_bot.get_chat_member(channel_id, sender.id)
+        if sender_member.status not in {
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.CREATOR,
+        }:
+            raise RuntimeError("platform bot is not a smoke channel administrator")
+        if sender_member.status == ChatMemberStatus.ADMINISTRATOR:
+            if not getattr(sender_member, "can_post_messages", False):
+                raise RuntimeError("platform bot cannot post smoke messages")
+            if not getattr(sender_member, "can_delete_messages", False):
+                raise RuntimeError("platform bot cannot delete smoke messages")
 
         connection = await ChannelImportService.connect_channel(
             shop_id,
@@ -55,9 +74,11 @@ async def configure() -> dict:
             "channel_id": channel_id,
             "connection_id": connection.id,
             "bot_username": me.username,
+            "sender_bot_username": sender.username,
         }
     finally:
         await bot.session.close()
+        await sender_bot.session.close()
 
 
 def main() -> int:
