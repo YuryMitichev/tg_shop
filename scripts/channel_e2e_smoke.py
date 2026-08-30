@@ -14,6 +14,7 @@ from aiogram import Bot
 from sqlalchemy import delete, func, select
 
 from app.database.db import async_session
+from app.core.config import settings
 from app.models.channel_import import (
     CatalogAnalysisRun,
     CatalogImportCandidate,
@@ -91,9 +92,14 @@ async def _cleanup(post_id: int) -> None:
 async def run(timeout: int, keep_evidence: bool) -> dict:
     shop_id = _required_int("CHANNEL_SMOKE_SHOP_ID")
     channel_id = _required_int("CHANNEL_SMOKE_CHANNEL_ID")
-    token = await ShopService.get_bot_token(shop_id)
-    if not token:
+    receiver_token = await ShopService.get_bot_token(shop_id)
+    if not receiver_token:
         raise RuntimeError("dedicated smoke shop has no bot token")
+    sender_token = settings.platform_bot_token
+    if not sender_token:
+        raise RuntimeError("PLATFORM_BOT_TOKEN is required as an independent smoke sender")
+    if sender_token == receiver_token:
+        raise RuntimeError("smoke sender and receiver bots must be different")
 
     async with async_session() as session:
         connection = (
@@ -109,7 +115,7 @@ async def run(timeout: int, keep_evidence: bool) -> dict:
         f"SMOKE-{correlation_id} Тестовый товар: хлопковая футболка, "
         "размер M, цена 1000 ₽, в наличии 1 шт."
     )
-    bot = Bot(token=token)
+    bot = Bot(token=sender_token)
     message = None
     result: dict = {}
     started = time.monotonic()
