@@ -92,8 +92,17 @@ jobs:
             install -m 0644 ops/systemd/tg-shop-channel-smoke.timer /etc/systemd/system/tg-shop-channel-smoke.timer
             systemctl daemon-reload
             systemctl enable --now tg-shop-monitor.timer
+            docker compose exec -T bot alembic current --check-heads
+            systemctl is-enabled tg-shop-monitor.timer
+            systemctl is-active tg-shop-monitor.timer
             if grep -q '^CHANNEL_SMOKE_CHANNEL_ID=.' .env; then
               systemctl enable --now tg-shop-channel-smoke.timer
+              systemctl is-enabled tg-shop-channel-smoke.timer
+              systemctl is-active tg-shop-channel-smoke.timer
+              systemctl start tg-shop-channel-smoke.service
+              test -s /var/lib/tg-shop-monitor/channel_smoke_last_success
+            else
+              echo "CHANNEL_SMOKE_CHANNEL_ID is not configured; live smoke timer remains disabled"
             fi
 
             trap - ERR
