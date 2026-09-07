@@ -105,3 +105,25 @@ def test_product_classification_does_not_depend_on_existing_categories():
     assert "независимо от списка существующих" in prompt
     assert "category_is_new=true" in prompt
     assert "никогда не является причиной классификации non_product" in prompt
+
+
+def test_ai_text_removes_nul_bytes_and_normalizes_ruble_currency():
+    product = AIProduct(
+        name="Футболка\x00",
+        description="Хлопок\x00",
+        variants=[
+            AIVariant(
+                title="Размер M\x00",
+                price=1000,
+                currency="₽\x00?",
+                stock=1,
+            )
+        ],
+    )
+
+    data = product.to_catalog_dict()
+
+    assert data["name"] == "Футболка"
+    assert data["description"] == "Хлопок"
+    assert data["variants"][0]["title"] == "Размер M"
+    assert data["variants"][0]["currency"] == "RUB"

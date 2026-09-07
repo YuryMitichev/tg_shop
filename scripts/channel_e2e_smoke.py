@@ -9,6 +9,7 @@ import json
 import os
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot
 from sqlalchemy import delete, func, select
@@ -22,11 +23,21 @@ from app.models.channel_import import (
     ChannelConnection,
     ChannelPost,
 )
+from app.models.subscription import Subscription, SubscriptionPlan
 from app.services.channel_import_service import ChannelImportService
 from app.services.shop_service import ShopService
 
 
 WORKFLOW_VERSION = "channel-e2e-smoke-v1"
+TERMINAL_JOB_STATUSES = {
+    "completed",
+    "failed",
+    "needs_manual",
+    "subscription_blocked",
+    "budget_blocked",
+    "superseded",
+}
+SMOKE_ACCESS_WINDOW = timedelta(days=2)
 
 
 def _required_int(name: str) -> int:
@@ -34,6 +45,57 @@ def _required_int(name: str) -> int:
     if not raw:
         raise RuntimeError(f"{name} is required")
     return int(raw)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+async def _ensure_smoke_access(shop_id: int) -> None:
+    """Keeps only the dedicated synthetic shop eligible for the daily smoke."""
+    shop = await ShopService.get(shop_id)
+    shop_name = str((shop or {}).get("name") or "")
+    if not shop_name.casefold().startswith("svoi kanal smoke"):
+        raise RuntimeError(
+            "refusing to renew smoke access: dedicated shop name is invalid"
+        )
+
+    now = _utcnow()
+    async with async_session() as session:
+        trial_plan = (
+            await session.execute(
+                select(SubscriptionPlan)
+                .where(
+                    SubscriptionPlan.is_trial.is_(True),
+                    SubscriptionPlan.is_active.is_(True),
+                )
+                .order_by(SubscriptionPlan.id)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if trial_plan is None:
+            raise RuntimeError("active trial plan is missing for smoke shop")
+
+        subscription = (
+            await session.execute(
+                select(Subscription).where(Subscription.shop_id == shop_id)
+            )
+        ).scalar_one_or_none()
+        if subscription is None:
+            subscription = Subscription(
+                shop_id=shop_id,
+                plan_id=trial_plan.id,
+                status="trial",
+                started_at=now,
+                expires_at=now + SMOKE_ACCESS_WINDOW,
+            )
+            session.add(subscription)
+        elif subscription.expires_at <= now + timedelta(days=1):
+            subscription.plan_id = trial_plan.id
+            subscription.status = "trial"
+            subscription.expires_at = now + SMOKE_ACCESS_WINDOW
+            subscription.cancelled_at = None
+        await session.commit()
 
 
 async def _wait_for_result(shop_id: int, message_id: int, timeout: int) -> dict:
@@ -54,7 +116,7 @@ async def _wait_for_result(shop_id: int, message_id: int, timeout: int) -> dict:
             ).one_or_none()
             if row:
                 post, job = row
-                if job.status in {"completed", "failed", "needs_manual"}:
+                if job.status in TERMINAL_JOB_STATUSES:
                     candidate_count = (
                         await session.execute(
                             select(func.count(CatalogImportCandidate.id)).where(
@@ -64,10 +126,13 @@ async def _wait_for_result(shop_id: int, message_id: int, timeout: int) -> dict:
                     ).scalar_one()
                     ai_run = (
                         await session.execute(
-                            select(CatalogAnalysisRun).where(
+                            select(CatalogAnalysisRun)
+                            .where(
                                 CatalogAnalysisRun.job_id == job.id,
                                 CatalogAnalysisRun.run_type == "cloud_ai",
                             )
+                            .order_by(CatalogAnalysisRun.id.desc())
+                            .limit(1)
                         )
                     ).scalar_one_or_none()
                     return {
@@ -109,6 +174,8 @@ async def run(timeout: int, keep_evidence: bool) -> dict:
         ).scalar_one_or_none()
         if not connection or connection.channel_id != channel_id or not connection.is_active:
             raise RuntimeError("smoke channel is not the active channel of the dedicated shop")
+
+    await _ensure_smoke_access(shop_id)
 
     correlation_id = uuid.uuid4().hex
     text = (
