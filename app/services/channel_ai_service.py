@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.config import settings
 
@@ -10,7 +10,18 @@ from app.core.config import settings
 PROMPT_VERSION = "channel-catalog-1.2"
 
 
-class AIAttribute(BaseModel):
+class SafeTextModel(BaseModel):
+    """Rejects PostgreSQL-incompatible NUL bytes from external AI text."""
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def remove_nul_bytes(cls, value):
+        if isinstance(value, str):
+            return value.replace("\x00", "")
+        return value
+
+
+class AIAttribute(SafeTextModel):
     """Характеристика в форме, совместимой со strict Structured Outputs."""
 
     model_config = ConfigDict(extra="forbid")
@@ -19,14 +30,14 @@ class AIAttribute(BaseModel):
     value: str = Field(min_length=1, max_length=300)
 
 
-class AIFieldConfidence(BaseModel):
+class AIFieldConfidence(SafeTextModel):
     model_config = ConfigDict(extra="forbid")
 
     field: str = Field(min_length=1, max_length=80)
     confidence: float = Field(ge=0, le=1)
 
 
-class AIVariant(BaseModel):
+class AIVariant(SafeTextModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(default="—", min_length=1, max_length=160)
@@ -35,13 +46,23 @@ class AIVariant(BaseModel):
     stock: int | None = Field(default=None, ge=0, le=1_000_000)
     attributes: list[AIAttribute] = Field(default_factory=list, max_length=50)
 
+    @field_validator("currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value):
+        if not isinstance(value, str):
+            return value
+        cleaned = value.replace("\x00", "").strip()
+        if cleaned.upper() in {"RUB", "RUR"} or "₽" in cleaned:
+            return "RUB"
+        return cleaned
+
     def to_catalog_dict(self) -> dict:
         data = self.model_dump(exclude={"attributes"})
         data["attributes"] = {item.name: item.value for item in self.attributes}
         return data
 
 
-class AIProduct(BaseModel):
+class AIProduct(SafeTextModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, max_length=200)
@@ -67,7 +88,7 @@ class AIProduct(BaseModel):
         return data
 
 
-class PostAnalysis(BaseModel):
+class PostAnalysis(SafeTextModel):
     model_config = ConfigDict(extra="forbid")
 
     classification: Literal["product", "non_product", "uncertain"]
@@ -76,7 +97,7 @@ class PostAnalysis(BaseModel):
     reason: str = Field(min_length=1, max_length=2_000)
 
 
-class DuplicateDecision(BaseModel):
+class DuplicateDecision(SafeTextModel):
     model_config = ConfigDict(extra="forbid")
 
     duplicate_product_id: int | None = Field(default=None, gt=0)
