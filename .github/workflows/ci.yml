@@ -1,8 +1,8 @@
 name: CI
 
+# Project paused on 2026-10-28. Push-triggered CI disabled; PR checks retained for branch protection.
 on:
-  push:
-    branches: [main, master]
+  workflow_dispatch:
   pull_request:
     branches: [main, master]
 
